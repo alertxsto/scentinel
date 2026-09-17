@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Scentinel — CFD Simulation Studio</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 16mm 16mm;
+    @bottom-center {
+      content: "Scentinel — CFD Simulation Studio | V1 | 2026";
+      font-size: 8pt;
+      color: #888;
+    }
+    @bottom-right {
+      content: "Hal. " counter(page);
+      font-size: 8pt;
+      color: #888;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+    margin: 0;
+  }
+  h1 {
+    font-size: 20pt;
+    margin: 0 0 2mm 0;
+    color: #1b4332;
+    line-height: 1.15;
+  }
+  h2 {
+    font-size: 13pt;
+    margin: 7mm 0 2.5mm 0;
+    color: #1b4332;
+    border-bottom: 1.2pt solid #2d6a4f;
+    padding-bottom: 1mm;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 10.5pt;
+    margin: 4mm 0 1.5mm 0;
+    color: #2d6a4f;
+    page-break-after: avoid;
+  }
+  p { margin: 0 0 2.5mm 0; text-align: justify; }
+  ul, ol { margin: 0 0 2.5mm 0; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 3.5mm 0;
+    font-size: 8.5pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #2d6a4f;
+    color: #fff;
+    text-align: left;
+    padding: 1.6mm 2mm;
+    font-weight: 600;
+  }
+  td {
+    border: 0.5pt solid #c8d6cd;
+    padding: 1.4mm 2mm;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f3f7f4; }
+  .cover {
+    text-align: left;
+    margin-bottom: 6mm;
+  }
+  .subtitle {
+    font-size: 11pt;
+    color: #555;
+    margin: 1mm 0 4mm 0;
+  }
+  .meta {
+    background: #eef4ef;
+    border-left: 3pt solid #2d6a4f;
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    font-size: 9pt;
+  }
+  .meta table { margin: 0; font-size: 9pt; }
+  .meta td { border: none; padding: 0.8mm 2mm 0.8mm 0; background: none !important; }
+  .meta td:first-child { font-weight: 600; width: 32mm; color: #1b4332; }
+  .box {
+    background: #f6f9f7;
+    border: 0.6pt solid #b7cdbf;
+    border-radius: 2mm;
+    padding: 2.5mm 3.5mm;
+    margin: 2.5mm 0;
+    page-break-inside: avoid;
+  }
+  .box-title {
+    font-weight: 700;
+    color: #1b4332;
+    margin-bottom: 1mm;
+    font-size: 9pt;
+  }
+  .highlight {
+    background: #fff8e6;
+    border-left: 3pt solid #d4a017;
+    padding: 2.5mm 3.5mm;
+    margin: 2.5mm 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .arch {
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 7.2pt;
+    line-height: 1.35;
+    background: #f4f4f4;
+    border: 0.5pt solid #ccc;
+    padding: 3mm;
+    white-space: pre;
+    page-break-inside: avoid;
+    margin: 2.5mm 0;
+  }
+  .small { font-size: 8pt; color: #666; }
+  code {
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 8.3pt;
+    background: #eef1ee;
+    padding: 0.3mm 1mm;
+    border-radius: 1mm;
+  }
+  .avoid-break { page-break-inside: avoid; }
+  .page-break { page-break-before: always; }
+  .cite { font-size: 7.8pt; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Scentinel</h1>
+  <div class="subtitle">CFD Simulation Studio untuk Penempatan Sensor Gas pada Bak Truk Pengangkut Sampah</div>
+</div>
+
+<div class="meta">
+  <table>
+    <tr><td>Tim</td><td>Dwiky Candra &middot; Gesang Hemas Bayu Sekti &middot; Ezekiel Benedicte Felice</td></tr>
+    <tr><td>Pembimbing</td><td>Pak Rijal — Kepala Program Studi Teknik Lingkungan</td></tr>
+    <tr><td>Institusi</td><td>President University</td></tr>
+    <tr><td>Versi</td><td>V1 — 18 September 2026</td></tr>
+    <tr><td>Status</td><td>Dokumen kerja untuk diskusi teknis internal &amp; pembimbing</td></tr>
+  </table>
+</div>
+
+<h2>1. Latar Belakang &amp; Posisi</h2>
+
+<p>Sampah campuran bersifat heterogen. Satu citra atau satu pembacaan gas tidak bisa
+mewakili seluruh muatan truk. Untuk menentukan <strong>di mana inlet sensor harus
+ditempatkan</strong> pada grabber atau bak truk, dibutuhkan pemahaman kuantitatif tentang
+bagaimana aliran udara dan gas bergerak di sekitar tumpukan sampah.</p>
+
+<p>Scentinel adalah aplikasi desktop native yang menjawab pertanyaan itu:
+<em>dengan geometri bak tertentu, bentuk tumpukan tertentu, kondisi angin tertentu,
+dan laju emisi gas tertentu — berapa konsentrasi yang "dilihat" oleh setiap posisi
+kandidat sensor?</em></p>
+
+<div class="box">
+  <div class="box-title">Posisi yang benar</div>
+  <p style="margin:0">Scentinel adalah <strong>alat bantu desain dan screening</strong>, bukan
+  pengganti pengukuran lapangan atau uji laboratorium tersertifikasi. Output-nya adalah
+  estimasi dan perbandingan skenario — istilah yang dipakai selalu <em>estimated</em>,
+  <em>proxy</em>, atau <em>screening</em>, bukan klaim nilai tersertifikasi.</p>
+</div>
+
+<p>Dokumen ini adalah revisi dari rencana JWIS V2. Fokus dipersempit ke satu hal yang
+bisa dieksekusi dan diverifikasi: <strong>layer simulasi CFD</strong>. Layer AI fusion,
+waste passport, dan forecasting pada dokumen sebelumnya adalah visi jangka panjang,
+bukan scope yang sedang dibangun.</p>
+
+<h2>2. Apa yang Dibangun</h2>
+
+<p>Aplikasi desktop dengan alur kerja:</p>
+<ol>
+  <li>Pengguna mendefinisikan penampang 2D bak truk (dimensi via form) dan bentuk tumpukan sampah (preset: <em>flat</em>, <em>mounded</em>, <em>irregular</em>).</li>
+  <li>Pengguna menempatkan titik kandidat sensor dengan mengklik langsung di viewport 2D.</li>
+  <li>Pengguna mengatur skenario: kecepatan &amp; arah angin, ventilasi, dan laju emisi per gas (CO, CH4, VOC, H2S) dengan default dari EPA AP-42.</li>
+  <li>Aplikasi membuat mesh, menulis case OpenFOAM, dan menjalankan solver di container Podman.</li>
+  <li>Hasil ditampilkan: medan kecepatan, medan konsentrasi per gas, streamline, dan nilai di tiap titik sensor.</li>
+  <li>Skenario bisa disimpan, dibandingkan, dan diekspor sebagai laporan CSV/PDF.</li>
+</ol>
+
+<h3>Arsitektur sistem</h3>
+
+<div class="arch">┌─────────────────────────────────────────────────────┐
+│  Scentinel — Aplikasi Desktop PySide6               │
+│                                                     │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │ Panel Setup │  │ Viewport 2D  │  │  Hasil     │  │
+│  │ geometri &  │  │ klik sensor  │  │  field +   │  │
+│  │ skenario    │  │ + preview    │  │  tabel     │  │
+│  └─────────────┘  └──────────────┘  └────────────┘  │
+│                                                     │
+│  Core Engine:                                       │
+│  geometry → mesh (gmsh) → casegen (Jinja2)          │
+│       → runner (podman) → post (pyvista)            │
+│                                                     │
+│  i18n: locale en.json + id.json (ganti runtime)     │
+└────────────────────────┬────────────────────────────┘
+                         │ podman run, mount case dir
+                         ▼
+        ┌────────────────────────────────┐
+        │ opencfd/openfoam-default:2512  │
+        │ foamRun + incompressibleFluid  │
+        │ + scalarTransport (CO/CH4/VOC) │
+        │ + foamToVTK                    │
+        └────────────────────────────────┘</div>
+
+<h3>Stack teknologi</h3>
+
+<table>
+  <tr><th style="width:38mm">Layer</th><th>Teknologi</th><th>Alasan</th></tr>
+  <tr><td>UI desktop</td><td>PySide6 6.11 (Qt 6)</td><td>Native, cross-platform, widget matang</td></tr>
+  <tr><td>Viewport 2D</td><td>QGraphicsView</td><td>Klik sensor + preview geometri interaktif</td></tr>
+  <tr><td>Visualisasi field</td><td>pyvista + VTK 9.7</td><td>Render 3D dari output OpenFOAM</td></tr>
+  <tr><td>Plot probe</td><td>pyqtgraph</td><td>Plot time-series real-time</td></tr>
+  <tr><td>Meshing</td><td>gmsh 4.15 (Python API)</td><td>Mesh 2D terparameterisasi + boundary tagging</td></tr>
+  <tr><td>Case generation</td><td>Jinja2 templates</td><td>Dictionary OpenFOAM yang reproducible</td></tr>
+  <tr><td>Solver</td><td>OpenFOAM 2512 (Podman)</td><td>CFD open-source, tidak mengotori sistem host</td></tr>
+  <tr><td>Export</td><td>CSV + PDF (matplotlib)</td><td>Laporan perbandingan skenario</td></tr>
+</table>
+
+<h2>3. Setup Fisika</h2>
+
+<h3>3.1 Solver dan model turbulensi</h3>
+
+<table>
+  <tr><th style="width:45mm">Item</th><th>Pilihan</th><th>Catatan</th></tr>
+  <tr><td>Solver</td><td><code>foamRun</code> + modul <code>incompressibleFluid</code></td><td>Steady-state RANS, aliran incompressible isotermal</td></tr>
+  <tr><td>Turbulensi</td><td>k-epsilon</td><td>Standar industri untuk aliran ventilasi</td></tr>
+  <tr><td>Gas</td><td>Passive scalar: CO, CH4, VOC, H2S</td><td>Function object <code>scalarTransport</code></td></tr>
+  <tr><td>Sampling</td><td>Function object <code>probes</code></td><td>Output time-value per titik sensor</td></tr>
+  <tr><td>Visualisasi</td><td><code>cutPlaneSurface</code>, <code>streamlinesLine</code>, <code>foamToVTK</code></td><td>Field, streamline, dan verifikasi mass balance</td></tr>
+</table>
+
+<h3>3.2 Boundary conditions</h3>
+
+<table>
+  <tr><th>Patch</th><th>Kecepatan (U)</th><th>Tekanan (p)</th><th>Scalar</th></tr>
+  <tr><td>inlet</td><td>fixedValue (angin)</td><td>zeroGradient</td><td>fixedValue 0</td></tr>
+  <tr><td>outlet</td><td>zeroGradient</td><td>fixedValue 0</td><td>zeroGradient</td></tr>
+  <tr><td>top</td><td>slip</td><td>zeroGradient</td><td>zeroGradient</td></tr>
+  <tr><td>bottom</td><td>noSlip</td><td>zeroGradient</td><td>zeroGradient</td></tr>
+  <tr><td>walls (bak)</td><td>noSlip</td><td>zeroGradient</td><td>zeroGradient</td></tr>
+  <tr><td>source (permukaan sampah)</td><td>noSlip</td><td>zeroGradient</td><td>fixedValue (dari AP-42)</td></tr>
+</table>
+
+<h3>3.3 Sumber data emisi gas</h3>
+
+<p>Semua konsentrasi default berasal dari dokumen resmi EPA dan tersimpan di kode
+dengan sitasi. Tidak ada angka tanpa sumber.</p>
+
+<table>
+  <tr><th>Gas</th><th>Nilai default</th><th>Sumber</th></tr>
+  <tr><td>CO</td><td>105 ppmv (uncontrolled)</td><td>EPA AP-42 Ch.2.4 Final Factors (Agu 2024)</td></tr>
+  <tr><td>CH4</td><td>50% by volume</td><td>EPA LMOP — Basic Information about Landfill Gas</td></tr>
+  <tr><td>VOC / NMOC</td><td>550 ppmv (as hexane, MSW-only 1992+)</td><td>EPA AP-42 Table 2.4-2</td></tr>
+  <tr><td>H2S</td><td>36 ppmv</td><td>EPA AP-42 Table 2.4-1</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Konteks penting:</strong> AP-42 Ch.2.4 juga mencatat bahwa pada kondisi
+  steady-state LFG mengandung ~55% CH4, 40% CO2, 5% N2. Untuk landfill dengan
+  co-disposal limbah non-domestik, default NMOC naik ke 2.400 ppmv. Scentinel
+  menyediakan kedua rezim ini sebagai pilihan, bukan hanya satu angka.
+</div>
+
+<h3>3.4 Properti fisika gas (25&deg;C, 1 atm)</h3>
+
+<table>
+  <tr><th>Gas</th><th>Berat molekul (g/mol)</th><th>Difusivitas di udara (m&sup2;/s)</th></tr>
+  <tr><td>CO</td><td>28.01</td><td>2.0 &times; 10<sup>-5</sup></td></tr>
+  <tr><td>CH4</td><td>16.04</td><td>2.2 &times; 10<sup>-5</sup></td></tr>
+  <tr><td>VOC (proxy hexane)</td><td>86.18</td><td>8.7 &times; 10<sup>-6</sup></td></tr>
+  <tr><td>H2S</td><td>34.08</td><td>1.6 &times; 10<sup>-5</sup></td></tr>
+</table>
+
+<h2>4. Protokol Verifikasi</h2>
+
+<p>Simulasi tanpa verifikasi tidak lebih dari animasi. Empat uji berikut adalah
+gate yang harus lolos sebelum hasil simulasi dianggap layak dipakai:</p>
+
+<table>
+  <tr><th style="width:42mm">Uji</th><th>Metode</th><th>Kriteria lulus</th></tr>
+  <tr>
+    <td>Mass balance</td>
+    <td>Integrasi fluks scalar keluar vs fluks sumber pada kondisi steady</td>
+    <td>Error &lt; 5%</td>
+  </tr>
+  <tr>
+    <td>Mesh independence</td>
+    <td>Refine mesh 2&times;, bandingkan nilai di titik probe</td>
+    <td>Deviasi &lt; 10%</td>
+  </tr>
+  <tr>
+    <td>Benchmark analitik</td>
+    <td>Kasus difusi 1D vs solusi erfc</td>
+    <td>R&sup2; &gt; 0.99</td>
+  </tr>
+  <tr>
+    <td>Benchmark solver</td>
+    <td>Lid-driven cavity case jalan sampai selesai</td>
+    <td>Residual sesuai, tanpa FOAM FATAL</td>
+  </tr>
+</table>
+
+<h2>5. Roadmap Eksekusi</h2>
+
+<table>
+  <tr><th style="width:16mm">Fase</th><th>Isi</th><th>Exit criteria</th></tr>
+  <tr>
+    <td><strong>F0</strong></td>
+    <td>Skeleton aplikasi + integrasi container OpenFOAM + benchmark cavity</td>
+    <td>Solver jalan dari aplikasi, hasil tampil di UI</td>
+  </tr>
+  <tr>
+    <td><strong>F1</strong></td>
+    <td>Geometri 2D + meshing + klik sensor + save/load project</td>
+    <td>Satu skenario jalan end-to-end</td>
+  </tr>
+  <tr>
+    <td><strong>F2</strong></td>
+    <td>Multi-gas scalar + visualisasi + probe + uji verifikasi fisika</td>
+    <td>CO/CH4/VOC terukur di titik sensor, semua uji verifikasi lolos</td>
+  </tr>
+  <tr>
+    <td><strong>F3</strong></td>
+    <td>Perbandingan skenario + export laporan</td>
+    <td>Bisa bandingkan &ge;2 run, export CSV/PDF</td>
+  </tr>
+  <tr>
+    <td><strong>F4</strong></td>
+    <td>Geometri 3D + analisis transient (response delay)</td>
+    <td>Mesh 3D jalan, response delay terukur</td>
+  </tr>
+</table>
+
+<div class="box">
+  <div class="box-title">Sprint 2&ndash;4 minggu pertama</div>
+  <ul style="margin-bottom:0">
+    <li>Setup environment: venv, dependensi, container OpenFOAM</li>
+    <li>Benchmark cavity untuk validasi pipeline container</li>
+    <li>Geometri 2D bak truk + tumpukan sampah + meshing</li>
+    <li>Case generation dengan satu gas (CO) + run pertama end-to-end</li>
+    <li>Review hasil dengan pembimbing sebelum lanjut ke multi-gas</li>
+  </ul>
+</div>
+
+<h2>6. Risiko &amp; Mitigasi</h2>
+
+<table>
+  <tr><th style="width:50mm">Risiko</th><th>Mitigasi</th></tr>
+  <tr>
+    <td>VTK + Qt6 bermasalah di Wayland</td>
+    <td>Uji sejak F0; fallback ke <code>QT_QPA_PLATFORM=xcb</code> atau render offscreen</td>
+  </tr>
+  <tr>
+    <td>Mesh dari gmsh ditolak OpenFOAM</td>
+    <td>Boundary tagging diuji ketat; <code>checkMesh</code> sebagai gate wajib</td>
+  </tr>
+  <tr>
+    <td>Solver run lama membekukan UI</td>
+    <td>Log streaming async via QThread sejak F0</td>
+  </tr>
+  <tr>
+    <td>Angka source term dianggap asumsi</td>
+    <td>Semua default dari AP-42/LMOP dengan sitasi di kode dan dokumen</td>
+  </tr>
+  <tr>
+    <td>Scope creep kembali ke AI/fleet layer</td>
+    <td>Fokus ketat pada layer simulasi sampai F3 selesai dan terverifikasi</td>
+  </tr>
+  <tr>
+    <td>Hardware grabber dipasang terlalu dini</td>
+    <td>Bench rig &rarr; pilot terkendali &rarr; field pod, setelah simulasi tervalidasi</td>
+  </tr>
+</table>
+
+<h2>7. Referensi</h2>
+
+<ol class="cite">
+  <li>US EPA. <em>AP-42 Chapter 2, Section 4 — Municipal Solid Waste Landfills</em> (final, Agustus 2024).
+  https://www.epa.gov/air-emissions-factors-and-quantification/final-emissions-factors-ap-42-chapter-2-section-4</li>
+  <li>US EPA LMOP. <em>Basic Information about Landfill Gas</em>.
+  https://www.epa.gov/lmop/basic-information-about-landfill-gas</li>
+  <li>US EPA LMOP. <em>Frequent Questions about Landfill Gas</em>.
+  https://www.epa.gov/lmop/frequent-questions-about-landfill-gas</li>
+  <li>Greenshields, C. (2025). <em>OpenFOAM v13 User Guide</em>. The OpenFOAM Foundation, London.
+  https://doc.cfd.direct/openfoam/user-guide-v13</li>
+  <li>Legg, S.W., Benavides-Serrano, A.J., Siirola, J.D., et al. (2012). A stochastic programming approach for gas detector placement using CFD-based dispersion simulations. <em>Computers &amp; Chemical Engineering</em>. DOI: 10.1016/j.compchemeng.2012.05.010</li>
+  <li>Lang, Y., Ng, M.X.Y., Yu, K.X., et al. (2025). A novel CFD-MILP-ANN approach for optimizing sensor placement, number, and source localization in large-scale gas dispersion. <em>Digital Chemical Engineering</em>. DOI: 10.1016/j.dche.2024.100216</li>
+  <li>Zi, Y., Fan, L., Wu, X., et al. (2022). Distributionally Robust Optimal Sensor Placement Method for Site-Scale Methane-Emission Monitoring. <em>IEEE Sensors Journal</em>. DOI: 10.1109/JSEN.2022.3214176</li>
+  <li>Versteeg, H.K., Malalasekera, W. (2007). <em>An Introduction to Computational Fluid Dynamics: The Finite Volume Method</em> (2nd ed.). Pearson.</li>
+</ol>
+
+<p class="small" style="margin-top:6mm">
+Dokumen ini di-generate dari sumber yang dapat direproduksi. Data mentah dan skrip
+scraping tersedia di repository proyek (<code>docs/data/</code>, <code>scripts/</code>).
+</p>
+
+</body>
+</html>

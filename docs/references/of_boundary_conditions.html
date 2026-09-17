@@ -1,0 +1,355 @@
+<html lang="en-GB" prefix="og: http://ogp.me/ns#"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OpenFOAM v13 User Guide - Chapter 6 Boundary conditions</title><meta name="description" content="OpenFOAM v13 User Guide - Chapter 6 Boundary conditions. The free introductory and reference guide to some basic CFD with OpenFOAM."><link rel="canonical" href="https://doc.cfd.direct/openfoam/user-guide-v14/boundary-conditions/"><meta property="og:locale" content="en_GB"><meta property="og:type" content="article"><meta property="og:title" content="OpenFOAM v13 User Guide"><meta property="og:description" content="OpenFOAM v13 User Guide - Chapter 6 Boundary conditions. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta property="og:url" content="https://doc.cfd.direct/openfoam/user-guide-v13/boundary-conditions/"><meta property="og:site_name" content="CFD Direct"><meta property="og:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:section" content="OpenFOAM v13 User Guide - Chapter 6 Boundary conditions"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:description" content="OpenFOAM v13 User Guide - Chapter 6 Boundary conditions. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta name="twitter:title" content="OpenFOAM v13 User Guide"><meta name="twitter:site" content="@CFDdirect"><meta name="twitter:creator" content="@CFDdirect"><meta name="twitter:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:published_time" content="2025-07-08T08:00:00+00:00"><meta property="article:modified_time" content="2026-07-27T17:31:49+00:00"><meta property="og:updated_time" content="2026-07-27T17:31:49+00:00"><link rel="stylesheet" id="style-css" href="../../assets/css/style.css" type="text/css" media="all"><link rel="stylesheet" id="genericons-css" href="../../assets/css/genericons.css" type="text/css" media="all"><link rel="stylesheet" id="fonts-css" href="../../assets/css/fonts.css" type="text/css" media="all"><link rel="stylesheet" id="font-awesome-css" href="../../assets/css/font-awesome.css" type="text/css" media="all"><link rel="stylesheet" type="text/css" href="../../assets/css/main.css"><link rel="stylesheet" type="text/css" href="../../assets/css/custom.css"><link rel="stylesheet" type="text/css" href="../../assets/css/doc.css"><link rel="stylesheet" type="text/css" href="../../assets/css/index.css"><script type="text/javascript" src="../../assets/js/jquery/jquery.js?ver=1.12.4"></script><script type="text/javascript" src="../../assets/js/jquery/jquery-migrate.min.js?ver=1.4.1"></script><script type="text/javascript">
+     jQuery(document).ready(function($){ $( "#training-schedule" ).load( "../../assets/html/training-schedule.html" ); });
+     jQuery(document).ready(function($){ $( "#content-top" ).load( "../../assets/html/content-top.html" ); });
+  </script><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-32x32.png" sizes="32x32"><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-192x192.png" sizes="192x192"><link rel="apple-touch-icon-precomposed" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-180x180.png"><meta name="msapplication-TileImage" content="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-270x270.png"></head><body data-rsssl="1" class="post-template-default
+         single
+         single-post
+         single-format-standard
+         wp-custom-logo
+         better-responsive-menu
+         narrow-1218">
+<div id="page" class="hfeed site">
+  <header id="masthead" class="site-header clearfix  spacious-header-display-one"><div id="header-meta">
+      <div class="inner-wrap clearfix">
+        <div class="social-links clearfix">
+          <ul><li class="spacious-twitter"><a href="https://twitter.com/CFDdirect" target="_blank"></a></li>
+            <li class="spacious-github"><a href="https://github.com/OpenFOAM" target="_blank"></a></li>
+            <li class="spacious-linkedin"><a href="https://www.linkedin.com/company/9369175" target="_blank"></a></li>
+            <li class="spacious-youtube"><a href="http://cfd.tips" target="_blank"></a></li>
+          </ul></div>
+        <nav class="small-menu"></nav></div>
+    </div>
+    <div id="header-text-nav-container">
+      <div class="inner-wrap clearfix">
+        <div id="header-text-nav-wrap" class="clearfix">
+          <div id="header-left-section">
+            <div id="header-logo-image">
+              <a href="https://cfd.direct/" class="custom-logo-link" rel="home" itemprop="url">
+                <img width="85" height="85" src="../../assets/img/CFDdirectLogoSq800080-85x85.png" class="custom-logo" alt="CFD Direct" itemprop="logo"></a>
+            </div>
+            <div id="header-text" class="">
+              <h3 id="site-title">
+                <a href="https://cfd.direct/" title="CFD Direct" rel="home">CFD Direct</a>
+              </h3>
+              <p id="site-description">The Architects of OpenFOAM</p>
+            </div>
+          </div>
+          <div id="header-right-section">
+            <div id="header-right-sidebar" class="clearfix">
+              <aside id="search-2" class="widget widget_search"><form action="" class="search-form searchform clearfix" method="get">
+                  <div class="search-wrap">
+                    <input type="text" placeholder="Search" class="s field" name="s"><button class="search-icon" type="submit"></button>
+                  </div>
+                </form>
+              </aside></div>
+            <div class="header-action">
+            </div>
+            <nav id="site-navigation" class="main-navigation" role="navigation"><p class="menu-toggle">Menu</p>
+              <div class="menu-primary-container">
+                <ul id="menu-header" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-home menu-item-82">
+                    <a href="https://cfd.direct/">Home</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                    <a href="https://doc.cfd.direct/notes/cfd-general-principles">Book</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM  | Open Source Computational Fluid Dynamics" href="https://cfd.direct/openfoam/">OpenFOAM</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/about/">About OpenFOAM</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/download/">Download</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/management/">Management</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/documentation/">Documentation</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-post">
+                        <a href="https://cfd.direct/openfoam/user-guide/">User Guide</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/videos/">Videos</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/features/">Features</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a href="https://cfd.direct/cloud/">Cloud</a>
+                    <ul class="sub-menu"><li id="menu-item-2258" class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/">Run on AWS EC2</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/setup/">+ Register/Setup</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/launch/">+ Launch an Instance</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/cli/launch/">+ Use the CLI</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Training" href="https://cfd.direct/openfoam-training/">Training</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training Schedule" href="https://cfd.direct/openfoam-training/schedule/">Schedule</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Course Catalogue" href="https://cfd.direct/openfoam-training/course-catalogue/">Course Catalogue</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Essential CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/essential-cfd/">+ Essential CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Applied CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/applied-cfd/">+ Applied CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Productive CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/productive-cfd/">+ Productive CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Programming CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/programming-cfd/">+ Programming CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Overview of CFD with OpenFOAM | Free Webinar" href="https://cfd.direct/openfoam-training/overview-cfd/">Overview of CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Academic On-site" href="https://cfd.direct/openfoam-training/academic-on-site/">Academic On-site</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Industry On-site" href="https://cfd.direct/openfoam-training/industry-on-site/">Industry On-site</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Support" href="https://cfd.direct/openfoam-support/">Support</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam-support/cfd-support/">CFD Support</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Development" href="https://cfd.direct/openfoam-development/">Development</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="Contact CFD Direct" href="https://cfd.direct/contact/">Contact</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/news/">News</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/about/">About Us</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/careers/">Careers</a>
+                      </li>
+                    </ul></li>
+                </ul></div>
+            </nav></div>
+        </div>
+      </div>
+    </div>
+    <div class="header-post-title-container clearfix">
+      <div class="inner-wrap">
+        <div class="post-title-wrapper">
+          <h1 class="header-post-title-class entry-title">OpenFOAM v13 User Guide - Chapter 6 Boundary conditions</h1>
+          <div class="taxonomy-description">
+          </div>
+        </div>
+      </div>
+    </div>
+  </header><div id="main" class="clearfix">
+    <div class="inner-wrap">
+      <div id="primary">
+        <div id="content" class="clearfix">
+          <article class="post type-post status-publish format-standard hentry category-user-guide"><div class="entry-content clearfix">
+              <div id="content-top"></div>
+                  <section class="widget widget_call_to_action clearfix"><div class="call-to-action-content-wrapper clearfix">
+                    <div class="call-to-action-content">
+                      <h3>How are boundary conditions applied in CFD?</h3>
+                      <p>
+                        CFD Direct's OpenFOAM Training fully covers boundary conditions in OpenFOAM
+                      </p>
+                    </div>
+                    <a class="call-to-action-button" target="_blank" href="https://cfd.direct/openfoam-training" title="See Training">See Training</a>
+                  </div>
+                  </section><div class="note">
+<div class="crosslinks"><p class="noindent">[<a href="../user-guide-v14">version 14</a>][<strong>version 13</strong>][<a href="../user-guide-v12">version 12</a>][<a href="../user-guide-v11">version 11</a>][<a href="../user-guide-v10">version 10</a>][<a href="../user-guide-v9">version 9</a>][<a href="../user-guide-v8">version 8</a>][<a href="../user-guide-v7">version 7</a>][<a href="../user-guide-v6">version 6</a>]</p></div>
+<div class="crosslinks">
+<p class="noindent">[<a href="index">chapter
+contents</a>][<a href="mapfields">previous topic</a>][<a href="patch-selection">next topic</a>][<a href="bookindex">index</a>]</p>
+</div>
+<h2 class="pagetitle"><span class="titlemark">Chapter 6</span>
+<a id="x33-1940006"></a>Boundary conditions</h2>
+<a id="dx33-194001"></a> 
+<p class="noindent">Boundary conditions are specified in field files,
+<span class="cmti-10x-x-109">e.g.</span> <span class="cmssi-10x-x-109">p</span>, <span class="cmssi-10x-x-109">U</span>,
+in time directories. The structure of these files is introduced in
+sections <a href="backwardstep#x5-80002.1.4">2.1.4
+</a> and <a href="basic-file-format#x18-1020004.2.9">4.2.9
+</a>. They include three entries:
+<span class="cmtt-10x-x-109">dimensions</span> for the dimensional
+units; <span class="cmtt-10x-x-109">internalField</span> for the
+initial internal field values; and, <span class="cmtt-10x-x-109">boundaryField</span> where the boundary conditions
+are specified. The <span class="cmtt-10x-x-109">boundaryField</span>
+requires an entry for each patch in the mesh. The patches are
+specified in the <span class="cmssi-10x-x-109">boundary</span> file;
+below is a sample file from a 2D <span class="cmss-10x-x-109">incompressibleFluid</span> example in
+OpenFOAM.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-9">5</span><br><span class="cmtt-9">(</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> outlet</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">{</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> patch;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nFaces</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 320;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> startFace</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 198740;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">}</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> up</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">{</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> symmetry;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inGroups</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> List&lt;word&gt;</span><span class="cmtt-9"> 1(symmetry);</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nFaces</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 760;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> startFace</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 199060;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">}</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> hole</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">{</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> wall;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inGroups</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> List&lt;word&gt;</span><span class="cmtt-9"> 1(wall);</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nFaces</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 1120;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> startFace</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 199820;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">}</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> frontAndBack</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">{</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> empty;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inGroups</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> List&lt;word&gt;</span><span class="cmtt-9"> 1(empty);</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nFaces</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 200000;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> startFace</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 200940;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">}</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inlet</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">{</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> patch;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nFaces</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 320;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> startFace</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 400940;</span><br><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmsy-9">}</span><br><span class="cmtt-9">)</span></div>
+</div>
+The corresponding pressure field file, <span class="cmssi-10x-x-109">p</span>, is shown below.
+<pre class="fancyvrb" id="fancyvrb67">
+<a id="x33-194003r16"></a><span class="cmr-6">16</span><span class="cmtt-9">dimensions</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> [0</span><span class="cmtt-9"> 2</span><span class="cmtt-9"> -2</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0];</span>
+
+<a id="x33-194005r17"></a><span class="cmr-6">17</span>
+
+<a id="x33-194007r18"></a><span class="cmr-6">18</span><span class="cmtt-9">internalField</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x33-194009r19"></a><span class="cmr-6">19</span>
+
+<a id="x33-194011r20"></a><span class="cmr-6">20</span><span class="cmtt-9">boundaryField</span>
+
+<a id="x33-194013r21"></a><span class="cmr-6">21</span><span class="cmtt-9">{</span>
+
+<a id="x33-194015r22"></a><span class="cmr-6">22</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inlet</span>
+
+<a id="x33-194017r23"></a><span class="cmr-6">23</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x33-194019r24"></a><span class="cmr-6">24</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> zeroGradient;</span>
+
+<a id="x33-194021r25"></a><span class="cmr-6">25</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x33-194023r26"></a><span class="cmr-6">26</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> outlet</span>
+
+<a id="x33-194025r27"></a><span class="cmr-6">27</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x33-194027r28"></a><span class="cmr-6">28</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> fixedValue;</span>
+
+<a id="x33-194029r29"></a><span class="cmr-6">29</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> value</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x33-194031r30"></a><span class="cmr-6">30</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x33-194033r31"></a><span class="cmr-6">31</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> up</span>
+
+<a id="x33-194035r32"></a><span class="cmr-6">32</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x33-194037r33"></a><span class="cmr-6">33</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> symmetry;</span>
+
+<a id="x33-194039r34"></a><span class="cmr-6">34</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x33-194041r35"></a><span class="cmr-6">35</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> hole</span>
+
+<a id="x33-194043r36"></a><span class="cmr-6">36</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x33-194045r37"></a><span class="cmr-6">37</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> zeroGradient;</span>
+
+<a id="x33-194047r38"></a><span class="cmr-6">38</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x33-194049r39"></a><span class="cmr-6">39</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> frontAndBack</span>
+
+<a id="x33-194051r40"></a><span class="cmr-6">40</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x33-194053r41"></a><span class="cmr-6">41</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> empty;</span>
+
+<a id="x33-194055r42"></a><span class="cmr-6">42</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x33-194057r43"></a><span class="cmr-6">43</span><span class="cmtt-9">}</span>
+
+<a id="x33-194059r44"></a><span class="cmr-6">44</span>
+
+<a id="x33-194061r45"></a><span class="cmr-6">45</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="indent">The <span class="cmtt-10x-x-109">boundaryField</span> is a sub-dictionary
+containing an entry for every patch in the mesh. Each entry begins
+with the patch name and configures the boundary condition through
+entries in a sub-dictionary. A <span class="cmtt-10x-x-109">type</span> entry is required for every patch
+which specifies the type of boundary condition. The examples above
+include <span class="cmss-10x-x-109">zeroGradient</span> and
+<span class="cmss-10x-x-109">fixedValue</span> conditions
+corresponding to generic patches defined in the <span class="cmssi-10x-x-109">boundary</span> file. They also include
+<span class="cmss-10x-x-109">symmetry</span> and <span class="cmss-10x-x-109">empty</span> types corresponding to equivalent
+constraint patches, <span class="cmti-10x-x-109">e.g.</span> the
+<span class="cmtt-10x-x-109">up</span> patch is defined as
+<span class="cmss-10x-x-109">symmetry</span> in the mesh and uses a
+<span class="cmss-10x-x-109">symmetry</span> condition in the field
+file. </p>
+<p class="indent">For details about the main boundary conditions
+used in OpenFOAM, refer to <a href="https://doc.cfd.direct/notes/cfd-general-principles/boundary-conditions">
+Chapter 4 of <span class="cmbxti-10x-x-109">Notes on Computational
+Fluid Dynamics: General</span> <span class="cmbxti-10x-x-109">Principles</span></a>.</p>
+<div class="sectionTOCS"> <span class="sectionToc">6.1
+<a href="patch-selection#x34-1950006.1">Patch selection in
+field files</a></span><br>
+ <span class="sectionToc">6.2 <a href="geometric-constraints#x35-1960006.2">Geometric
+constraints</a></span><br>
+ <span class="sectionToc">6.3 <a href="basic-boundary-conditions#x36-1970006.3">Basic boundary
+conditions</a></span><br>
+ <span class="sectionToc">6.4 <a href="derived-boundary-conditions#x37-1980006.4">Derived boundary
+conditions</a></span><br>
+  <span class="subsectionToc">6.4.1 <a href="derived-boundary-conditions#x37-1990006.4.1">The inlet/outlet
+condition</a></span><br>
+  <span class="subsectionToc">6.4.2 <a href="derived-boundary-conditions#x37-2000006.4.2">Entrainment
+boundary conditions</a></span><br>
+  <span class="subsectionToc">6.4.3 <a href="derived-boundary-conditions#x37-2010006.4.3">Fixed flux
+pressure</a></span><br>
+  <span class="subsectionToc">6.4.4 <a href="derived-boundary-conditions#x37-2020006.4.4">Time-varying
+boundary conditions</a></span></div>
+              </div>
+              <div class="extra-hatom"><span class="entry-title">OpenFOAM v13 User Guide - Chapter 6 Boundary conditions</span>
+              </div>
+            </div>
+            <footer class="entry-meta-bar clearfix"><div class="entry-meta clearfix">
+                <span class="by-author author vcard">
+                <a class="url fn n" href="https://cfd.direct/about/chris-greenshields">Chris Greenshields</a></span>
+                <span class="date">
+                  <a href="https://doc.cfd.direct/openfoam/user-guide-v13/boundary-conditions/" title="" rel="bookmark">
+                    <time class="entry-date published" datetime="2025-07-08T08:00:00+00:00">8th July 2025</time><time class="updated" datetime="2026-07-27T17:31:49+00:00">8th July 2026</time></a>
+                </span>
+                <span class="category">
+                  <a href="https://cfd.direct/category/user-guide/" rel="category tag">User Guide</a>
+                </span>
+              </div>
+            </footer></article></div>
+      </div>
+<div id="secondary">
+        <a href="https://cfd.tips/1buy"><img src="../../assets/img/user-guide-v13-cover.png" alt="OpenFOAM User Guide"></a>
+    <div id="training-schedule"></div>
+      </div>
+    </div>
+  </div>
+  <footer id="colophon" class="clearfix"><div class="footer-socket-wrapper clearfix">
+      <div class="inner-wrap">
+        <div class="footer-socket-area">
+          <div class="copyright">Copyright © 2015-2025 <a href="https://cfd.direct/" title="CFD Direct">
+          <span>CFD Direct</span></a> Ltd</div>
+          <nav class="small-menu clearfix"><div class="menu-footer-container">
+              <ul id="menu-footer" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a title="CFD Direct | Contact" href="https://cfd.direct/contact/">Contact Us</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="https://www.linkedin.com/company/9369175">LinkedIn</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | Bluesky" href="https://bsky.app/profile/cfd.direct">Bluesky</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | X" href="https://x.com/CFDdirect">X</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="http://cfd.tips">YouTube</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/website-terms-of-use/">Website Terms of Use</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/privacy-policy/">Privacy</a></li>
+                </ul></div>
+          </nav></div>
+      </div>
+    </div>
+  </footer><a href="#masthead" id="scroll-up"></a>
+    </div>
+    <script type="text/javascript" src="../../assets/js/jquery/ui/core.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/jquery/ui/datepicker.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/navigation.min.js"></script><script type="text/javascript" src="../../assets/js/spacious-custom.min.js"></script><script type="text/javascript">function checkKey(e) { e = e || window.event; switch (e.key) {
+case "ArrowRight": document.location = "patch-selection"; break;
+case "Enter": document.location = "patch-selection"; break;
+case "ArrowLeft": document.location = "mapfields"; break;
+case "PageUp": document.location = "index"; break;
+ } }
+document.onkeydown = checkKey;
+</script></body></html>

@@ -1,0 +1,637 @@
+<html lang="en-GB" prefix="og: http://ogp.me/ns#"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data</title><meta name="description" content="OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data. The free introductory and reference guide to some basic CFD with OpenFOAM."><link rel="canonical" href="https://doc.cfd.direct/openfoam/user-guide-v14/graphs-monitoring/"><meta property="og:locale" content="en_GB"><meta property="og:type" content="article"><meta property="og:title" content="OpenFOAM v13 User Guide"><meta property="og:description" content="OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta property="og:url" content="https://doc.cfd.direct/openfoam/user-guide-v13/graphs-monitoring/"><meta property="og:site_name" content="CFD Direct"><meta property="og:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:section" content="OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:description" content="OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta name="twitter:title" content="OpenFOAM v13 User Guide"><meta name="twitter:site" content="@CFDdirect"><meta name="twitter:creator" content="@CFDdirect"><meta name="twitter:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:published_time" content="2025-07-08T08:00:00+00:00"><meta property="article:modified_time" content="2026-07-27T17:31:45+00:00"><meta property="og:updated_time" content="2026-07-27T17:31:45+00:00"><link rel="stylesheet" id="style-css" href="../../assets/css/style.css" type="text/css" media="all"><link rel="stylesheet" id="genericons-css" href="../../assets/css/genericons.css" type="text/css" media="all"><link rel="stylesheet" id="fonts-css" href="../../assets/css/fonts.css" type="text/css" media="all"><link rel="stylesheet" id="font-awesome-css" href="../../assets/css/font-awesome.css" type="text/css" media="all"><link rel="stylesheet" type="text/css" href="../../assets/css/main.css"><link rel="stylesheet" type="text/css" href="../../assets/css/custom.css"><link rel="stylesheet" type="text/css" href="../../assets/css/doc.css"><link rel="stylesheet" type="text/css" href="../../assets/css/index.css"><script type="text/javascript" src="../../assets/js/jquery/jquery.js?ver=1.12.4"></script><script type="text/javascript" src="../../assets/js/jquery/jquery-migrate.min.js?ver=1.4.1"></script><script type="text/javascript">
+     jQuery(document).ready(function($){ $( "#training-schedule" ).load( "../../assets/html/training-schedule.html" ); });
+     jQuery(document).ready(function($){ $( "#content-top" ).load( "../../assets/html/content-top.html" ); });
+  </script><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-32x32.png" sizes="32x32"><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-192x192.png" sizes="192x192"><link rel="apple-touch-icon-precomposed" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-180x180.png"><meta name="msapplication-TileImage" content="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-270x270.png"></head><body data-rsssl="1" class="post-template-default
+         single
+         single-post
+         single-format-standard
+         wp-custom-logo
+         better-responsive-menu
+         narrow-1218">
+<div id="page" class="hfeed site">
+  <header id="masthead" class="site-header clearfix  spacious-header-display-one"><div id="header-meta">
+      <div class="inner-wrap clearfix">
+        <div class="social-links clearfix">
+          <ul><li class="spacious-twitter"><a href="https://twitter.com/CFDdirect" target="_blank"></a></li>
+            <li class="spacious-github"><a href="https://github.com/OpenFOAM" target="_blank"></a></li>
+            <li class="spacious-linkedin"><a href="https://www.linkedin.com/company/9369175" target="_blank"></a></li>
+            <li class="spacious-youtube"><a href="http://cfd.tips" target="_blank"></a></li>
+          </ul></div>
+        <nav class="small-menu"></nav></div>
+    </div>
+    <div id="header-text-nav-container">
+      <div class="inner-wrap clearfix">
+        <div id="header-text-nav-wrap" class="clearfix">
+          <div id="header-left-section">
+            <div id="header-logo-image">
+              <a href="https://cfd.direct/" class="custom-logo-link" rel="home" itemprop="url">
+                <img width="85" height="85" src="../../assets/img/CFDdirectLogoSq800080-85x85.png" class="custom-logo" alt="CFD Direct" itemprop="logo"></a>
+            </div>
+            <div id="header-text" class="">
+              <h3 id="site-title">
+                <a href="https://cfd.direct/" title="CFD Direct" rel="home">CFD Direct</a>
+              </h3>
+              <p id="site-description">The Architects of OpenFOAM</p>
+            </div>
+          </div>
+          <div id="header-right-section">
+            <div id="header-right-sidebar" class="clearfix">
+              <aside id="search-2" class="widget widget_search"><form action="" class="search-form searchform clearfix" method="get">
+                  <div class="search-wrap">
+                    <input type="text" placeholder="Search" class="s field" name="s"><button class="search-icon" type="submit"></button>
+                  </div>
+                </form>
+              </aside></div>
+            <div class="header-action">
+            </div>
+            <nav id="site-navigation" class="main-navigation" role="navigation"><p class="menu-toggle">Menu</p>
+              <div class="menu-primary-container">
+                <ul id="menu-header" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-home menu-item-82">
+                    <a href="https://cfd.direct/">Home</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                    <a href="https://doc.cfd.direct/notes/cfd-general-principles">Book</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM  | Open Source Computational Fluid Dynamics" href="https://cfd.direct/openfoam/">OpenFOAM</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/about/">About OpenFOAM</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/download/">Download</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/management/">Management</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/documentation/">Documentation</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-post">
+                        <a href="https://cfd.direct/openfoam/user-guide/">User Guide</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/videos/">Videos</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/features/">Features</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a href="https://cfd.direct/cloud/">Cloud</a>
+                    <ul class="sub-menu"><li id="menu-item-2258" class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/">Run on AWS EC2</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/setup/">+ Register/Setup</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/launch/">+ Launch an Instance</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/cli/launch/">+ Use the CLI</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Training" href="https://cfd.direct/openfoam-training/">Training</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training Schedule" href="https://cfd.direct/openfoam-training/schedule/">Schedule</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Course Catalogue" href="https://cfd.direct/openfoam-training/course-catalogue/">Course Catalogue</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Essential CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/essential-cfd/">+ Essential CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Applied CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/applied-cfd/">+ Applied CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Productive CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/productive-cfd/">+ Productive CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Programming CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/programming-cfd/">+ Programming CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Overview of CFD with OpenFOAM | Free Webinar" href="https://cfd.direct/openfoam-training/overview-cfd/">Overview of CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Academic On-site" href="https://cfd.direct/openfoam-training/academic-on-site/">Academic On-site</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Industry On-site" href="https://cfd.direct/openfoam-training/industry-on-site/">Industry On-site</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Support" href="https://cfd.direct/openfoam-support/">Support</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam-support/cfd-support/">CFD Support</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Development" href="https://cfd.direct/openfoam-development/">Development</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="Contact CFD Direct" href="https://cfd.direct/contact/">Contact</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/news/">News</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/about/">About Us</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/careers/">Careers</a>
+                      </li>
+                    </ul></li>
+                </ul></div>
+            </nav></div>
+        </div>
+      </div>
+    </div>
+    <div class="header-post-title-container clearfix">
+      <div class="inner-wrap">
+        <div class="post-title-wrapper">
+          <h1 class="header-post-title-class entry-title">OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data</h1>
+          <div class="taxonomy-description">
+          </div>
+        </div>
+      </div>
+    </div>
+  </header><div id="main" class="clearfix">
+    <div class="inner-wrap">
+      <div id="primary">
+        <div id="content" class="clearfix">
+          <article class="post type-post status-publish format-standard hentry category-user-guide"><div class="entry-content clearfix">
+              <div id="content-top"></div>
+                  <section class="widget widget_call_to_action clearfix"><div class="call-to-action-content-wrapper clearfix">
+                    <div class="call-to-action-content">
+                      <h3>How do I plot graphs in OpenFOAM?</h3>
+                      <p>
+                        Plotting graphs and sampling surfaces is covered in our Essential CFD course
+                      </p>
+                    </div>
+                    <a class="call-to-action-button" target="_blank" href="https://cfd.direct/openfoam-training/essential-cfd" title="Essential CFD">Essential CFD</a>
+                  </div>
+                  </section><div class="note">
+<div class="crosslinks"><p class="noindent">[<a href="../user-guide-v14">version 14</a>][<strong>version 13</strong>][<a href="../user-guide-v12">version 12</a>][<a href="../user-guide-v11">version 11</a>][<a href="../user-guide-v10">version 10</a>][<a href="../user-guide-v9">version 9</a>][<a href="../user-guide-v8">version 8</a>][<a href="../user-guide-v7">version 7</a>][<a href="../user-guide-v6">version 6</a>]</p></div>
+<div class="crosslinks">
+<p class="noindent">[<a href="postprocessing">chapter
+contents</a>][<a href="post-processing-functionality">previous
+topic</a>][<a href="post-processing-third-party">next
+topic</a>][<a href="bookindex">index</a>]</p>
+</div>
+<h2 class="pagetitle"><span class="titlemark">7.4</span> <a id="x42-2360007.4"></a>Sampling and monitoring data</h2>
+
+<p class="noindent">There are a set of general post-processing
+functions for sampling data across the domain for graphs and
+visualisation. Several functions also provide data in a single file,
+in the form of time versus values, that can be plotted onto graphs.
+This time-value data can be monitored during a simulation with the
+<span class="cmss-10x-x-109">foamMonitor</span> script. 
+</p>
+<p class="noindent"></p>
+<h3 class="pagetitle"><span class="titlemark">7.4.1</span> <a id="x42-2370007.4.1"></a>Probing data</h3>
+
+<p class="noindent">The functions for probing data are <span class="cmss-10x-x-109">boundaryProbes</span>, <span class="cmss-10x-x-109">internalProbes</span> and <span class="cmss-10x-x-109">probes</span><a id="dx42-237001"></a><a id="dx42-237002"></a> as listed in section <a href="post-processing-functionality#x41-2300007.3.12">7.3.12
+</a>. All functions work on the basis
+that the user provides some point locations and a list of fields,
+and the function writes out values of the fields are those
+locations. The differences between the functions are as follows.</p>
+<ul class="itemize1"><li class="itemize">
+<p class="noindent"><span class="cmss-10x-x-109">probes</span>
+identifies the nearest cells to the probe locations and writes out
+the cell values; data is written into a single file in time-value
+format, suitable for plotting a graph.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmss-10x-x-109">boundaryProbes</span> and <span class="cmss-10x-x-109">internalProbes</span> interpolate field data to the
+probe locations, with the locations being snapped onto boundaries
+for <span class="cmss-10x-x-109">boundaryProbes</span>; data sets
+are written to separate files at scheduled write times (like fields).
+data.</p>
+</li>
+</ul><p class="noindent">Generally <span class="cmss-10x-x-109">probes</span> is more suitable for monitoring
+values at smaller numbers of locations, whereas the other functions
+are typically for sampling at large numbers of locations. 
+</p>
+<p class="indent">As an example, the user could use the
+<span class="cmss-10x-x-109">pitzDailySteady</span> case set up in
+section <a href="backwardstep#x5-40002.1">2.1
+</a>. The <span class="cmss-10x-x-109">probes</span> function is best configured by
+copying the file to the local system directory using <span class="cmss-10x-x-109">foamGet</span>.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamGet</span><span class="cmtt-10x-x-109"> probes</span></div>
+</div>
+The user can modify the <span class="cmtt-10x-x-109">probeLocations</span><a id="dx42-237003"></a><a id="dx42-237004"></a> in the <span class="cmssi-10x-x-109">probes</span> file as follows.
+<pre class="fancyvrb" id="fancyvrb73">
+<a id="x42-237006r12"></a><span class="cmr-6">12</span>
+
+<a id="x42-237008r13"></a><span class="cmr-6">13</span><span class="cmtt-9">#includeEtc</span><span class="cmtt-9"> "caseDicts/postProcessing/probes/probes.cfg"</span>
+
+<a id="x42-237010r14"></a><span class="cmr-6">14</span>
+
+<a id="x42-237012r15"></a><span class="cmr-6">15</span><span class="cmtt-9">fields</span><span class="cmtt-9"> (p</span><span class="cmtt-9"> U);</span>
+
+<a id="x42-237014r16"></a><span class="cmr-6">16</span><span class="cmtt-9">probeLocations</span>
+
+<a id="x42-237016r17"></a><span class="cmr-6">17</span><span class="cmtt-9">(</span>
+
+<a id="x42-237018r18"></a><span class="cmr-6">18</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (0.01</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0)</span>
+
+<a id="x42-237020r19"></a><span class="cmr-6">19</span><span class="cmtt-9">);</span>
+
+<a id="x42-237022r20"></a><span class="cmr-6">20</span>
+
+<a id="x42-237024r21"></a><span class="cmr-6">21</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">The configuration is completed by adding the
+<span class="cmtt-10x-x-109">#includeFunc</span> directive to a
+<span class="cmssi-10x-x-109">functions</span> file in the
+<span class="cmssi-10x-x-109">system</span> directory.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> #includeFunc</span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> probes</span></div>
+</div>
+When the simulation runs, time-value data is written into
+<span class="cmssi-10x-x-109">p</span> and <span class="cmssi-10x-x-109">U</span> files in <span class="cmssi-10x-x-109">postProcessing/probes/0</span>. 
+<p class="indent"><a id="graphs"></a></p>
+<h3 class="pagetitle"><span class="titlemark">7.4.2</span> <a id="x42-2380007.4.2"></a>Sampling for graphs</h3>
+
+<p class="noindent">The <span class="cmss-10x-x-109">graphUniform</span><a id="dx42-238001"></a><a id="dx42-238002"></a> function samples data for graph plotting. To use
+it, the <span class="cmssi-10x-x-109">graphUniform</span> file can
+be copied into the <span class="cmssi-10x-x-109">system</span>
+directory to be configured. We will configure it here using the
+<span class="cmss-10x-x-109">pitzDaily</span> case as before. The
+file is simply copied using <span class="cmss-10x-x-109">foamGet</span>.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamGet</span><span class="cmtt-10x-x-109"> graphUniform</span></div>
+</div>
+The start and end points of the line, along which data is sampled,
+should be edited; the entries below provide a vertical line across
+the full height of the geometry 0.01 m beyond the back step.
+<pre class="fancyvrb" id="fancyvrb74">
+<a id="x42-238004r14"></a><span class="cmr-6">14</span>
+
+<a id="x42-238006r15"></a><span class="cmr-6">15</span><span class="cmtt-9">start</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (0.01</span><span class="cmtt-9"> -0.025</span><span class="cmtt-9"> 0);</span>
+
+<a id="x42-238008r16"></a><span class="cmr-6">16</span><span class="cmtt-9">end</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (0.01</span><span class="cmtt-9"> </span><span class="cmtt-9"> 0.025</span><span class="cmtt-9"> 0);</span>
+
+<a id="x42-238010r17"></a><span class="cmr-6">17</span><span class="cmtt-9">nPoints</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> 100;</span>
+
+<a id="x42-238012r18"></a><span class="cmr-6">18</span>
+
+<a id="x42-238014r19"></a><span class="cmr-6">19</span><span class="cmtt-9">fields</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (U</span><span class="cmtt-9"> p);</span>
+
+<a id="x42-238016r20"></a><span class="cmr-6">20</span>
+
+<a id="x42-238018r21"></a><span class="cmr-6">21</span><span class="cmtt-9">axis</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> distance;</span><span class="cmtt-9"> //</span><span class="cmtt-9"> The</span><span class="cmtt-9"> independent</span><span class="cmtt-9"> variable</span><span class="cmtt-9"> of</span><span class="cmtt-9"> the</span><span class="cmtt-9"> graph.</span><span class="cmtt-9"> Can</span><span class="cmtt-9"> be</span><span class="cmtt-9"> "x",</span>
+
+<a id="x42-238020r22"></a><span class="cmr-6">22</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> //</span><span class="cmtt-9"> "y",</span><span class="cmtt-9"> "z",</span><span class="cmtt-9"> "xyz"</span><span class="cmtt-9"> (all</span><span class="cmtt-9"> coordinates</span><span class="cmtt-9"> written</span><span class="cmtt-9"> out),</span><span class="cmtt-9"> or</span>
+
+<a id="x42-238022r23"></a><span class="cmr-6">23</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> //</span><span class="cmtt-9"> "distance"</span><span class="cmtt-9"> (from</span><span class="cmtt-9"> the</span><span class="cmtt-9"> start</span><span class="cmtt-9"> point).</span>
+
+<a id="x42-238024r24"></a><span class="cmr-6">24</span>
+
+<a id="x42-238026r25"></a><span class="cmr-6">25</span><span class="cmtt-9">#includeEtc</span><span class="cmtt-9"> "caseDicts/postProcessing/graphs/graphUniform.cfg"</span>
+
+<a id="x42-238028r26"></a><span class="cmr-6">26</span>
+
+<a id="x42-238030r27"></a><span class="cmr-6">27</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">The configuration is completed by adding the
+<span class="cmtt-10x-x-109">#includeFunc</span> directive to a
+<span class="cmssi-10x-x-109">functions</span> file in the
+<span class="cmssi-10x-x-109">system</span> directory.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> #includeFunc</span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> graphUniform</span></div>
+</div>
+The simulation can be then re-run or the user could run the
+post-processing with the following command.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamPostProcess</span><span class="cmtt-10x-x-109"> -solver</span><span class="cmtt-10x-x-109"> incompressibleFluid</span></div>
+</div>
+Either way, distance-value data is written into files in time
+directories within <span class="cmssi-10x-x-109">postProcessing/graphUniform</span>. The user can
+quickly display the data for <img border="0" src="img/index392x.png" alt="eqn" class="math">-component of velocity,
+<img border="0" src="img/index393x.png" alt="eqn" class="math"> in
+the last time <span class="cmti-10x-x-109">e.g.</span> <span class="cmssi-10x-x-109">285</span>, by running <span class="cmss-10x-x-109">gnuplot</span> and plotting values.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> gnuplot</span><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> gnuplot&gt;</span><span class="cmtt-10x-x-109"> set</span><span class="cmtt-10x-x-109"> style</span><span class="cmtt-10x-x-109"> data</span><span class="cmtt-10x-x-109"> linespoints</span><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> gnuplot&gt;</span><span class="cmtt-10x-x-109"> plot</span><span class="cmtt-10x-x-109"> "postProcessing/graphUniform/285/line_U.xy"</span><span class="cmtt-10x-x-109"> u</span><span class="cmtt-10x-x-109"> 2:1</span></div>
+</div>
+This produces the graph shown in Figure <a href="#x42-2380315">7.5</a>.
+This graph corresponds to the velocity inlet with a uniform profile,
+rather than a boundary layer profile.
+<hr class="figure"><div class="figure"><a id="x42-2380315"></a>
+<div class="minipage"><img border="0" src="img/index394x.png" alt=" \relax \special {t4ht="></div>
+<br><div class="caption"><span class="id">Figure 7.5:</span>
+<span class="content">Graph of <img border="0" src="img/index395x.png" alt="eqn" class="math"> at <img border="0" src="img/index396x.png" alt="eqn" class="math"> = 0.01,
+uniform sampling</span></div>
+
+
+<p class="indent"></p>
+</div>
+<hr class="endfigure"><p class="indent">The formatting of the graph is specified in
+configuration files in <span class="tcsi-1095">$</span><span class="cmssi-10x-x-109">FOAM</span><span class="cmssi-10x-x-109">_ETC/caseDicts/postProcessing/graphs</span>. The
+<span class="cmssi-10x-x-109">graphUniform.cfg</span> file in that
+directory includes the configuration as follows.</p>
+<pre class="fancyvrb" id="fancyvrb75">
+<a id="x42-238033r8"></a><span class="cmr-6">8</span>
+
+<a id="x42-238035r9"></a><span class="cmr-6">9</span><span class="cmtt-9">#includeEtc</span><span class="cmtt-9"> "caseDicts/functions/graphs/graph.cfg"</span>
+
+<a id="x42-238037r10"></a><span class="cmr-6">10</span>
+
+<a id="x42-238039r11"></a><span class="cmr-6">11</span><span class="cmtt-9">sets</span>
+
+<a id="x42-238041r12"></a><span class="cmr-6">12</span><span class="cmtt-9">{</span>
+
+<a id="x42-238043r13"></a><span class="cmr-6">13</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> line</span>
+
+<a id="x42-238045r14"></a><span class="cmr-6">14</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x42-238047r15"></a><span class="cmr-6">15</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> lineUniform;</span>
+
+<a id="x42-238049r16"></a><span class="cmr-6">16</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> axis</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> $axis;</span>
+
+<a id="x42-238051r17"></a><span class="cmr-6">17</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> start</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> $start;</span>
+
+<a id="x42-238053r18"></a><span class="cmr-6">18</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> end</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> $end;</span>
+
+<a id="x42-238055r19"></a><span class="cmr-6">19</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nPoints</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> $nPoints;</span>
+
+<a id="x42-238057r20"></a><span class="cmr-6">20</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x42-238059r21"></a><span class="cmr-6">21</span><span class="cmtt-9">}</span>
+
+<a id="x42-238061r22"></a><span class="cmr-6">22</span>
+
+<a id="x42-238063r23"></a><span class="cmr-6">23</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">It shows that the sampling type is <span class="cmtt-10x-x-109">lineUniform</span>, meaning the sampling uses a
+uniform distribution of points along a line. The other parameters
+are included by macro expansion from the main file and specify the
+line start and end, the number of points and the distance parameter
+specified on the horizontal axis of the graph. </p>
+<p class="indent">An alternative graph function object,
+<span class="cmssi-10x-x-109">graphCell</span>, samples the data at
+locations nearest to the cell centres. The user can copy that
+function object file and configure it as shown below.</p>
+<pre class="fancyvrb" id="fancyvrb76">
+<a id="x42-238065r13"></a><span class="cmr-6">13</span>
+
+<a id="x42-238067r14"></a><span class="cmr-6">14</span><span class="cmtt-9">start</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (0.01</span><span class="cmtt-9"> -0.025</span><span class="cmtt-9"> 0);</span>
+
+<a id="x42-238069r15"></a><span class="cmr-6">15</span><span class="cmtt-9">end</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (0.01</span><span class="cmtt-9"> </span><span class="cmtt-9"> 0.025</span><span class="cmtt-9"> 0);</span>
+
+<a id="x42-238071r16"></a><span class="cmr-6">16</span><span class="cmtt-9">fields</span><span class="cmtt-9"> </span><span class="cmtt-9"> (U</span><span class="cmtt-9"> p);</span>
+
+<a id="x42-238073r17"></a><span class="cmr-6">17</span>
+
+<a id="x42-238075r18"></a><span class="cmr-6">18</span><span class="cmtt-9">axis</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> distance;</span><span class="cmtt-9"> //</span><span class="cmtt-9"> The</span><span class="cmtt-9"> independent</span><span class="cmtt-9"> variable</span><span class="cmtt-9"> of</span><span class="cmtt-9"> the</span><span class="cmtt-9"> graph.</span><span class="cmtt-9"> Can</span><span class="cmtt-9"> be</span><span class="cmtt-9"> "x",</span>
+
+<a id="x42-238077r19"></a><span class="cmr-6">19</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> //</span><span class="cmtt-9"> "y",</span><span class="cmtt-9"> "z",</span><span class="cmtt-9"> "xyz"</span><span class="cmtt-9"> (all</span><span class="cmtt-9"> coordinates</span><span class="cmtt-9"> written</span><span class="cmtt-9"> out),</span><span class="cmtt-9"> or</span>
+
+<a id="x42-238079r20"></a><span class="cmr-6">20</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> //</span><span class="cmtt-9"> "distance"</span><span class="cmtt-9"> (from</span><span class="cmtt-9"> the</span><span class="cmtt-9"> start</span><span class="cmtt-9"> point).</span>
+
+<a id="x42-238081r21"></a><span class="cmr-6">21</span>
+
+<a id="x42-238083r22"></a><span class="cmr-6">22</span><span class="cmtt-9">#includeEtc</span><span class="cmtt-9"> "caseDicts/postProcessing/graphs/graphCell.cfg"</span>
+
+<a id="x42-238085r23"></a><span class="cmr-6">23</span>
+
+<a id="x42-238087r24"></a><span class="cmr-6">24</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">Running the post-processing produces the graph
+in Figure <a href="#x42-2380886">7.6
+</a>.</p>
+<hr class="figure"><div class="figure"><a id="x42-2380886"></a>
+<div class="minipage"><img border="0" src="img/index397x.png" alt=" \relax \special {t4ht="></div>
+<br><div class="caption"><span class="id">Figure 7.6:</span>
+<span class="content">Graph of <img border="0" src="img/index398x.png" alt="eqn" class="math"> at <img border="0" src="img/index399x.png" alt="eqn" class="math"> = 0.01,
+mid-point sampling</span></div>
+
+
+<p class="indent"></p>
+</div>
+<hr class="endfigure"><p class="indent"><a id="monitoring"></a></p>
+<h3 class="pagetitle"><span class="titlemark">7.4.3</span> <a id="x42-2390007.4.3"></a>Live monitoring of data</h3>
+
+<p class="noindent">Functions like <span class="cmss-10x-x-109">probes</span> produce a single file of time-value
+data, suitable for graph plotting. When the function is executed
+during a simulation, the user may wish to monitor the data live on
+screen. The <span class="cmss-10x-x-109">foamMonitor</span> script
+enables this; to discover its functionality, the user run it with
+the <span class="cmtt-10x-x-109">-help</span> option. The help
+option includes an example of monitoring residuals<a id="dx42-239001"></a> that we can demonstrate in this section. 
+</p>
+<p class="indent">Firstly, include the <span class="cmss-10x-x-109">residuals</span><a id="dx42-239002"></a><a id="dx42-239003"></a> function in the <span class="cmssi-10x-x-109">functions</span> file.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> #includeFunc</span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> residuals</span></div>
+</div>
+The default fields whose residuals are captured are <span class="cmssi-10x-x-109">p</span> and <span class="cmssi-10x-x-109">U</span>. Should the user wish to configure other
+fields, they should make copy the <span class="cmssi-10x-x-109">residuals</span> file in their <span class="cmssi-10x-x-109">system</span> and edit the <span class="cmtt-10x-x-109">fields</span> entry accordingly. All functions
+files are within the <span class="tcsi-1095">$</span><span class="cmssi-10x-x-109">FOAM</span><span class="cmssi-10x-x-109">_ETC/caseDicts</span> directory. The <span class="cmssi-10x-x-109">residuals</span> file can be located using
+<span class="cmss-10x-x-109">foamInfo</span>:
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamInfo</span><span class="cmtt-10x-x-109"> residuals</span></div>
+</div>
+It can then be copied into the <span class="cmssi-10x-x-109">system</span> directory conveniently using
+<span class="cmss-10x-x-109">foamGet</span>:
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamGet</span><span class="cmtt-10x-x-109"> residuals</span></div>
+</div>
+The user can then run the case in the background.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamRun</span><span class="cmtt-10x-x-109"> &gt;</span><span class="cmtt-10x-x-109"> log</span><span class="cmtt-10x-x-109"> &amp;</span></div>
+</div>
+The user should then run <span class="cmss-10x-x-109">foamMonitor</span> using the <span class="cmtt-10x-x-109">-l</span> option for a log scale <img border="0" src="img/index400x.png" alt="eqn" class="math">-axis on the
+<span class="cmssi-10x-x-109">residuals</span> file as follows. If
+the command is executed before the simulation is complete, they can
+see the graph being updated live.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamMonitor</span><span class="cmtt-10x-x-109"> -l</span><span class="cmtt-10x-x-109"> postProcessing/residuals/0/residuals.dat</span><span class="cmtt-10x-x-109"> &amp;</span></div>
+</div>
+It produces the graph of residuals for pressure and velocity in
+Figure <a href="#x42-2390047">7.7
+</a>.
+<hr class="figure"><div class="figure"><a id="x42-2390047"></a>
+<div class="minipage">
+<p class="noindent"><img border="0" src="img/index401x.png" alt=" \relax \special {t4ht="></p>
+</div>
+<br><div class="caption"><span class="id">Figure 7.7:</span>
+<span class="content">Live plot of residuals with <span class="cmss-10x-x-109">foamMonitor</span></span></div>
+
+
+<p class="indent"></p>
+</div>
+<hr class="endfigure"><p class="indent"><a id="surfaces"></a></p>
+<h3 class="pagetitle"><span class="titlemark">7.4.4</span> <a id="x42-2400007.4.4"></a>Sampling for visualisation</h3>
+
+<p class="noindent">There are several surfaces and streamlines
+functions, listed in sections <a href="post-processing-functionality#x41-2340007.3.16">7.3.16
+</a> and <a href="post-processing-functionality#x41-2350007.3.17">7.3.17
+</a>, that can be used to
+generate files for visualisation. The use of <span class="cmss-10x-x-109">streamlinesLine</span> is already configured in the
+<span class="cmss-10x-x-109">pitzDailySteady</span> case. 
+</p>
+<p class="indent">To generate a cutting plane, the <span class="cmss-10x-x-109">cutPlaneSurface</span> function can be configured
+by copying the <span class="cmssi-10x-x-109">cutPlaneSurface</span>
+file to the <span class="cmssi-10x-x-109">system</span> directory
+using <span class="cmss-10x-x-109">foamGet</span>.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamGet</span><span class="cmtt-10x-x-109"> cutPlaneSurface</span></div>
+</div>
+The file is configured by setting the origin and normal of the plane
+and the field data to be sampled. We can edit the file to produce a
+cutting plane along the <span class="cmss-10x-x-109">pitzDaily</span> geometry, normal to the
+<img border="0" src="img/index402x.png" alt="eqn" class="math">-direction.
+<pre class="fancyvrb" id="fancyvrb77">
+<a id="x42-240002r16"></a><span class="cmr-6">16</span>
+
+<a id="x42-240004r17"></a><span class="cmr-6">17</span><span class="cmtt-9">fields</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> (p</span><span class="cmtt-9"> U);</span>
+
+<a id="x42-240006r18"></a><span class="cmr-6">18</span>
+
+<a id="x42-240008r19"></a><span class="cmr-6">19</span><span class="cmtt-9">interpolate</span><span class="cmtt-9"> true;</span><span class="cmtt-9"> //</span><span class="cmtt-9"> If</span><span class="cmtt-9"> false,</span><span class="cmtt-9"> write</span><span class="cmtt-9"> cell</span><span class="cmtt-9"> data</span><span class="cmtt-9"> to</span><span class="cmtt-9"> the</span><span class="cmtt-9"> surface</span><span class="cmtt-9"> triangles.</span>
+
+<a id="x42-240010r20"></a><span class="cmr-6">20</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> //</span><span class="cmtt-9"> If</span><span class="cmtt-9"> true,</span><span class="cmtt-9"> write</span><span class="cmtt-9"> interpolated</span><span class="cmtt-9"> data</span><span class="cmtt-9"> at</span><span class="cmtt-9"> the</span><span class="cmtt-9"> surface</span><span class="cmtt-9"> points.</span>
+
+<a id="x42-240012r21"></a><span class="cmr-6">21</span>
+
+<a id="x42-240014r22"></a><span class="cmr-6">22</span><span class="cmtt-9">#includeEtc</span><span class="cmtt-9"> "caseDicts/postProcessing/surface/cutPlaneSurface.cfg"</span>
+
+<a id="x42-240016r23"></a><span class="cmr-6">23</span>
+
+<a id="x42-240018r24"></a><span class="cmr-6">24</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">The function can be included as normal by
+adding the <span class="cmtt-10x-x-109">#includeFunc</span> to a
+<span class="cmssi-10x-x-109">functions</span> file in the
+<span class="cmssi-10x-x-109">system</span> directory.
+Alternatively, the user could test running the function using the
+solver post-processing by the following command.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamPostProcess</span><span class="cmtt-10x-x-109"> -solver</span><span class="cmtt-10x-x-109"> incompressibleFluid</span><span class="cmtt-10x-x-109"> -func</span><span class="cmtt-10x-x-109"> cutPlaneSurface</span></div>
+</div>
+This produces VTK format files of the cutting plane with pressure
+and velocity data in time directories in the <span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface</span> directory.
+The user can display the cutting plane by opening <span class="cmss-10x-x-109">ParaView</span> (type <span class="cmtt-10x-x-109">paraview</span>), then doing <span class="cmtt-10x-x-109">File-&gt;Open</span> and selecting one of the
+files, <span class="cmti-10x-x-109">e.g.</span> <span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface/285/U</span><span class="cmssi-10x-x-109">_zNormal.vtk</span>
+as shown in Figure <a href="#x42-2400198">7.8
+</a>.
+<hr class="figure"><div class="figure"><a id="x42-2400198"></a>
+<div class="minipage"><img border="0" src="img/index403x.png" alt=" \relax \special {t4ht="></div>
+<br><div class="caption"><span class="id">Figure 7.8:</span>
+<span class="content">Cutting plane with velocity</span></div>
+
+
+<p class="indent"></p>
+</div>
+<hr class="endfigure"><p class="indent"><a id="foam-vtk-series"></a></p>
+<h3 class="pagetitle"><span class="titlemark">7.4.5</span> <a id="x42-2410007.4.5"></a>The <span class="cmss-10x-x-109">foamVTKSeries</span> script</h3>
+
+<p class="noindent">The previous section describes how to create
+surface image files in VTK format which can be read into
+<span class="cmss-10x-x-109">ParaView</span> and processed. The
+image files are distributed across time directories within a
+sub-directory of the <span class="cmssi-10x-x-109">postProcessing</span> directory, <span class="cmti-10x-x-109">e.g.</span> <span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface/0</span>,
+<span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface/100</span>,
+<span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface/200</span> and
+<span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface/285</span> from
+the case in the previous section. </p>
+<p class="indent">If the user wishes to read a collection of files
+into <span class="cmss-10x-x-109">ParaView</span>, <span class="cmti-10x-x-109">e.g.</span> from time directories within the
+<span class="cmssi-10x-x-109">cutPlaneSurface</span> directory, it
+would be a somewhat laborious job. In addition, <span class="cmss-10x-x-109">ParaView</span> would see no connection between
+the files and that they form a sequence. Without sequencing it is
+then not possible to create an animation from the files (without
+some manual effort). </p>
+<p class="indent">The <span class="cmss-10x-x-109">foamVTKSeries</span><a id="dx42-241001"></a><a id="dx42-241002"></a> script overcomes this challenge quickly and
+easily. The user simply needs to run the script as follows.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamVTKSeries</span></div>
+</div>
+The script interrogates the contents of the <span class="cmssi-10x-x-109">postProcessing</span> directory and creates a VTK
+series file, with extension <span class="cmssi-10x-x-109">.vtk.series</span> for each collection of files it
+encounters. In the <span class="cmssi-10x-x-109">cutPlaneSurface</span> example, <span class="cmss-10x-x-109">foamVTKSeries</span> would create a file named
+<span class="cmssi-10x-x-109">U</span><span class="cmssi-10x-x-109">_zNormal.vtk.series</span> in the <span class="cmssi-10x-x-109">postProcessing/cutPlaneSurface</span> directory.
+From <span class="cmss-10x-x-109">ParaView</span>, the user can
+then load the series of files by going to <span class="cmtt-10x-x-109">File-&gt;Open</span> and selecting the
+<span class="cmssi-10x-x-109">U</span><span class="cmssi-10x-x-109">_zNormal.vtk.series</span> file. The files appear
+in the <span class="cmss-10x-x-109">Pipeline Browser</span> as a
+single entity, with each file selectable by changing time in the
+<span class="cmss-10x-x-109">Time</span> selector.
+              </div>
+              <div class="extra-hatom"><span class="entry-title">OpenFOAM v13 User Guide - 7.4 Sampling and monitoring data</span>
+              </div>
+            </div>
+            <footer class="entry-meta-bar clearfix"><div class="entry-meta clearfix">
+                <span class="by-author author vcard">
+                <a class="url fn n" href="https://cfd.direct/about/chris-greenshields">Chris Greenshields</a></span>
+                <span class="date">
+                  <a href="https://doc.cfd.direct/openfoam/user-guide-v13/graphs-monitoring/" title="" rel="bookmark">
+                    <time class="entry-date published" datetime="2025-07-08T08:00:00+00:00">8th July 2025</time><time class="updated" datetime="2026-07-27T17:31:45+00:00">8th July 2026</time></a>
+                </span>
+                <span class="category">
+                  <a href="https://cfd.direct/category/user-guide/" rel="category tag">User Guide</a>
+                </span>
+              </div>
+            </footer></article></div>
+      </div>
+<div id="secondary">
+        <a href="https://cfd.tips/1buy"><img src="../../assets/img/user-guide-v13-cover.png" alt="OpenFOAM User Guide"></a>
+    <div id="training-schedule"></div>
+      </div>
+    </div>
+  </div>
+  <footer id="colophon" class="clearfix"><div class="footer-socket-wrapper clearfix">
+      <div class="inner-wrap">
+        <div class="footer-socket-area">
+          <div class="copyright">Copyright © 2015-2025 <a href="https://cfd.direct/" title="CFD Direct">
+          <span>CFD Direct</span></a> Ltd</div>
+          <nav class="small-menu clearfix"><div class="menu-footer-container">
+              <ul id="menu-footer" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a title="CFD Direct | Contact" href="https://cfd.direct/contact/">Contact Us</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="https://www.linkedin.com/company/9369175">LinkedIn</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | Bluesky" href="https://bsky.app/profile/cfd.direct">Bluesky</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | X" href="https://x.com/CFDdirect">X</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="http://cfd.tips">YouTube</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/website-terms-of-use/">Website Terms of Use</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/privacy-policy/">Privacy</a></li>
+                </ul></div>
+          </nav></div>
+      </div>
+    </div>
+  </footer><a href="#masthead" id="scroll-up"></a>
+    </div>
+    <script type="text/javascript" src="../../assets/js/jquery/ui/core.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/jquery/ui/datepicker.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/navigation.min.js"></script><script type="text/javascript" src="../../assets/js/spacious-custom.min.js"></script><script type="text/javascript">function checkKey(e) { e = e || window.event; switch (e.key) {
+case "ArrowRight": document.location = "post-processing-third-party"; break;
+case "Enter": document.location = "post-processing-third-party"; break;
+case "ArrowLeft": document.location = "post-processing-functionality"; break;
+case "PageUp": document.location = "postprocessing"; break;
+ } }
+document.onkeydown = checkKey;
+</script></body></html>

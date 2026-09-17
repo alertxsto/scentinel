@@ -1,0 +1,759 @@
+<html lang="en-GB" prefix="og: http://ogp.me/ns#"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OpenFOAM v13 User Guide - 8.2 Turbulence models</title><meta name="description" content="OpenFOAM v13 User Guide - 8.2 Turbulence models. The free introductory and reference guide to some basic CFD with OpenFOAM."><link rel="canonical" href="https://doc.cfd.direct/openfoam/user-guide-v14/turbulence/"><meta property="og:locale" content="en_GB"><meta property="og:type" content="article"><meta property="og:title" content="OpenFOAM v13 User Guide"><meta property="og:description" content="OpenFOAM v13 User Guide - 8.2 Turbulence models. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta property="og:url" content="https://doc.cfd.direct/openfoam/user-guide-v13/turbulence/"><meta property="og:site_name" content="CFD Direct"><meta property="og:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:section" content="OpenFOAM v13 User Guide - 8.2 Turbulence models"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:description" content="OpenFOAM v13 User Guide - 8.2 Turbulence models. The free introductory and reference guide to some basic CFD with OpenFOAM."><meta name="twitter:title" content="OpenFOAM v13 User Guide"><meta name="twitter:site" content="@CFDdirect"><meta name="twitter:creator" content="@CFDdirect"><meta name="twitter:image" content="https://doc.cfd.direct/assets/img/user-guide-v13-og-image.png"><meta property="article:published_time" content="2025-07-08T08:00:00+00:00"><meta property="article:modified_time" content="2026-07-27T17:31:49+00:00"><meta property="og:updated_time" content="2026-07-27T17:31:49+00:00"><link rel="stylesheet" id="style-css" href="../../assets/css/style.css" type="text/css" media="all"><link rel="stylesheet" id="genericons-css" href="../../assets/css/genericons.css" type="text/css" media="all"><link rel="stylesheet" id="fonts-css" href="../../assets/css/fonts.css" type="text/css" media="all"><link rel="stylesheet" id="font-awesome-css" href="../../assets/css/font-awesome.css" type="text/css" media="all"><link rel="stylesheet" type="text/css" href="../../assets/css/main.css"><link rel="stylesheet" type="text/css" href="../../assets/css/custom.css"><link rel="stylesheet" type="text/css" href="../../assets/css/doc.css"><link rel="stylesheet" type="text/css" href="../../assets/css/index.css"><script type="text/javascript" src="../../assets/js/jquery/jquery.js?ver=1.12.4"></script><script type="text/javascript" src="../../assets/js/jquery/jquery-migrate.min.js?ver=1.4.1"></script><script type="text/javascript">
+     jQuery(document).ready(function($){ $( "#training-schedule" ).load( "../../assets/html/training-schedule.html" ); });
+     jQuery(document).ready(function($){ $( "#content-top" ).load( "../../assets/html/content-top.html" ); });
+  </script><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-32x32.png" sizes="32x32"><link rel="icon" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-192x192.png" sizes="192x192"><link rel="apple-touch-icon-precomposed" href="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-180x180.png"><meta name="msapplication-TileImage" content="../../assets/img/cropped-CFDdirectLogoSqDarkLargeBorder-270x270.png"></head><body data-rsssl="1" class="post-template-default
+         single
+         single-post
+         single-format-standard
+         wp-custom-logo
+         better-responsive-menu
+         narrow-1218">
+<div id="page" class="hfeed site">
+  <header id="masthead" class="site-header clearfix  spacious-header-display-one"><div id="header-meta">
+      <div class="inner-wrap clearfix">
+        <div class="social-links clearfix">
+          <ul><li class="spacious-twitter"><a href="https://twitter.com/CFDdirect" target="_blank"></a></li>
+            <li class="spacious-github"><a href="https://github.com/OpenFOAM" target="_blank"></a></li>
+            <li class="spacious-linkedin"><a href="https://www.linkedin.com/company/9369175" target="_blank"></a></li>
+            <li class="spacious-youtube"><a href="http://cfd.tips" target="_blank"></a></li>
+          </ul></div>
+        <nav class="small-menu"></nav></div>
+    </div>
+    <div id="header-text-nav-container">
+      <div class="inner-wrap clearfix">
+        <div id="header-text-nav-wrap" class="clearfix">
+          <div id="header-left-section">
+            <div id="header-logo-image">
+              <a href="https://cfd.direct/" class="custom-logo-link" rel="home" itemprop="url">
+                <img width="85" height="85" src="../../assets/img/CFDdirectLogoSq800080-85x85.png" class="custom-logo" alt="CFD Direct" itemprop="logo"></a>
+            </div>
+            <div id="header-text" class="">
+              <h3 id="site-title">
+                <a href="https://cfd.direct/" title="CFD Direct" rel="home">CFD Direct</a>
+              </h3>
+              <p id="site-description">The Architects of OpenFOAM</p>
+            </div>
+          </div>
+          <div id="header-right-section">
+            <div id="header-right-sidebar" class="clearfix">
+              <aside id="search-2" class="widget widget_search"><form action="" class="search-form searchform clearfix" method="get">
+                  <div class="search-wrap">
+                    <input type="text" placeholder="Search" class="s field" name="s"><button class="search-icon" type="submit"></button>
+                  </div>
+                </form>
+              </aside></div>
+            <div class="header-action">
+            </div>
+            <nav id="site-navigation" class="main-navigation" role="navigation"><p class="menu-toggle">Menu</p>
+              <div class="menu-primary-container">
+                <ul id="menu-header" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-home menu-item-82">
+                    <a href="https://cfd.direct/">Home</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                    <a href="https://doc.cfd.direct/notes/cfd-general-principles">Book</a>
+                  </li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM  | Open Source Computational Fluid Dynamics" href="https://cfd.direct/openfoam/">OpenFOAM</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/about/">About OpenFOAM</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/download/">Download</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/management/">Management</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/documentation/">Documentation</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-post">
+                        <a href="https://cfd.direct/openfoam/user-guide/">User Guide</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/videos/">Videos</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam/features/">Features</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a href="https://cfd.direct/cloud/">Cloud</a>
+                    <ul class="sub-menu"><li id="menu-item-2258" class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/">Run on AWS EC2</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/setup/">+ Register/Setup</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/launch/">+ Launch an Instance</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/cloud/aws/cli/launch/">+ Use the CLI</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Training" href="https://cfd.direct/openfoam-training/">Training</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training Schedule" href="https://cfd.direct/openfoam-training/schedule/">Schedule</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Course Catalogue" href="https://cfd.direct/openfoam-training/course-catalogue/">Course Catalogue</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Essential CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/essential-cfd/">+ Essential CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Applied CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/applied-cfd/">+ Applied CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Productive CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/productive-cfd/">+ Productive CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Programming CFD | OpenFOAM Course" href="https://cfd.direct/openfoam-training/programming-cfd/">+ Programming CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="Overview of CFD with OpenFOAM | Free Webinar" href="https://cfd.direct/openfoam-training/overview-cfd/">Overview of CFD</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Academic On-site" href="https://cfd.direct/openfoam-training/academic-on-site/">Academic On-site</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Training | Industry On-site" href="https://cfd.direct/openfoam-training/industry-on-site/">Industry On-site</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="OpenFOAM Support" href="https://cfd.direct/openfoam-support/">Support</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/openfoam-support/cfd-support/">CFD Support</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a title="OpenFOAM Development" href="https://cfd.direct/openfoam-development/">Development</a>
+                      </li>
+                    </ul></li>
+                  <li class="menu-item menu-item-type-post_type menu-item-object-page menu-item-has-children">
+                    <a title="Contact CFD Direct" href="https://cfd.direct/contact/">Contact</a>
+                    <ul class="sub-menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/news/">News</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/about/">About Us</a>
+                      </li>
+                      <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                        <a href="https://cfd.direct/careers/">Careers</a>
+                      </li>
+                    </ul></li>
+                </ul></div>
+            </nav></div>
+        </div>
+      </div>
+    </div>
+    <div class="header-post-title-container clearfix">
+      <div class="inner-wrap">
+        <div class="post-title-wrapper">
+          <h1 class="header-post-title-class entry-title">OpenFOAM v13 User Guide - 8.2 Turbulence models</h1>
+          <div class="taxonomy-description">
+          </div>
+        </div>
+      </div>
+    </div>
+  </header><div id="main" class="clearfix">
+    <div class="inner-wrap">
+      <div id="primary">
+        <div id="content" class="clearfix">
+          <article class="post type-post status-publish format-standard hentry category-user-guide"><div class="entry-content clearfix">
+              <div id="content-top"></div>
+                  <section class="widget widget_call_to_action clearfix"><div class="call-to-action-content-wrapper clearfix">
+                    <div class="call-to-action-content">
+                      <h3>How are turbulence models initialised in OpenFOAM?</h3>
+                      <p>
+                        Our Essential CFD course demonstrates the initialisation of turbulence models
+                      </p>
+                    </div>
+                    <a class="call-to-action-button" target="_blank" href="https://cfd.direct/openfoam-training/essential-cfd" title="Essential CFD">Essential CFD</a>
+                  </div>
+                  </section><div class="note">
+<div class="crosslinks"><p class="noindent">[<a href="../user-guide-v14">version 14</a>][<strong>version 13</strong>][<a href="../user-guide-v12">version 12</a>][<a href="../user-guide-v11">version 11</a>][<a href="../user-guide-v10">version 10</a>][<a href="../user-guide-v9">version 9</a>][<a href="../user-guide-v8">version 8</a>][<a href="../user-guide-v7">version 7</a>][<a href="../user-guide-v6">version 6</a>]</p></div>
+<div class="crosslinks">
+<p class="noindent">[<a href="models">chapter
+contents</a>][<a href="thermophysical">previous
+topic</a>][<a href="transport-rheology">next
+topic</a>][<a href="bookindex">index</a>]</p>
+</div>
+<h2 class="pagetitle"><span class="titlemark">8.2</span> <a id="x46-2530008.2"></a>Turbulence models</h2>
+
+<p class="noindent">Turbulence modelling is part of general
+<span class="cmbx-10x-x-109">momentum transport</span> which is
+concerned with models for the viscous stress in a fluid. Momentum
+transport is configured through the <span class="cmssi-10x-x-109">momentumTransport</span><a id="dx46-253001"></a><a id="dx46-253002"></a> file in the <span class="cmssi-10x-x-109">constant</span> directory of a case. The file
+includes the mandatory <span class="cmtt-10x-x-109">simulationType</span><a id="dx46-253003"></a><a id="dx46-253004"></a> keyword that specifies
+how turbulence is modelled, which includes the following
+options:</p>
+<dl class="description"><dt class="description"><br class="noindent"><span class="cmtt-10x-x-109">laminar</span><a id="dx46-253005"></a><a id="dx46-253006"></a></dt>
+<dd class="description">
+<p class="noindent">uses no turbulence models;</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmtt-10x-x-109">RAS</span><a id="dx46-253007"></a><a id="dx46-253008"></a></dt>
+<dd class="description">
+<p class="noindent">uses Reynolds-averaged simulation (RAS)
+modelling;</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmtt-10x-x-109">LES</span><a id="dx46-253009"></a><a id="dx46-253010"></a></dt>
+<dd class="description">
+<p class="noindent">uses large-eddy simulation (LES) modelling.</p>
+</dd>
+</dl><p class="noindent">The file then includes a sub-dictionary of the
+same name as the chosen <span class="cmtt-10x-x-109">simulationType</span><a id="dx46-253011"></a><a id="dx46-253012"></a> which contains the model
+selections. A typical example is shown below that uses the
+<img border="0" src="img/index531x.png" alt="eqn" class="math">–<img border="0" src="img/index532x.png" alt="eqn" class="math"> (k-epsilon) turbulence model.</p>
+<pre class="fancyvrb" id="fancyvrb78">
+<a id="x46-253014r16"></a><span class="cmr-6">16</span>
+
+<a id="x46-253016r17"></a><span class="cmr-6">17</span><span class="cmtt-9">simulationType</span><span class="cmtt-9"> RAS;</span>
+
+<a id="x46-253018r18"></a><span class="cmr-6">18</span>
+
+<a id="x46-253020r19"></a><span class="cmr-6">19</span><span class="cmtt-9">RAS</span>
+
+<a id="x46-253022r20"></a><span class="cmr-6">20</span><span class="cmtt-9">{</span>
+
+<a id="x46-253024r21"></a><span class="cmr-6">21</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> model</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> kEpsilon;</span>
+
+<a id="x46-253026r22"></a><span class="cmr-6">22</span>
+
+<a id="x46-253028r23"></a><span class="cmr-6">23</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> turbulence</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> on;</span>
+
+<a id="x46-253030r24"></a><span class="cmr-6">24</span><span class="cmtt-9">}</span>
+
+<a id="x46-253032r25"></a><span class="cmr-6">25</span>
+
+<a id="x46-253034r26"></a><span class="cmr-6">26</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">The file shows the selected <span class="cmtt-10x-x-109">RAS</span> simulation followed by the <span class="cmtt-10x-x-109">RAS</span> sub-dictionary containing the model
+selections, in particular the <span class="cmtt-10x-x-109">model</span> which is set to <span class="cmtt-10x-x-109">kEpsilon</span>. The choice of RAS models is
+described in section <a href="#x46-2540008.2.1">8.2.1
+</a> and more information can be found
+in <a href="https://doc.cfd.direct/notes/cfd-general-principles/reynolds-averaged-turbulence-modelling">
+Chapter 7 of <span class="cmbxti-10x-x-109">Notes on
+Computational</span> <span class="cmbxti-10x-x-109">Fluid Dynamics:
+General Principles</span></a>. The LES models are listed in
+section <a href="#x46-2560008.2.3">8.2.3
+</a>. </p>
+<p class="indent">Where the <span class="cmtt-10x-x-109">laminar</span> option is selected, the
+sub-dictionary is optional and will default to a Newtonian model,
+using the viscosity specified in the <span class="cmssi-10x-x-109">physicalProperties</span> file. Other models,
+including non-Newtonian and visco-elastic models, are described in
+section <a href="transport-rheology#x47-2600008.3">8.3
+</a>. Non-Newtonian models
+can also be combined with turbulence models (whereas visco-elastic
+models cannot). </p>
+<p class="indent">For a general introduction to turbulence for CFD,
+the reader may also wish to consult <a href="https://doc.cfd.direct/notes/cfd-general-principles/introduction-to-turbulence">
+Chapter 6 of <span class="cmbxti-10x-x-109">Notes on Computational
+Fluid Dynamics: General</span> <span class="cmbxti-10x-x-109">Principles</span></a>. </p>
+<p class="noindent"></p>
+<h3 class="pagetitle"><span class="titlemark">8.2.1</span> <a id="x46-2540008.2.1"></a>Reynolds-averaged simulation (RAS)
+modelling</h3>
+
+<p class="noindent">If <span class="cmtt-10x-x-109">RAS</span> is
+selected, the choice of RAS modelling is specified in a <span class="cmtt-10x-x-109">RAS</span> sub-dictionary which requires the
+following entries.</p>
+<ul class="itemize1"><li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">model</span><a id="dx46-254001"></a><a id="dx46-254002"></a>: name of RAS turbulence
+model.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">turbulence</span><a id="dx46-254003"></a><a id="dx46-254004"></a>: switch to turn the solving of turbulence
+modelling on/off.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">printCoeffs</span><a id="dx46-254005"></a><a id="dx46-254006"></a>: optional switch to print model coeffs to
+terminal at simulation start up, defaults to <span class="cmtt-10x-x-109">false</span>.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="aess-10">&lt;</span><span class="cmtt-10x-x-109">model</span><span class="aess-10">&gt;</span><span class="cmtt-10x-x-109">Coeffs</span><a id="dx46-254007"></a><a id="dx46-254008"></a>: optional dictionary of coefficients for the
+respective <span class="cmtt-10x-x-109">model</span>, defaults to
+standard coefficients.</p>
+</li>
+</ul><p class="noindent">Turbulence models can be listed by running
+<span class="cmss-10x-x-109">foamToC</span> with a relevant table
+listed from the <span class="cmtt-10x-x-109">RAS</span> or
+<span class="cmtt-10x-x-109">LES</span> tables. For example, the
+<span class="cmtt-10x-x-109">RAS</span> tables are listed by
+running the following command.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamToC</span><span class="cmtt-10x-x-109"> -table</span><span class="cmtt-10x-x-109"> RAS</span></div>
+</div>
+This returns several sub-tables. The user can then list the models
+within one of those tables, <span class="cmti-10x-x-109">e.g.</span> the incompressible models.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamToC</span><span class="cmtt-10x-x-109"> -table</span><span class="cmtt-10x-x-109"> RASincompressibleMomentumTransportModel</span></div>
+</div>
+The RAS models used in the tutorials can be listed using
+<span class="cmss-10x-x-109">foamSearch</span> with the following
+command. The lists of available models are given in the following
+sections.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamSearch</span><span class="cmtt-10x-x-109"> </span><span class="tctt-1095">$</span><span class="cmtt-10x-x-109">FOAM</span><span class="cmtt-10x-x-109">_TUTORIALS</span><span class="cmtt-10x-x-109"> momentumTransport</span><span class="cmtt-10x-x-109"> RAS/model</span></div>
+</div>
+Users can locate tutorials using a particular model, <span class="cmti-10x-x-109">e.g.</span> <span class="cmss-10x-x-109">buoyantKEpsilon</span>, using <span class="cmss-10x-x-109">foamInfo</span>.
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamInfo</span><span class="cmtt-10x-x-109"> buoyantKEpsilon</span></div>
+</div>
+<h3 class="pagetitle"><span class="titlemark">8.2.2</span> <a id="x46-2550008.2.2"></a>RAS turbulence models</h3>
+
+<p class="noindent">For <span class="cmbx-10x-x-109">incompressible
+flows</span>, the RAS <span class="cmtt-10x-x-109">model</span><a id="dx46-255001"></a><a id="dx46-255002"></a> can be chosen from the list below.</p>
+<dl class="description"><dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LRR</span><a id="dx46-255003"></a><a id="dx46-255004"></a></dt>
+<dd class="description">
+<p class="noindent">Launder, Reece and Rodi Reynolds-stress
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LamBremhorstKE</span><a id="dx46-255005"></a><a id="dx46-255006"></a></dt>
+<dd class="description">
+<p class="noindent">Lam and Bremhorst low-Reynolds number k-epsilon
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LaunderSharmaKE</span><a id="dx46-255007"></a><a id="dx46-255008"></a></dt>
+<dd class="description">
+<p class="noindent">Launder and Sharma low-Reynolds k-epsilon
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LienCubicKE</span><a id="dx46-255009"></a><a id="dx46-255010"></a></dt>
+<dd class="description">
+<p class="noindent">Lien cubic non-linear low-Reynolds k-epsilon
+turbulence models for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LienLeschziner</span><a id="dx46-255011"></a><a id="dx46-255012"></a></dt>
+<dd class="description">
+<p class="noindent">Lien and Leschziner low-Reynolds number
+k-epsilon turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">RNGkEpsilon</span><a id="dx46-255013"></a><a id="dx46-255014"></a></dt>
+<dd class="description">
+<p class="noindent">Renormalization group k-epsilon turbulence
+model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SSG</span><a id="dx46-255015"></a><a id="dx46-255016"></a></dt>
+<dd class="description">
+<p class="noindent">Speziale, Sarkar and Gatski Reynolds-stress
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">ShihQuadraticKE</span><a id="dx46-255017"></a><a id="dx46-255018"></a></dt>
+<dd class="description">
+<p class="noindent">Shih’s quadratic algebraic Reynolds stress
+k-epsilon turbulence model for incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SpalartAllmaras</span><a id="dx46-255019"></a><a id="dx46-255020"></a></dt>
+<dd class="description">
+<p class="noindent">Spalart-Allmaras one-eqn mixing-length model
+for incompressible external flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kEpsilon</span><a id="dx46-255021"></a><a id="dx46-255022"></a></dt>
+<dd class="description">
+<p class="noindent">Standard k-epsilon turbulence model for
+incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kEpsilonLopesdaCosta</span><a id="dx46-255023"></a><a id="dx46-255024"></a></dt>
+<dd class="description">
+<p class="noindent">Variant of the standard k-epsilon turbulence
+model with additional source terms to handle the changes in
+turbulence in porous regions for atmospheric flows over forested
+terrain.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmega</span><a id="dx46-255025"></a><a id="dx46-255026"></a></dt>
+<dd class="description">
+<p class="noindent">Standard high Reynolds-number k-omega
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmega2006</span><a id="dx46-255027"></a><a id="dx46-255028"></a></dt>
+<dd class="description">
+<p class="noindent">Standard (2006) high Reynolds-number k-omega
+turbulence model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSST</span><a id="dx46-255029"></a><a id="dx46-255030"></a></dt>
+<dd class="description">
+<p class="noindent">Implementation of the k-omega-SST turbulence
+model for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSSTLM</span><a id="dx46-255031"></a><a id="dx46-255032"></a></dt>
+<dd class="description">
+<p class="noindent">Langtry-Menter 4-equation transitional SST
+model based on the k-omega-SST RAS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSSTSAS</span><a id="dx46-255033"></a><a id="dx46-255034"></a></dt>
+<dd class="description">
+<p class="noindent">Scale-adaptive URAS model based on the
+k-omega-SST RAS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kkLOmega</span><a id="dx46-255035"></a><a id="dx46-255036"></a></dt>
+<dd class="description">
+<p class="noindent">Low Reynolds-number k-kl-omega turbulence model
+for incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">qZeta</span><a id="dx46-255037"></a><a id="dx46-255038"></a></dt>
+<dd class="description">
+<p class="noindent">Gibson and Dafa’Alla’s q-zeta two-equation
+low-Re turbulence model for incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">realizableKE</span><a id="dx46-255039"></a><a id="dx46-255040"></a></dt>
+<dd class="description">
+<p class="noindent">Realizable k-epsilon turbulence model for
+incompressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">v2f</span><a id="dx46-255041"></a><a id="dx46-255042"></a></dt>
+<dd class="description">
+<p class="noindent">Lien and Kalitzin’s v2-f turbulence model for
+incompressible flows, with a limit imposed on the turbulent
+viscosity given by Davidson et al.</p>
+</dd>
+</dl><p class="noindent">For <span class="cmbx-10x-x-109">compressible
+flows</span>, the RAS <span class="cmtt-10x-x-109">model</span><a id="dx46-255043"></a><a id="dx46-255044"></a> can be chosen from the list below.</p>
+<dl class="description"><dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LRR</span><a id="dx46-255045"></a><a id="dx46-255046"></a></dt>
+<dd class="description">
+<p class="noindent">Launder, Reece and Rodi Reynolds-stress
+turbulence model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">LaunderSharmaKE</span><a id="dx46-255047"></a><a id="dx46-255048"></a></dt>
+<dd class="description">
+<p class="noindent">Launder and Sharma low-Reynolds k-epsilon
+turbulence model for compressible and combusting flows including
+rapid distortion theory (RDT) based compression term.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">RNGkEpsilon</span><a id="dx46-255049"></a><a id="dx46-255050"></a></dt>
+<dd class="description">
+<p class="noindent">Renormalization group k-epsilon turbulence
+model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SSG</span><a id="dx46-255051"></a><a id="dx46-255052"></a></dt>
+<dd class="description">
+<p class="noindent">Speziale, Sarkar and Gatski Reynolds-stress
+turbulence model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SpalartAllmaras</span><a id="dx46-255053"></a><a id="dx46-255054"></a></dt>
+<dd class="description">
+<p class="noindent">Spalart-Allmaras one-eqn mixing-length model
+for compressible external flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">buoyantKEpsilon</span><a id="dx46-255055"></a><a id="dx46-255056"></a></dt>
+<dd class="description">
+<p class="noindent">Additional buoyancy generation/dissipation term
+applied to the k and epsilon equations of the standard k-epsilon
+model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kEpsilon</span><a id="dx46-255057"></a><a id="dx46-255058"></a></dt>
+<dd class="description">
+<p class="noindent">Standard k-epsilon turbulence model for
+compressible flows including rapid distortion theory (RDT) based
+compression term.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmega</span><a id="dx46-255059"></a><a id="dx46-255060"></a></dt>
+<dd class="description">
+<p class="noindent">Standard high Reynolds-number k-omega
+turbulence model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmega2006</span><a id="dx46-255061"></a><a id="dx46-255062"></a></dt>
+<dd class="description">
+<p class="noindent">Standard (2006) high Reynolds-number k-omega
+turbulence model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSST</span><a id="dx46-255063"></a><a id="dx46-255064"></a></dt>
+<dd class="description">
+<p class="noindent">Implementation of the k-omega-SST turbulence
+model for compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSSTLM</span><a id="dx46-255065"></a><a id="dx46-255066"></a></dt>
+<dd class="description">
+<p class="noindent">Langtry-Menter 4-equation transitional SST
+model based on the k-omega-SST RAS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSSTSAS</span><a id="dx46-255067"></a><a id="dx46-255068"></a></dt>
+<dd class="description">
+<p class="noindent">Scale-adaptive URAS model based on the
+k-omega-SST RAS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">realizableKE</span><a id="dx46-255069"></a><a id="dx46-255070"></a></dt>
+<dd class="description">
+<p class="noindent">Realizable k-epsilon turbulence model for
+compressible flows.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">v2f</span><a id="dx46-255071"></a><a id="dx46-255072"></a></dt>
+<dd class="description">
+<p class="noindent">Lien and Kalitzin’s v2-f turbulence model for
+compressible flows, with a limit imposed on the turbulent viscosity
+given by Davidson et al.</p>
+</dd>
+</dl><p class="noindent"></p>
+<h3 class="pagetitle"><span class="titlemark">8.2.3</span> <a id="x46-2560008.2.3"></a>Large eddy simulation (LES) modelling</h3>
+
+<p class="noindent">If <span class="cmtt-10x-x-109">LES</span> is
+selected, the choice of LES modelling is specified in a <span class="cmtt-10x-x-109">LES</span> sub-dictionary which requires the
+following entries.</p>
+<ul class="itemize1"><li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">model</span><a id="dx46-256001"></a><a id="dx46-256002"></a>: name of LES turbulence
+model.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">turbulence</span><a id="dx46-256003"></a><a id="dx46-256004"></a>: switch to turn the solving of turbulence
+modelling on/off.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">delta</span><a id="dx46-256005"></a><a id="dx46-256006"></a>: name of delta
+<img border="0" src="img/index533x.png" alt="eqn" class="math">
+model.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmtt-10x-x-109">printCoeffs</span><a id="dx46-256007"></a><a id="dx46-256008"></a>: optional switch to print model coeffs to
+terminal at simulation start up, defaults to <span class="cmtt-10x-x-109">false</span>.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="aess-10">&lt;</span><span class="cmtt-10x-x-109">model</span><span class="aess-10">&gt;</span><span class="cmtt-10x-x-109">Coeffs</span><a id="dx46-256009"></a><a id="dx46-256010"></a>:</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="aess-10">&lt;</span><span class="cmtt-10x-x-109">model</span><span class="aess-10">&gt;</span><span class="cmtt-10x-x-109">Coeffs</span><a id="dx46-256011"></a><a id="dx46-256012"></a>: optional dictionary of coefficients for the
+respective <span class="cmtt-10x-x-109">model</span>, to override
+the default coefficients.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="aess-10">&lt;</span><span class="cmtt-10x-x-109">delta</span><span class="aess-10">&gt;</span><span class="cmtt-10x-x-109">Coeffs</span><a id="dx46-256013"></a><a id="dx46-256014"></a>: dictionary of coefficients for the <span class="cmtt-10x-x-109">delta</span> model.</p>
+</li>
+</ul><p class="noindent">The LES models used in the tutorials can be
+listed using <span class="cmss-10x-x-109">foamSearch</span> with
+the following command. The lists of available models are given in
+the following sections.</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamSearch</span><span class="cmtt-10x-x-109"> </span><span class="tctt-1095">$</span><span class="cmtt-10x-x-109">FOAM</span><span class="cmtt-10x-x-109">_TUTORIALS</span><span class="cmtt-10x-x-109"> momentumTransport</span><span class="cmtt-10x-x-109"> LES/model</span></div>
+</div>
+<h3 class="pagetitle"><span class="titlemark">8.2.4</span> <a id="x46-2570008.2.4"></a>LES turbulence models</h3>
+
+<p class="noindent">For <span class="cmbx-10x-x-109">incompressible
+and compressible flows</span>, the LES <span class="cmtt-10x-x-109">model</span><a id="dx46-257001"></a><a id="dx46-257002"></a> can be chosen from the list below.</p>
+<dl class="description"><dt class="description"><br class="noindent"><span class="cmss-10x-x-109">DeardorffDiffStress</span><a id="dx46-257003"></a><a id="dx46-257004"></a></dt>
+<dd class="description">
+<p class="noindent">Differential SGS Stress Equation Model for
+incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">Smagorinsky</span><a id="dx46-257005"></a><a id="dx46-257006"></a></dt>
+<dd class="description">
+<p class="noindent">The Smagorinsky SGS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SpalartAllmarasDDES</span><a id="dx46-257007"></a><a id="dx46-257008"></a></dt>
+<dd class="description">
+<p class="noindent">SpalartAllmaras DDES turbulence model for
+incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SpalartAllmarasDES</span><a id="dx46-257009"></a><a id="dx46-257010"></a></dt>
+<dd class="description">
+<p class="noindent">SpalartAllmarasDES DES turbulence model for
+incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">SpalartAllmarasIDDES</span><a id="dx46-257011"></a><a id="dx46-257012"></a></dt>
+<dd class="description">
+<p class="noindent">SpalartAllmaras IDDES turbulence model for
+incompressible flows</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">WALE</span><a id="dx46-257013"></a><a id="dx46-257014"></a></dt>
+<dd class="description">
+<p class="noindent">The Wall-adapting local eddy-viscosity (WALE)
+SGS model.</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">dynamicKEqn</span><a id="dx46-257015"></a><a id="dx46-257016"></a></dt>
+<dd class="description">
+<p class="noindent">Dynamic one equation eddy-viscosity model</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">dynamicLagrangian</span><a id="dx46-257017"></a><a id="dx46-257018"></a></dt>
+<dd class="description">
+<p class="noindent">Dynamic SGS model with Lagrangian averaging</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kEqn</span><a id="dx46-257019"></a><a id="dx46-257020"></a></dt>
+<dd class="description">
+<p class="noindent">One equation eddy-viscosity model</p>
+</dd>
+<dt class="description"><br class="noindent"><span class="cmss-10x-x-109">kOmegaSSTDES</span><a id="dx46-257021"></a><a id="dx46-257022"></a></dt>
+<dd class="description">
+<p class="noindent">Implementation of the k-omega-SST-DES
+turbulence model for incompressible flows.</p>
+</dd>
+</dl><p class="noindent"></p>
+<h3 class="pagetitle"><span class="titlemark">8.2.5</span> <a id="x46-2580008.2.5"></a>Model coefficients</h3>
+
+<p class="noindent">The coefficients for the RAS turbulence models
+are given default values in their respective source code. If the
+user wishes to override these default values, then they can do so
+by adding a sub-dictionary entry to the <span class="cmtt-10x-x-109">RAS</span> sub-dictionary file, whose keyword name
+is that of the model with <span class="cmtt-10x-x-109">Coeffs</span> appended, <span class="cmti-10x-x-109">e.g.</span> <span class="cmtt-10x-x-109">kEpsilonCoeffs</span> for the <span class="cmtt-10x-x-109">kEpsilon</span> model. If the <span class="cmtt-10x-x-109">printCoeffs</span> switch is <span class="cmtt-10x-x-109">on</span> in the <span class="cmtt-10x-x-109">RAS</span> sub-dictionary, an example of the
+relevant <span class="cmtt-10x-x-109">…Coeffs</span> dictionary is
+printed to standard output when the model is created at the
+beginning of a run. The user can simply copy this into the
+<span class="cmtt-10x-x-109">RAS</span> sub-dictionary file and edit
+the entries as required. </p>
+<p class="noindent"></p>
+<h3 class="pagetitle"><span class="titlemark">8.2.6</span> <a id="x46-2590008.2.6"></a>Wall functions</h3>
+
+<p class="noindent">A range of wall function models is available in
+OpenFOAM that are applied as boundary conditions on individual
+patches. This enables different wall function models to be applied
+to different wall regions. The choice of wall function model is
+specified through the turbulent viscosity field <img border="0" src="img/index534x.png" alt="eqn" class="math"> in the <span class="cmssi-10x-x-109">0/nut</span> file. For example, a <span class="cmssi-10x-x-109">0/nut</span> file:</p>
+<pre class="fancyvrb" id="fancyvrb79">
+<a id="x46-259002r16"></a><span class="cmr-6">16</span>
+
+<a id="x46-259004r17"></a><span class="cmr-6">17</span><span class="cmtt-9">dimensions</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> [0</span><span class="cmtt-9"> 2</span><span class="cmtt-9"> -1</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0</span><span class="cmtt-9"> 0];</span>
+
+<a id="x46-259006r18"></a><span class="cmr-6">18</span>
+
+<a id="x46-259008r19"></a><span class="cmr-6">19</span><span class="cmtt-9">internalField</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x46-259010r20"></a><span class="cmr-6">20</span>
+
+<a id="x46-259012r21"></a><span class="cmr-6">21</span><span class="cmtt-9">boundaryField</span>
+
+<a id="x46-259014r22"></a><span class="cmr-6">22</span><span class="cmtt-9">{</span>
+
+<a id="x46-259016r23"></a><span class="cmr-6">23</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> inlet</span>
+
+<a id="x46-259018r24"></a><span class="cmr-6">24</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x46-259020r25"></a><span class="cmr-6">25</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> calculated;</span>
+
+<a id="x46-259022r26"></a><span class="cmr-6">26</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> value</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x46-259024r27"></a><span class="cmr-6">27</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x46-259026r28"></a><span class="cmr-6">28</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> outlet</span>
+
+<a id="x46-259028r29"></a><span class="cmr-6">29</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x46-259030r30"></a><span class="cmr-6">30</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> calculated;</span>
+
+<a id="x46-259032r31"></a><span class="cmr-6">31</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> value</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x46-259034r32"></a><span class="cmr-6">32</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x46-259036r33"></a><span class="cmr-6">33</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> upperWall</span>
+
+<a id="x46-259038r34"></a><span class="cmr-6">34</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x46-259040r35"></a><span class="cmr-6">35</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nutkWallFunction;</span>
+
+<a id="x46-259042r36"></a><span class="cmr-6">36</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> value</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x46-259044r37"></a><span class="cmr-6">37</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x46-259046r38"></a><span class="cmr-6">38</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> lowerWall</span>
+
+<a id="x46-259048r39"></a><span class="cmr-6">39</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x46-259050r40"></a><span class="cmr-6">40</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> nutkWallFunction;</span>
+
+<a id="x46-259052r41"></a><span class="cmr-6">41</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> value</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> uniform</span><span class="cmtt-9"> 0;</span>
+
+<a id="x46-259054r42"></a><span class="cmr-6">42</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x46-259056r43"></a><span class="cmr-6">43</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> frontAndBack</span>
+
+<a id="x46-259058r44"></a><span class="cmr-6">44</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> {</span>
+
+<a id="x46-259060r45"></a><span class="cmr-6">45</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> type</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> empty;</span>
+
+<a id="x46-259062r46"></a><span class="cmr-6">46</span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> </span><span class="cmtt-9"> }</span>
+
+<a id="x46-259064r47"></a><span class="cmr-6">47</span><span class="cmtt-9">}</span>
+
+<a id="x46-259066r48"></a><span class="cmr-6">48</span>
+
+<a id="x46-259068r49"></a><span class="cmr-6">49</span>
+
+<a id="x46-259070r50"></a><span class="cmr-6">50</span><span class="cmtt-9">//</span><span class="cmtt-9"> *************************************************************************</span><span class="cmtt-9"> //</span>
+   </pre>
+
+<p class="noindent">There are a number of wall function models
+available in the release, <span class="cmti-10x-x-109">e.g.</span> <span class="cmtt-10x-x-109">nutWallFunction</span>, <span class="cmtt-10x-x-109">nutRoughWallFunction</span>, <span class="cmtt-10x-x-109">nutUSpaldingWallFunction</span>, <span class="cmtt-10x-x-109">nutkWallFunction</span> and <span class="cmtt-10x-x-109">nutkAtmWallFunction</span>. The user can get the
+full list of wall function models using <span class="cmss-10x-x-109">foamInfo</span>:</p>
+<div class="alltt">
+<p class="noindent"></p>
+<div class="obeylines-v"><br><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> </span><span class="cmtt-10x-x-109"> foamToC</span><span class="cmtt-10x-x-109"> -scalarBCs</span><span class="cmtt-10x-x-109"> |</span><span class="cmtt-10x-x-109"> grep</span><span class="cmtt-10x-x-109"> nut</span></div>
+</div>
+Within each wall function boundary condition the user can over-ride
+default settings for <img border="0" src="img/index535x.png" alt="eqn" class="math">, <img border="0" src="img/index536x.png" alt="eqn" class="math"> and <img border="0" src="img/index537x.png" alt="eqn" class="math"> through optional <span class="cmtt-10x-x-109">E</span>, <span class="cmtt-10x-x-109">kappa</span> and <span class="cmtt-10x-x-109">Cmu</span> keyword entries. 
+<p class="indent">Having selected the particular wall functions on
+various wall patches in the <span class="cmssi-10x-x-109">nut</span> file, the user should select the
+following boundary conditions at wall patches for other turbulence
+fields.</p>
+<ul class="itemize1"><li class="itemize">
+<p class="noindent"><span class="cmssi-10x-x-109">epsilon</span>
+field: apply the <span class="cmss-10x-x-109">epsilonWallFunction</span> to corresponding
+patches.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmssi-10x-x-109">omega</span>
+field: apply the <span class="cmss-10x-x-109">omegaWallFunction</span> to corresponding
+patches.</p>
+</li>
+<li class="itemize">
+<p class="noindent"><span class="cmssi-10x-x-109">k</span>,
+<span class="cmssi-10x-x-109">q</span> or <span class="cmssi-10x-x-109">R</span> field: apply <span class="cmss-10x-x-109">kqRwallFunction</span> to corresponding
+patches.</p>
+</li>
+</ul></div>
+              <div class="extra-hatom"><span class="entry-title">OpenFOAM v13 User Guide - 8.2 Turbulence models</span>
+              </div>
+            </div>
+            <footer class="entry-meta-bar clearfix"><div class="entry-meta clearfix">
+                <span class="by-author author vcard">
+                <a class="url fn n" href="https://cfd.direct/about/chris-greenshields">Chris Greenshields</a></span>
+                <span class="date">
+                  <a href="https://doc.cfd.direct/openfoam/user-guide-v13/turbulence/" title="" rel="bookmark">
+                    <time class="entry-date published" datetime="2025-07-08T08:00:00+00:00">8th July 2025</time><time class="updated" datetime="2026-07-27T17:31:49+00:00">8th July 2026</time></a>
+                </span>
+                <span class="category">
+                  <a href="https://cfd.direct/category/user-guide/" rel="category tag">User Guide</a>
+                </span>
+              </div>
+            </footer></article></div>
+      </div>
+<div id="secondary">
+        <a href="https://cfd.tips/1buy"><img src="../../assets/img/user-guide-v13-cover.png" alt="OpenFOAM User Guide"></a>
+    <div id="training-schedule"></div>
+      </div>
+    </div>
+  </div>
+  <footer id="colophon" class="clearfix"><div class="footer-socket-wrapper clearfix">
+      <div class="inner-wrap">
+        <div class="footer-socket-area">
+          <div class="copyright">Copyright © 2015-2025 <a href="https://cfd.direct/" title="CFD Direct">
+          <span>CFD Direct</span></a> Ltd</div>
+          <nav class="small-menu clearfix"><div class="menu-footer-container">
+              <ul id="menu-footer" class="menu"><li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a title="CFD Direct | Contact" href="https://cfd.direct/contact/">Contact Us</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="https://www.linkedin.com/company/9369175">LinkedIn</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | Bluesky" href="https://bsky.app/profile/cfd.direct">Bluesky</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a title="CFD Direct | X" href="https://x.com/CFDdirect">X</a></li>
+                <li class="menu-item menu-item-type-custom menu-item-object-custom">
+                  <a href="http://cfd.tips">YouTube</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/website-terms-of-use/">Website Terms of Use</a></li>
+                <li class="menu-item menu-item-type-post_type menu-item-object-page">
+                  <a href="https://cfd.direct/privacy-policy/">Privacy</a></li>
+                </ul></div>
+          </nav></div>
+      </div>
+    </div>
+  </footer><a href="#masthead" id="scroll-up"></a>
+    </div>
+    <script type="text/javascript" src="../../assets/js/jquery/ui/core.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/jquery/ui/datepicker.min.js?ver=1.11.4"></script><script type="text/javascript" src="../../assets/js/navigation.min.js"></script><script type="text/javascript" src="../../assets/js/spacious-custom.min.js"></script><script type="text/javascript">function checkKey(e) { e = e || window.event; switch (e.key) {
+case "ArrowRight": document.location = "transport-rheology"; break;
+case "Enter": document.location = "transport-rheology"; break;
+case "ArrowLeft": document.location = "thermophysical"; break;
+case "PageUp": document.location = "models"; break;
+ } }
+document.onkeydown = checkKey;
+</script></body></html>

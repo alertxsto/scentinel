@@ -1,0 +1,786 @@
+{
+  "epa_lfg": {
+    "ch4_percent": 50,
+    "co2_percent": 50,
+    "heating_value_btu_per_cft": [
+      350,
+      600
+    ],
+    "faq_ch4_percent": 50,
+    "faq_co2_h2o_percent": 50,
+    "has_n2_o2_h2_trace": true
+  },
+  "epa_ap42": {
+    "documents": [
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/ap-42-chapter-2-section-4-tables-final.xlsx"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/c2s4_2024_final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/summary-of-changes-from-draft-to-final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-01/c02s04_1_2024_clean.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2025-05/c2s4_2024_final_rlso_final-to-final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/2024.03.12-final-comments-on-landfills-ap42.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/combined-attachments.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/attachment-b-analysis-of-test-data-to-support-revised-nmoc-and-voc-defaults_locked.xlsx"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/attachment-c-reviewed-but-not-revised_locked.xlsx"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/nwra-swana-comments-on-ap-42-final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/ap-42-jz-comments-final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/ap-42-jz-comment-attachment.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-07/draft-ap-42_aptim-comments.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/ap42_c2s4_2024_rtc_final.pdf"
+      },
+      {
+        "label": "",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/reviewed-but-not-revised.xlsx"
+      }
+    ],
+    "downloaded": [
+      {
+        "file": "docs/data/ap-42-chapter-2-section-4-tables-final.xlsx",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/ap-42-chapter-2-section-4-tables-final.xlsx"
+      },
+      {
+        "file": "docs/data/c2s4_2024_final.pdf",
+        "url": "https://www.epa.gov/system/files/documents/2024-08/c2s4_2024_final.pdf"
+      }
+    ]
+  },
+  "cfd_sensor_placement": {
+    "query": "CFD gas dispersion sensor placement optimization",
+    "items": [
+      {
+        "title": "Reconstruction of Full Time Series Data from Gas Sensor Array by Partial Measurement Using Sparse Sensor Placement Optimization Method",
+        "authors": [
+          "Uno, Shigeyasu"
+        ],
+        "year": 2025,
+        "container": "2025 IEEE SENSORS",
+        "doi": "10.1109/sensors59705.2025.11331262",
+        "url": "https://doi.org/10.1109/sensors59705.2025.11331262"
+      },
+      {
+        "title": "On numerical modelling of atmospheric gas dispersion using CFD approach",
+        "authors": [
+          "",
+          "Tran, Le Vu"
+        ],
+        "year": null,
+        "container": "",
+        "doi": "10.32657/10356/103659",
+        "url": "https://doi.org/10.32657/10356/103659"
+      },
+      {
+        "title": "CFD evaluation of Ar leakage",
+        "authors": [],
+        "year": null,
+        "container": "",
+        "doi": "10.1088/1361-6501/ae7ea1/data1",
+        "url": "https://doi.org/10.1088/1361-6501/ae7ea1/data1"
+      },
+      {
+        "title": "",
+        "authors": [],
+        "year": 2021,
+        "container": "",
+        "doi": "10.61686/pvmpy77337",
+        "url": "https://doi.org/10.61686/pvmpy77337"
+      },
+      {
+        "title": "A stochastic programming approach for gas detector placement using CFD-based dispersion simulations",
+        "authors": [
+          "Legg, S.W.",
+          "Benavides-Serrano, A.J.",
+          "Siirola, J.D.",
+          "Watson, J.P.",
+          "Davis, S.G.",
+          "Bratteteig, A.",
+          "Laird, C.D."
+        ],
+        "year": 2012,
+        "container": "Computers &amp; Chemical Engineering",
+        "doi": "10.1016/j.compchemeng.2012.05.010",
+        "url": "https://doi.org/10.1016/j.compchemeng.2012.05.010"
+      },
+      {
+        "title": "A novel CFD-MILP-ANN approach for optimizing sensor placement, number, and source localization in large-scale gas dispersion from unknown locations",
+        "authors": [
+          "Lang, Yiming",
+          "Ng, Michelle Xin Yi",
+          "Yu, Kai Xiang",
+          "Chen, Binghui",
+          "Tan, Peng Chee",
+          "Tan, Khang Wei",
+          "Lam, Weng Hoong",
+          "Siwayanan, Parthiban",
+          "Kim, Kek Seong",
+          "Choong, Thomas Shean Yaw",
+          "Ten, Joon Yoon",
+          "Ban, Zhen Hong"
+        ],
+        "year": 2025,
+        "container": "Digital Chemical Engineering",
+        "doi": "10.1016/j.dche.2024.100216",
+        "url": "https://doi.org/10.1016/j.dche.2024.100216"
+      },
+      {
+        "title": "Comparative Evaluation of the Cloud Dispersion of a Liquefied Natural Gas Leakage Using the UDM and a CFD Model",
+        "authors": [
+          "MirallesSchleder, Adriana",
+          "Martins, Marcelo Ramos"
+        ],
+        "year": 2013,
+        "container": "Volume 7: CFD and VIV",
+        "doi": "10.1115/omae2013-10901",
+        "url": "https://doi.org/10.1115/omae2013-10901"
+      },
+      {
+        "title": "Temperature sensor placement optimization for VAV control using CFD–BES co-simulation strategy",
+        "authors": [
+          "Du, Zhimin",
+          "Xu, Peifan",
+          "Jin, Xinqiao",
+          "Liu, Qiaoling"
+        ],
+        "year": 2015,
+        "container": "Building and Environment",
+        "doi": "10.1016/j.buildenv.2014.11.033",
+        "url": "https://doi.org/10.1016/j.buildenv.2014.11.033"
+      },
+      {
+        "title": "Leakage and Dispersion Characteristics of Mobile Liquid Hydrogen Energy Storage Systems and Risk Mitigation: Optimization of Ventilation Strategies and Sensor Placement for Refueling skids",
+        "authors": [
+          "Li, Jiepu",
+          "Yan, Xincheng",
+          "Li, Chaoyuan",
+          "Chen, Jianyi",
+          "Yang, Hong",
+          "Wang, Gaoping",
+          "Li, Xiang"
+        ],
+        "year": 2026,
+        "container": "",
+        "doi": "10.2139/ssrn.7403681",
+        "url": "https://doi.org/10.2139/ssrn.7403681"
+      },
+      {
+        "title": "CO2 Gas Dispersion of Onshore Pipeline for Complex Terrain &amp; Environment Using CFD",
+        "authors": [
+          "Malek, Farahidayu",
+          "Chauvet, Christian"
+        ],
+        "year": 2026,
+        "container": "Offshore Technology Conference Asia",
+        "doi": "10.4043/36580-ms",
+        "url": "https://doi.org/10.4043/36580-ms"
+      }
+    ]
+  },
+  "landfill_gas_dispersion": {
+    "query": "landfill gas dispersion CFD simulation",
+    "items": [
+      {
+        "title": "CFD simulation of the stratified atmospheric boundary layer: Stack gas dispersion under different thermal stratifications",
+        "authors": [
+          "Wang, Hao",
+          "Blocken, Bert",
+          "Lin, Zhang",
+          "Cheng, Zi"
+        ],
+        "year": 2025,
+        "container": "",
+        "doi": "10.2139/ssrn.5896236",
+        "url": "https://doi.org/10.2139/ssrn.5896236"
+      },
+      {
+        "title": "CFD simulation of gas dispersion dynamics in liquid cross-flows",
+        "authors": [
+          "Rigby, G.D.",
+          "Evans, G.M."
+        ],
+        "year": 1998,
+        "container": "Applied Mathematical Modelling",
+        "doi": "10.1016/s0307-904x(98)10022-7",
+        "url": "https://doi.org/10.1016/s0307-904x(98)10022-7"
+      },
+      {
+        "title": "CFD simulation study on gas dispersion for risk assessment: A case study of sour gas well blowout",
+        "authors": [
+          "Qingchun, Ma",
+          "Laibin, Zhang"
+        ],
+        "year": 2011,
+        "container": "Safety Science",
+        "doi": "10.1016/j.ssci.2011.04.016",
+        "url": "https://doi.org/10.1016/j.ssci.2011.04.016"
+      },
+      {
+        "title": "On numerical modelling of atmospheric gas dispersion using CFD approach",
+        "authors": [
+          "",
+          "Tran, Le Vu"
+        ],
+        "year": null,
+        "container": "",
+        "doi": "10.32657/10356/103659",
+        "url": "https://doi.org/10.32657/10356/103659"
+      },
+      {
+        "title": "CFD simulation of a gas trubine combustor",
+        "authors": [
+          "Ng, Chok"
+        ],
+        "year": null,
+        "container": "",
+        "doi": "10.22215/etd/2003-05556",
+        "url": "https://doi.org/10.22215/etd/2003-05556"
+      },
+      {
+        "title": "CFD Simulation of Gas Pollutant Motion and Dispersion Problem in Wind Tunnel with Respect to Froude Number",
+        "authors": [
+          "Zavila, Ondrej",
+          "Simos, Theodore E.",
+          "Psihoyios, George",
+          "Tsitouras, Ch.",
+          "Anastassi, Zacharias"
+        ],
+        "year": 2011,
+        "container": "AIP Conference Proceedings",
+        "doi": "10.1063/1.3636674",
+        "url": "https://doi.org/10.1063/1.3636674"
+      },
+      {
+        "title": "",
+        "authors": [],
+        "year": 2021,
+        "container": "",
+        "doi": "10.61686/pvmpy77337",
+        "url": "https://doi.org/10.61686/pvmpy77337"
+      },
+      {
+        "title": "Investigation on Gas Dispersion Inside the Large-Scale Containment by CFD Simulation With Code_Saturne for Experimental Scenario Definition",
+        "authors": [
+          "Song, Yuting",
+          "Yun, Xiangyu",
+          "Chen, Tian",
+          "Zhang, Huiyong",
+          "Min, Jiesheng",
+          "Chen, Guofei"
+        ],
+        "year": 2017,
+        "container": "Volume 8: Computational Fluid Dynamics (CFD) and Coupled Codes; Nuclear Education, Public Acceptance and Related Issues",
+        "doi": "10.1115/icone25-67027",
+        "url": "https://doi.org/10.1115/icone25-67027"
+      },
+      {
+        "title": "NUMERICAL SIMULATION APPLIED FOR UNSYMMETRICAL DIMETHYLHYDRAZINE PROPELLANT GAS DISPERSION BASED ON CFD TECHNOLOGY",
+        "authors": [
+          "Huang, Zhiyong",
+          "Jin, Guofeng",
+          "Wang, Xuanjun"
+        ],
+        "year": 2011,
+        "container": "Environmental Engineering and Management Journal",
+        "doi": "10.30638/eemj.2011.139",
+        "url": "https://doi.org/10.30638/eemj.2011.139"
+      },
+      {
+        "title": "CFD Simulation Study to analyze the Dispersion and Explosion of Combustible Gas",
+        "authors": [
+          "Jang, Chang-Bong",
+          "Lee, Hyang-Jik",
+          "Lee, Min-Ho",
+          "Min, Dong-Chul",
+          "Back, Jong-Bae",
+          "Ko, Jae Wook",
+          "Kwon, Hyuck-Myun"
+        ],
+        "year": 2012,
+        "container": "Journal of the Korean Institute of Gas",
+        "doi": "10.7842/kigas.2012.16.5.58",
+        "url": "https://doi.org/10.7842/kigas.2012.16.5.58"
+      }
+    ]
+  },
+  "passive_scalar_transport": {
+    "query": "passive scalar transport turbulent dispersion CFD",
+    "items": [
+      {
+        "title": "Passive Scalar Transport: Dispersion, Patterning, and Mixing",
+        "authors": [],
+        "year": 2012,
+        "container": "Micro- and Nanoscale Fluid Mechanics",
+        "doi": "10.1017/cbo9780511760723.006",
+        "url": "https://doi.org/10.1017/cbo9780511760723.006"
+      },
+      {
+        "title": "Passive Scalar Transport in a Turbulent Spot within a Poiseuille Flow",
+        "authors": [
+          "Arrondeau, Benjamin",
+          "Tardu, Sedat",
+          "Doche, Olivier"
+        ],
+        "year": 2022,
+        "container": "",
+        "doi": "10.2139/ssrn.4182103",
+        "url": "https://doi.org/10.2139/ssrn.4182103"
+      },
+      {
+        "title": "Introduction: A Note on Passive Scalar Transport in Turbulence",
+        "authors": [
+          "Lesieur, M."
+        ],
+        "year": 1989,
+        "container": "Turbulent Shear Flows 6",
+        "doi": "10.1007/978-3-642-73948-4_8",
+        "url": "https://doi.org/10.1007/978-3-642-73948-4_8"
+      },
+      {
+        "title": "Relative dispersion of a passive scalar plume in turbulent shear flow",
+        "authors": [
+          "Vanderwel, Christina",
+          "Tavoularis, Stavros"
+        ],
+        "year": 2014,
+        "container": "Physical Review E",
+        "doi": "10.1103/physreve.89.041005",
+        "url": "https://doi.org/10.1103/physreve.89.041005"
+      },
+      {
+        "title": "Dispersion of a passive scalar in turbulent open channel flow",
+        "authors": [
+          "Bomminayuni, S",
+          "Stoesser, T",
+          "Ruether, N"
+        ],
+        "year": 2014,
+        "container": "River Flow 2014",
+        "doi": "10.1201/b17133-25",
+        "url": "https://doi.org/10.1201/b17133-25"
+      },
+      {
+        "title": "NONLOCAL TRANSPORT OF PASSIVE SCALAR IN TURBULENT CHANNEL FLOW",
+        "authors": [
+          "Hamba, Fujihiro"
+        ],
+        "year": 2003,
+        "container": "Proceeding of Third Symposium on Turbulence and Shear Flow Phenomena",
+        "doi": "10.1615/tsfp3.540",
+        "url": "https://doi.org/10.1615/tsfp3.540"
+      },
+      {
+        "title": "Calculation of scalar structure functions from a vortex model of turbulent passive scalar transport",
+        "authors": [
+          "Higgins, Keith",
+          "Ooi, Andrew",
+          "Chong, M. S."
+        ],
+        "year": 2008,
+        "container": "Physics of Fluids",
+        "doi": "10.1063/1.2844471",
+        "url": "https://doi.org/10.1063/1.2844471"
+      },
+      {
+        "title": "Influence of spanwise rotation and scalar boundary conditions on passive scalar transport in turbulent channel flow",
+        "authors": [
+          "Brethouwer, Geert"
+        ],
+        "year": 2019,
+        "container": "Physical Review Fluids",
+        "doi": "10.1103/physrevfluids.4.014602",
+        "url": "https://doi.org/10.1103/physrevfluids.4.014602"
+      },
+      {
+        "title": "Passive scalar dispersion and mixing in a turbulent jet",
+        "authors": [
+          "Tong, Chenning",
+          "Warhaft, Z."
+        ],
+        "year": 1995,
+        "container": "Journal of Fluid Mechanics",
+        "doi": "10.1017/s0022112095001418",
+        "url": "https://doi.org/10.1017/s0022112095001418"
+      },
+      {
+        "title": "Turbulent mixing and passive scalar transport in shallow flows",
+        "authors": [
+          "Kim, Dae-Hong",
+          "Lynett, Patrick J."
+        ],
+        "year": 2011,
+        "container": "Physics of Fluids",
+        "doi": "10.1063/1.3531716",
+        "url": "https://doi.org/10.1063/1.3531716"
+      }
+    ]
+  },
+  "waste_bunker_ventilation": {
+    "query": "waste bunker ventilation CFD airflow",
+    "items": [
+      {
+        "title": "Incorporating Ventilation Network Simulation into CFD Modeling to Analyze Airflow Distribution Around Longwall Panels",
+        "authors": [
+          "Juganda, Aditya",
+          "Brune, Jürgen",
+          "Bogin, Gregory"
+        ],
+        "year": 2018,
+        "container": "Proceedings of the 11th International Mine Ventilation Congress",
+        "doi": "10.1007/978-981-13-1420-9_74",
+        "url": "https://doi.org/10.1007/978-981-13-1420-9_74"
+      },
+      {
+        "title": "Evaluation of Ventilation Strategies to Mitigate Airborne Infection Risk in a Dental School: A Three-Dimensional CFD Analysis of Airflow Patterns and Ventilation Efficiency",
+        "authors": [
+          "Chaloeytoy, Kittiwoot",
+          "Piemjaiswang, Ratchanon",
+          "Vivatbutsiri, Philaiporn",
+          "Koottathape, Natthavoot",
+          "Prueksrisakul, Titipong",
+          "Ampornaramveth, Ruchanee Salingcarnboriboon",
+          "Srithanyarat, Suebsiri",
+          "Palopakon, Ying",
+          "Srikram, Tanadej"
+        ],
+        "year": 2024,
+        "container": "CFD Letters",
+        "doi": "10.37934/cfdl.17.3.1735",
+        "url": "https://doi.org/10.37934/cfdl.17.3.1735"
+      },
+      {
+        "title": "92. Improvement of the Ventilation System in the Waste Bunker of a Municipal Waste Incinerator Plant",
+        "authors": [
+          "Lee, T.",
+          "Moon, S.",
+          "Heo, J.",
+          "Lee, J.",
+          "Yoo, H."
+        ],
+        "year": 2006,
+        "container": "AIHce 2006",
+        "doi": "10.3320/1.2759094",
+        "url": "https://doi.org/10.3320/1.2759094"
+      },
+      {
+        "title": "Evaluation of the Airflow Distribution of a Vertical Air Ventilation System in a Car Cabin Using Piv Measurements and Cfd Simulations",
+        "authors": [
+          "Boughanmi, Nesrine",
+          "Frisch, Jérôme",
+          "van Treeck, Christoph"
+        ],
+        "year": 2023,
+        "container": "",
+        "doi": "10.2139/ssrn.4529542",
+        "url": "https://doi.org/10.2139/ssrn.4529542"
+      },
+      {
+        "title": "Experimental and CFD Airflow Studies of a Cleanroom with Special Respect to Air Supply Inlets",
+        "authors": [
+          "Whyte, W.",
+          "Hejab, M.",
+          "Whyte, W. M.",
+          "Green, G."
+        ],
+        "year": 2010,
+        "container": "International Journal of Ventilation",
+        "doi": "10.1080/14733315.2010.11683880",
+        "url": "https://doi.org/10.1080/14733315.2010.11683880"
+      },
+      {
+        "title": "Computational Fluid Dynamics: Machine Learning (CFD-ML)-Based Airflow Exchange Model for Large Opening Underground Mine",
+        "authors": [
+          "Song, X.",
+          "Azam, S.",
+          "Kumar, A.R.",
+          "Snesavage, A.J.",
+          "Liu, S."
+        ],
+        "year": 2026,
+        "container": "Mine Ventilation, Environment, Safety, and Health",
+        "doi": "10.1201/9781003677918-21",
+        "url": "https://doi.org/10.1201/9781003677918-21"
+      },
+      {
+        "title": "Numerical simulation study on optimization of ventilation airflow organization of a raw coal bunker",
+        "authors": [
+          "Zhang, Qianru",
+          "Yang, Luying",
+          "Shi, Xiaoyan",
+          "Wang, Xin"
+        ],
+        "year": 2022,
+        "container": "E3S Web of Conferences",
+        "doi": "10.1051/e3sconf/202235601061",
+        "url": "https://doi.org/10.1051/e3sconf/202235601061"
+      },
+      {
+        "title": "Analysis of Airflow in Soundproofing Ventilation Unit with CFD",
+        "authors": [
+          "TANAKA, Yuichi",
+          "MASUDA, Keisuke",
+          "HAYASHIDA, Norihiro",
+          "TANAKA, Teiichi",
+          "NISHIMURA, Sohei"
+        ],
+        "year": 2017,
+        "container": "The Proceedings of Conference of Kyushu Branch",
+        "doi": "10.1299/jsmekyushu.2017.70.511",
+        "url": "https://doi.org/10.1299/jsmekyushu.2017.70.511"
+      },
+      {
+        "title": "Combined wind tunnel and CFD analysis for indoor airflow prediction of wind-driven cross ventilation",
+        "authors": [
+          "James Lo, L.",
+          "Banks, David",
+          "Novoselac, Atila"
+        ],
+        "year": 2013,
+        "container": "Building and Environment",
+        "doi": "10.1016/j.buildenv.2012.10.022",
+        "url": "https://doi.org/10.1016/j.buildenv.2012.10.022"
+      },
+      {
+        "title": "Modeling of ventilation airflow",
+        "authors": [],
+        "year": 2007,
+        "container": "Ventilation Systems",
+        "doi": "10.4324/9780203936894-9",
+        "url": "https://doi.org/10.4324/9780203936894-9"
+      }
+    ]
+  },
+  "legg_detector_placement": {
+    "query": "A stochastic programming approach for gas detector placement using CFD-based dispersion simulations",
+    "items": [
+      {
+        "title": "A stochastic programming approach for gas detector placement using CFD-based dispersion simulations",
+        "authors": [
+          "Legg, S.W.",
+          "Benavides-Serrano, A.J.",
+          "Siirola, J.D.",
+          "Watson, J.P.",
+          "Davis, S.G.",
+          "Bratteteig, A.",
+          "Laird, C.D."
+        ],
+        "year": 2012,
+        "container": "Computers &amp; Chemical Engineering",
+        "doi": "10.1016/j.compchemeng.2012.05.010",
+        "url": "https://doi.org/10.1016/j.compchemeng.2012.05.010"
+      },
+      {
+        "title": "Optimal Gas Detector Placement Using Integer Linear Programming Combined To Dimensional Analysis For A Minimal Number Of Cfd Simulations",
+        "authors": [
+          "Díaz, Milagritos",
+          "Souza Venâncio Vianna, Sávio"
+        ],
+        "year": 2024,
+        "container": "Congresso Brasileiro de Fluidodinâmica Computacional",
+        "doi": "10.17648/cbcfd-2024-192063",
+        "url": "https://doi.org/10.17648/cbcfd-2024-192063"
+      },
+      {
+        "title": "A stochastic programming approach for the optimization of gas detector placement in offshore platforms",
+        "authors": [
+          "Zhou, Cancan",
+          "Zhang, Bo",
+          "Qiao, Shen",
+          "Mu, Chao"
+        ],
+        "year": 2019,
+        "container": "Ocean Engineering",
+        "doi": "10.1016/j.oceaneng.2019.106223",
+        "url": "https://doi.org/10.1016/j.oceaneng.2019.106223"
+      }
+    ]
+  },
+  "lang_sensor_placement": {
+    "query": "A novel CFD-MILP-ANN approach for optimizing sensor placement, number, and source localization in large-scale gas dispersion from unknown locations",
+    "items": [
+      {
+        "title": "A novel CFD-MILP-ANN approach for optimizing sensor placement, number, and source localization in large-scale gas dispersion from unknown locations",
+        "authors": [
+          "Lang, Yiming",
+          "Ng, Michelle Xin Yi",
+          "Yu, Kai Xiang",
+          "Chen, Binghui",
+          "Tan, Peng Chee",
+          "Tan, Khang Wei",
+          "Lam, Weng Hoong",
+          "Siwayanan, Parthiban",
+          "Kim, Kek Seong",
+          "Choong, Thomas Shean Yaw",
+          "Ten, Joon Yoon",
+          "Ban, Zhen Hong"
+        ],
+        "year": 2025,
+        "container": "Digital Chemical Engineering",
+        "doi": "10.1016/j.dche.2024.100216",
+        "url": "https://doi.org/10.1016/j.dche.2024.100216"
+      },
+      {
+        "title": "A Spatial Modeling Approach for Optimizing the Locations of Large-Scale Biogas Plants from Livestock Manure in Bangladesh",
+        "authors": [
+          "Mahal, Zinat",
+          "Yabar, Helmut"
+        ],
+        "year": 2024,
+        "container": "",
+        "doi": "10.20944/preprints202411.2406.v1",
+        "url": "https://doi.org/10.20944/preprints202411.2406.v1"
+      },
+      {
+        "title": "Optimum sensor placement for source localization and monitoring from received signal strength",
+        "authors": [
+          "Ibeawuchi, Stella-Rita Chioma"
+        ],
+        "year": null,
+        "container": "",
+        "doi": "10.17077/etd.q51hr00n",
+        "url": "https://doi.org/10.17077/etd.q51hr00n"
+      }
+    ]
+  },
+  "zi_methane_monitoring": {
+    "query": "Distributionally robust optimal sensor placement method for site-scale methane-emission monitoring",
+    "items": [
+      {
+        "title": "Distributionally Robust Optimal Sensor Placement Method for Site-Scale Methane-Emission Monitoring",
+        "authors": [
+          "Zi, Yuan",
+          "Fan, Lei",
+          "Wu, Xuqing",
+          "Chen, Jiefu",
+          "Han, Zhu"
+        ],
+        "year": 2022,
+        "container": "IEEE Sensors Journal",
+        "doi": "10.1109/jsen.2022.3214176",
+        "url": "https://doi.org/10.1109/jsen.2022.3214176"
+      },
+      {
+        "title": "Sensor Placement Optimization Software Applied to Site-Scale Methane-Emissions Monitoring",
+        "authors": [
+          "Klise, Katherine A.",
+          "Nicholson, Bethany L.",
+          "Laird, Carl D.",
+          "Ravikumar, Arvind P.",
+          "Brandt, Adam R."
+        ],
+        "year": 2020,
+        "container": "Journal of Environmental Engineering",
+        "doi": "10.1061/(asce)ee.1943-7870.0001737",
+        "url": "https://doi.org/10.1061/(asce)ee.1943-7870.0001737"
+      },
+      {
+        "title": "Optimal Sensor Placement for Structural Health Monitoring",
+        "authors": [
+          "Movva, Gopichand"
+        ],
+        "year": null,
+        "container": "",
+        "doi": "10.12794/metadc700010",
+        "url": "https://doi.org/10.12794/metadc700010"
+      }
+    ]
+  },
+  "abbassi_indoor_monitoring": {
+    "query": "Risk-based prioritisation of indoor air pollution monitoring using computational fluid dynamics",
+    "items": [
+      {
+        "title": "Risk-Based Prioritisation of Indoor Air Pollution Monitoring Using Computational Fluid Dynamics",
+        "authors": [
+          "Abbassi, Rouzbeh",
+          "Dadashzadeh, Mohammad",
+          "Khan, Faisal",
+          "Hawboldt, Kelly"
+        ],
+        "year": 2011,
+        "container": "Indoor and Built Environment",
+        "doi": "10.1177/1420326x11428164",
+        "url": "https://doi.org/10.1177/1420326x11428164"
+      },
+      {
+        "title": "Computational fluid dynamics and room air movement",
+        "authors": [
+          "Nielsen, P. V."
+        ],
+        "year": 2004,
+        "container": "Indoor Air",
+        "doi": "10.1111/j.1600-0668.2004.00282.x",
+        "url": "https://doi.org/10.1111/j.1600-0668.2004.00282.x"
+      },
+      {
+        "title": "Quality control of computational fluid dynamics in indoor environments",
+        "authors": [
+          "Sørensen, D. N.",
+          "Nielsen, P. V."
+        ],
+        "year": 2003,
+        "container": "Indoor Air",
+        "doi": "10.1111/j.1600-0668.2003.00170.x",
+        "url": "https://doi.org/10.1111/j.1600-0668.2003.00170.x"
+      }
+    ]
+  },
+  "openfoam_docs": {
+    "of_scalar_transport": {
+      "url": "https://doc.cfd.direct/openfoam/user-guide-v13/post-processing-functionality",
+      "chars": 14672
+    },
+    "of_solver_modules": {
+      "url": "https://doc.cfd.direct/openfoam/user-guide-v13/solvers-modules",
+      "chars": 5243
+    },
+    "of_sampling_monitoring": {
+      "url": "https://doc.cfd.direct/openfoam/user-guide-v13/graphs-monitoring",
+      "chars": 10308
+    },
+    "of_boundary_conditions": {
+      "url": "https://doc.cfd.direct/openfoam/user-guide-v13/boundary-conditions",
+      "chars": 2828
+    },
+    "of_turbulence": {
+      "url": "https://doc.cfd.direct/openfoam/user-guide-v13/turbulence",
+      "chars": 11079
+    }
+  }
+}
