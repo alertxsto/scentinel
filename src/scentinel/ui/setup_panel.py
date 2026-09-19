@@ -13,16 +13,18 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation
+from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation, short_label
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
 from scentinel.core.scenario import WASTE_SPECS, WASTE_TYPES, WIND_DIRECTIONS, Scenario
 from scentinel.ui.i18n import Translator
@@ -168,24 +170,32 @@ class SetupPanel(QScrollArea):
 
     def _build_sources_group(self) -> QGroupBox:
         self._sources_group = QGroupBox(self)
-        form = QFormLayout(self._sources_group)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        layout = QVBoxLayout(self._sources_group)
+        layout.setContentsMargins(9, 6, 9, 9)
+        layout.setSpacing(4)
+
         self._sources_help = _help_label()
-        form.addRow(self._sources_help)
+        layout.addWidget(self._sources_help)
 
         self._gas_boxes: dict[str, QCheckBox] = {}
         self._gas_spins: dict[str, QDoubleSpinBox] = {}
         self._gas_auto: dict[str, QCheckBox] = {}
-        for gas in DEFAULT_SOURCE_GASES:
-            row = QWidget()
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(6)
-
-            box = QCheckBox(gas)
+        # A grid keeps the value and "auto" columns aligned across rows while
+        # letting each row be as narrow as its own label. The constant names
+        # ("METHYL_MERCAPTAN") are 187 px wide on their own; the cited display
+        # names are what a reader needs, and they fit.
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(4)
+        grid.setVerticalSpacing(4)
+        grid.setColumnStretch(1, 1)
+        for row_index, gas in enumerate(DEFAULT_SOURCE_GASES):
+            box = QCheckBox(short_label(gas))
             box.setToolTip(citation(gas))
             spin = _spin(0.0, 1_000_000.0, 0.0, 10.0, " ppmv", 1, decimals=1)
             spin.setEnabled(False)
+            spin.setMinimumWidth(56)
+            spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             auto = QCheckBox("auto")
             auto.setToolTip(citation(gas))
             auto.setChecked(True)
@@ -204,12 +214,13 @@ class SetupPanel(QScrollArea):
             auto.toggled.connect(self._emit)
             spin.valueChanged.connect(self._emit)
 
-            row_layout.addWidget(spin, 1)
-            row_layout.addWidget(auto)
+            grid.addWidget(box, row_index, 0)
+            grid.addWidget(spin, row_index, 1)
+            grid.addWidget(auto, row_index, 2)
             self._gas_boxes[gas] = box
             self._gas_spins[gas] = spin
             self._gas_auto[gas] = auto
-            form.addRow(box, row)
+        layout.addLayout(grid)
         return self._sources_group
 
     def _build_simulation_group(self) -> QGroupBox:

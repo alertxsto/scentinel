@@ -24,6 +24,30 @@ DEFAULT_SOURCE_GASES = (
     "DIMETHYL_SULFIDE",
 )
 
+#: Compact labels for dense rows such as the source list, where the full
+#: ``name`` does not fit. The headline gases use the formula engineers write;
+#: the rest use a trimmed common name. The full name and its citation belong in
+#: a tooltip.
+SHORT_LABELS = {
+    "CO": "CO",
+    "CH4": "CH4",
+    "VOC": "VOC",
+    "H2S": "H2S",
+    "ETHANE": "Ethane",
+    "BENZENE": "Benzene",
+    "TOLUENE": "Toluene",
+    "VINYL_CHLORIDE": "Vinyl chloride",
+    "METHYL_MERCAPTAN": "Methyl mercaptan",
+    "DIMETHYL_SULFIDE": "Dimethyl sulfide",
+}
+
+
+def short_label(gas_key: str) -> str:
+    """Compact label for a gas, falling back to its full name."""
+    if gas_key in SHORT_LABELS:
+        return SHORT_LABELS[gas_key]
+    return get_gas(gas_key).name
+
 
 @dataclass(frozen=True)
 class GasSpec:

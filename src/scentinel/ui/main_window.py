@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(workspace)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([340, 1100])
+        splitter.setSizes([380, 1060])
 
         # A floor on the whole window stops the panes from being squeezed below
         # usability; within it, every divider moves.
