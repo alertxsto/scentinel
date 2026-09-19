@@ -36,13 +36,20 @@ def test_mass_closes_end_to_end():
     assert result.balance.accounted_tonnes == pytest.approx(7.5, abs=1e-9)
 
 
-def test_a_fresh_load_reports_phase_one_and_no_methane():
+def test_a_fresh_load_reports_phase_one_and_negligible_methane():
+    """Methane is continuous, not switched off; at 6 h it is a trace of the ultimate.
+
+    The phase still gates the *applicable gas set* — methane is not offered for
+    phase I — but the mass is the same decay curve as any other age, so it is
+    small rather than fabricated to zero.
+    """
     result = pipeline.assess_batch(
         comp.PRESETS["mixed-msw"], tonnage_t=10.0, moisture=0.40, age_h=6.0
     )
     assert result.phase == "I"
     assert "CH4" not in result.generation.gases
-    assert result.generation.ch4_kg < 0.001 * 10.0
+    ultimate = result.generation.ultimate_ch4_kg
+    assert result.generation.ch4_cumulative_kg < 0.001 * ultimate
 
 
 def test_the_same_load_years_later_is_phase_four_with_methane():
@@ -54,7 +61,17 @@ def test_the_same_load_years_later_is_phase_four_with_methane():
     )
     assert aged.phase == "IV"
     assert "CH4" in aged.generation.gases
-    assert aged.generation.ch4_kg > fresh.generation.ch4_kg * 1000
+    assert aged.generation.ch4_cumulative_kg > fresh.generation.ch4_cumulative_kg * 1000
+
+
+def test_the_summary_states_cumulative_and_rate_with_units():
+    """A reader must be able to tell the cumulative mass from the instantaneous rate."""
+    result = pipeline.assess_batch(
+        comp.PRESETS["mixed-msw"], tonnage_t=10.0, moisture=0.40, age_h=24 * 365
+    )
+    joined = "\n".join(result.summary_lines())
+    assert "cumulative" in joined
+    assert "kg/h" in joined
 
 
 def test_the_methane_ceiling_holds_end_to_end():
@@ -87,7 +104,9 @@ def test_tonnage_scales_the_whole_assessment():
     ten = pipeline.assess_batch(
         comp.PRESETS["mixed-msw"], tonnage_t=10.0, moisture=0.4, age_h=24 * 365
     )
-    assert ten.generation.ch4_kg == pytest.approx(one.generation.ch4_kg * 10.0)
+    assert ten.generation.ch4_cumulative_kg == pytest.approx(
+        one.generation.ch4_cumulative_kg * 10.0
+    )
     for stream in mb.STREAMS:
         assert ten.balance.streams[stream].tonnes == pytest.approx(
             one.balance.streams[stream].tonnes * 10.0

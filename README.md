@@ -48,11 +48,18 @@ and per-sensor ppmv results. Records survive restarts and are readable through
 `scentinel.core.history` (`list_runs()` / `get_run()`); failed and cancelled
 attempts are recorded too.
 
-Manifest format 4 also records the batch the run solved: the composition
-fractions, the tonnage, and the generation chemistry (phase, DOC, k, methane
-fraction) the model derived from them. The batch panel and the setup form edit
-one scenario, so the assessment a user reads is the waste the case actually
-solves.
+Manifest format 5 also records the batch the run solved: the composition
+fractions, the tonnage, and the generation chemistry the model derived from
+them — the ultimate potential, the cumulative gas produced by the recorded age,
+and the instantaneous generation rate, each a separate quantity. The batch
+panel and the setup form edit one scenario, so the assessment a user reads is
+the waste the case actually solves.
+
+The generated gas is split by the regulation's own default methane fraction,
+`F = 0.5` (40 CFR 98.343 Table HH-1), at every age; the AP-42 55/40/5 mix is
+retained as a measured mature-landfill ceiling, not as the produced mixture.
+Holding time therefore moves the gas **rate and cumulative mass**, not the
+volume share.
 
 `execution_status: "succeeded"` means the container pipeline exited 0 and every
 captured sensor was sampled. It does **not** mean the run converged, or that

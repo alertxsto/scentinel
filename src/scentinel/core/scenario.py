@@ -88,16 +88,16 @@ def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
     """Source concentration of a decomposition product, in ppmv.
 
     The gas phase above the waste is the mixture the decomposition model reports,
-    so the source strength of a product is its volume share of that mixture:
-    methane is 0 ppmv in a fresh load and 550 000 ppmv at the cited steady state,
-    and nothing in between is invented.
+    so the source strength of a product is its volume share of that mixture. The
+    model splits the degraded carbon by the regulation's own default methane
+    fraction, ``F = 0.5`` (40 CFR §98.343 Table HH-1), at every age: methane and
+    CO2 each hold about half the gas by volume, and the AP-42 55/40/5
+    mature-landfill mix is a measured ceiling rather than the produced mixture.
 
-    In the pre-methanogenic phases the CO2 volume share is **not cited**: AP-42
-    describes phase I as CO2-dominated with high N2 but gives no split, and the
-    generation model's CO2 mass is a carbon-balance result, not a measured
-    mixture composition. Returning a share would mean dividing by a mixture that
-    contains only CO2 — 1 000 000 ppmv — so the gap is stated instead. The mass
-    remains available on :class:`~scentinel.core.generation.Generation`.
+    The holding time does not move this share — it moves the *rate* and the
+    cumulative mass the generation model reports. That separation is the point:
+    a fresh load and an aged landfill both produce a ~50/50 gas, but the aged one
+    produces far more of it, and much faster.
     """
     if gas not in GENERATED_GASES:
         raise ValueError(f"{gas!r} is not a decomposition product")
@@ -110,20 +110,11 @@ def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
     )
     if gas == "CH4":
         return result.methane_fraction * PPMV_PER_FRACTION
-    if result.phase in ("I", "II"):
-        raise ValueError(
-            f"a phase-{result.phase} CO2 volume share is not cited: AP-42 §2.4.4 "
-            "describes the aerobic/transition gas as CO2-dominated with high N2 "
-            "but publishes no split, and the generation model's CO2 mass is a "
-            "carbon balance, not a mixture measurement. Use the mass "
-            "(Generation.co2_kg) or an aged scenario instead."
-        )
     # CO2 share of the same mixture.
     molar = gen.MOLAR_MASS_G_PER_MOL
-    moles_ch4 = result.ch4_kg / (molar["CH4"] / 1000.0)
-    moles_co2 = result.co2_kg / (molar["CO2"] / 1000.0)
-    moles_n2 = result.n2_kg / (molar["N2"] / 1000.0)
-    total = moles_ch4 + moles_co2 + moles_n2
+    moles_ch4 = result.ch4_cumulative_kg / (molar["CH4"] / 1000.0)
+    moles_co2 = result.co2_cumulative_kg / (molar["CO2"] / 1000.0)
+    total = moles_ch4 + moles_co2
     if total <= 0.0:
         return 0.0
     return (moles_co2 / total) * PPMV_PER_FRACTION
@@ -156,7 +147,7 @@ def auto_provenance(scenario: Scenario, gas: str) -> str:
             f"{gas}: {ppmv:.0f} ppmv — computed by the generation model "
             f"(40 CFR 98.343(a)(1) Equation HH-1) for waste_type={scenario.waste_type!r}, "
             f"age_h={scenario.age_h:g}, moisture={scenario.moisture_fraction:.2f}; "
-            f"AP-42 Ch.2.4 steady-state ratio 55% CH4 / 40% CO2 / 5% N2"
+            f"40 CFR 98.343 Table HH-1 F=0.5 splits the degraded carbon between CH4 and CO2"
         )
     return gas_data.citation(gas)
 

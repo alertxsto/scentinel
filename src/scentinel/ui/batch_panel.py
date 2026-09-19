@@ -137,7 +137,8 @@ class BatchPanel(QScrollArea):
         self._fields: dict[str, QLabel] = {}
         keys = (
             "phase",
-            "gas_now",
+            "gas_cumulative",
+            "gas_rate",
             "doc_k",
             "yield",
             "scores",
@@ -306,9 +307,12 @@ class BatchPanel(QScrollArea):
             self._sum_label.setStyleSheet("")
 
         self._fields["phase"].setText(assessment.phase)
-        self._fields["gas_now"].setText(
-            f"CH4 {gen.ch4_kg:.3f} kg · CO2 {gen.co2_kg:.3f} kg · "
-            f"{', '.join(gen.gases)}"
+        self._fields["gas_cumulative"].setText(
+            f"CH4 {gen.ch4_cumulative_kg:.3f} kg · CO2 {gen.co2_cumulative_kg:.3f} kg"
+        )
+        self._fields["gas_rate"].setText(
+            f"CH4 {gen.ch4_rate_kg_per_h:.4f} kg/h · "
+            f"CO2 {gen.co2_rate_kg_per_h:.4f} kg/h"
         )
         self._fields["doc_k"].setText(
             f"DOC {gen.doc:.4f} · k {gen.k_per_year:.4f} /yr · "

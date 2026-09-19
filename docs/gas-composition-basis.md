@@ -235,12 +235,12 @@ diekstrak** dan karenanya belum boleh dipakai:
 | Salinas et al., 2026 — *Odour and Composition Assessment of MSW* | Pengaruh komposisi & tingkat pengisian terhadap emisi bau | Belum diekstrak |
 | NIOSH NMAM Method 3900 | Daftar analyte yang diukur di udara sampah (termasuk α-pinene, d-limonene) | Metode analitik, bukan nilai |
 
-### 5.2 Yang secara fisika tidak mungkin
+### 5.2 Yang secara fisika tidak mungkin (kondisi sebelum W0; diperbaiki)
 
-Model saat ini dapat menghasilkan komposisi yang melanggar batas fisik.
-Diverifikasi langsung dari kode:
+Model linear lama dapat menghasilkan komposisi yang melanggar batas fisik.
+Diverifikasi langsung dari kode pada waktu itu:
 
-| Waste type | CH₄ hasil model | Batas fisik (55% = 550 000 ppmv) |
+| Waste type | CH₄ hasil model lama | Batas fisik (55% = 550 000 ppmv) |
 |---|---|---|
 | mixed-msw | 500 000 ppmv (50%) | ok |
 | co-disposal | 550 000 ppmv (55%) | tepat di batas |
@@ -253,6 +253,10 @@ Penskalaan linear `organic_fraction / 0.50` tidak memiliki dasar dalam
 dokumentasi mana pun — tidak ada sitasi di `docs/`, tidak ada di literatur yang
 ditemukan. Bentuk yang benar adalah peluruhan orde-satu (§3), bukan
 perkalian linear.
+
+**Status 0.2.2:** penskalaan linear dihapus (T-103); kekuatan sumber dihitung
+dari Eq. HH-1. CH₄ dan CO₂ kini mengikuti pembagian `F = 0.5` regulasi (§6.2b),
+jadi tidak ada komposisi yang melampaui plafon 55%.
 
 ### 5.3 Parameter yang saat ini tidak berfungsi
 
@@ -314,6 +318,35 @@ Fasa ditentukan dari umur, mengikuti AP-42 §2.4.4:
 - **Fasa II–III (hari–bulan):** CO₂ + H₂, CH₄ mulai
 - **Fasa IV (bulan–tahun):** steady state 55% CH₄
 
+**Penting — fasa adalah interpretasi, bukan saklar.** Batas 48 jam / 90 hari /
+365 hari adalah narasi AP-42 yang dinyatakan sebagai aturan keputusan; AP-42
+sendiri menyatakan durasinya "bervariasi" dan tidak memberi angka pasti. Karena
+itu fasa **tidak boleh** mematikan atau menyalakan gas: jumlah gas dihitung oleh
+kurva peluruhan orde-satu yang kontinu pada setiap umur, dan fasa hanya
+menafsirkan umur itu. Model yang lama memakai fasa sebagai saklar, sehingga
+CH₄ meloncat dari 0 menjadi campuran landfill tepat di batas 90 hari — itu
+artefak, bukan fisika. Lihat §6.6.
+
+### 6.2b Campuran gas yang dihasilkan (F = 0.5)
+
+Gas yang dihasilkan dibagi oleh **default metana regulasi itu sendiri**,
+`F = 0.5` (40 CFR §98.343 Tabel HH-1) — bukan oleh campuran AP-42 55/40/5.
+Alasannya:
+
+- 55/40/5 adalah **hasil pengukuran landfill matang**; menerapkannya pada sampah
+  berumur jam-an adalah kesalahan basis yang sama yang memicu seluruh dokumen ini.
+- Regulasi yang sama yang memberi persamaan HH-1 juga memberi `F = 0.5` sebagai
+  default, jadi campurannya satu basis dengan lajunya.
+- Dengan `F = 0.5`, karbon yang terdegradasi terbagi rata: sekitar separuh mol
+  menjadi CH₄, separuh menjadi CO₂. N₂ **bukan** produk peluruhan (ia udara
+  terperangkap) sehingga tidak dilaporkan.
+- Yang berubah karena umur adalah **jumlah** gas (kumulatif, kg) dan **lajunya**
+  (kg/jam), bukan persentasenya. Ini yang membuat umur benar-benar menggerakkan
+  simulasi, bukan hanya angka di layar.
+
+Campuran 55/40/5 tetap disimpan sebagai **plafon dan pembanding** (gas landfill
+matang), bukan sebagai input model.
+
 ### 6.3 Gas yang dihitung (output)
 
 **Fasa I (bak truk):**
@@ -333,8 +366,8 @@ Fasa ditentukan dari umur, mengikuti AP-42 §2.4.4:
 
 | Gas | Sumber nilai |
 |---|---|
-| CH₄ | Equation HH-1 (§3) dengan `f`, `DOC`, `k` |
-| CO₂ | HH-1; rasio terhadap CH₄ dari AP-42 (40:55) |
+| CH₄ | Equation HH-1 (§3) dengan `f`, `DOC`, `k`, dibagi `F = 0.5` (§6.2b) |
+| CO₂ | Neraca karbon HH-1; sisa karbon setelah CH₄, perbandingan massa molar 44.009/12.011 |
 | NMOC | Table 2.4-2, regime co-disposal |
 | Trace | Table 2.4-1 |
 
@@ -360,6 +393,21 @@ perencanaan penempatan sensor, tetapi harus **eksplisit dan terpisah**:
   dan alasannya
 - Manifest mencatat keduanya secara terpisah, sehingga tidak ada konsumen yang
   salah membaca nilai what-if sebagai nilai kutipan
+
+### 6.6 Tiga kuantitas yang tidak boleh dicampur
+
+Versi 0.2.2 melabeli massa kumulatif gas sebagai "gas yang dihasilkan sekarang".
+Itu keliru: tiga besaran berbeda disatukan dalam satu angka.
+
+| Kuantitas | Simbol | Satuan | Sifat |
+|---|---|---|---|
+| Potensi pamungkas | `ultimate_ch4_kg` | kg | Properti komposisi + tonase; tidak bergantung umur |
+| Gas kumulatif | `ch4_cumulative_kg` | kg | Monoton naik terhadap umur; nol di umur nol |
+| Laju pembentukan | `ch4_rate_kg_per_h` | kg/jam | Turunan eksak kurva kumulatif |
+
+Laju **adalah turunan** dari kumulatif:
+`d/dt [C_ult · (1 − e^(−k·t))] = C_ult · k · e^(−k·t)`, sehingga keduanya tidak
+dapat saling bertentangan. Uji mengasertifkan ini secara numerik.
 
 ---
 
@@ -394,11 +442,12 @@ data dari literatur.
 
 | Komponen | Status | Sumber |
 |---|---|---|
-| Komposisi steady-state LFG (55/40/5) | **Terkutip** | AP-42 Ch.2.4 hlm 2.4-3 |
+| Komposisi steady-state LFG (55/40/5) | **Terkutip** (plafon/pembanding, bukan input) | AP-42 Ch.2.4 hlm 2.4-3 |
 | Empat fasa dekomposisi | **Terkutip** | AP-42 Ch.2.4 hlm 2.4-2 |
 | Persamaan HH-1 | **Terkutip** | 40 CFR §98.343(a)(1) |
 | DOC & k per material | **Terkutip** | Table HH-1 Subpart HH |
 | DOC_F = 0.5, F = 0.5 | **Terkutip** | 40 CFR §98.343(a)(1) |
+| Rasio massa CO₂/C = 44.009/12.011 | **Derived** | Massa molar |
 | Konsentrasi trace (45+ senyawa) | **Terkutip** | AP-42 Table 2.4-1 |
 | NMOC/Benzene/Toluene per regime | **Terkutip** | AP-42 Table 2.4-2 |
 | Kelembapan memengaruhi laju | **Terkutip** | AP-42 Ch.2.4 hlm 2.4-5 |

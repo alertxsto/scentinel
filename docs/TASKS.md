@@ -27,6 +27,52 @@ describe the repository as it is (no stale status or number); tag
 Note: scope is frozen — new work enters only through an explicit edit to the
 program plan.
 
+### Phase 2 — Gas generation definitions
+
+#### T-220 Three generation quantities · DONE — 2026-09-19
+Files: `src/scentinel/core/generation.py`, `tests/unit/test_generation.py`
+Acceptance met: `ultimate_ch4_kg` (and `ultimate_ch4_kg_per_t`),
+`ch4_cumulative_kg`/`co2_cumulative_kg`, and
+`ch4_rate_kg_per_h`/`co2_rate_kg_per_h` are separate outputs; the rate is the
+analytical derivative of the cumulative mass (asserted numerically within
+1e-6); cumulative is monotone in age; carbon closes between CH4 and CO2 within
+0.2%.
+
+#### T-221 UI truth-in-labelling · DONE — 2026-09-19
+Files: `src/scentinel/ui/batch_panel.py`, `src/scentinel/core/pipeline.py`,
+`resources/locales/{en,id}.json`, `tests/ui/test_batch_panel.py`,
+`tests/unit/test_pipeline.py`
+Acceptance met: the `gas_now` readout is replaced by `gas_cumulative` (kg) and
+`gas_rate` (kg/h) with units in both; the summary states both quantities; no
+string describes cumulative mass as "produced now".
+
+#### T-222 Continuity across age · DONE — 2026-09-19
+Files: `tests/unit/test_generation.py`
+Acceptance met: generation is continuous at 48 h, 90 d, and 365 d (the step
+across a boundary equals the rate times the interval); no CH4 step remains.
+
+#### T-223 Phase is interpretation, not a switch · DONE — 2026-09-19
+Files: `src/scentinel/core/generation.py`, `src/scentinel/core/scenario.py`,
+`tests/unit/test_generation.py`, `tests/unit/test_scenario.py`
+Acceptance met: monkeypatching `phase_for` changes no generation number; the
+II→III CH4 jump is gone; the generated gas is the regulation's `F = 0.5` split
+(40 CFR 98.343 Table HH-1) at every age, so a fresh load reads ~500 000 ppmv
+CH4 by volume and the age moves the rate, not the share. The AP-42 55/40/5 mix
+is retained as a ceiling/comparison only.
+Note: this is a deliberate change of the mixture basis from AP-42 55/40/5 to
+the regulation's F = 0.5, agreed before implementation. The CO2 phase-I refusal
+from the previous session is retired — the CO2 share is now cited (F basis).
+
+#### T-224 Manifest v6 · DONE — 2026-09-19
+Files: `src/scentinel/core/history.py`, `tests/unit/test_history.py`
+Acceptance met: `RUN_FORMAT_VERSION` is 5 (the program's "v6" is the fifth
+bump in this repository's numbering — see note); the scenario generation block
+records ultimate, cumulative, and rate separately; a version 4 manifest is
+rejected naming both versions.
+Note: the master program expected Phase 1 to land manifest v5 first. Gas work
+ran first, so this is v5 and Phase 1's material composition will be v6. The
+numbering is by repository sequence, not by program label.
+
 ---
 
 ## Done

@@ -43,16 +43,37 @@ def test_trace_species_do_not_scale_with_organic_fraction():
     assert auto_concentration_ppmv(organic, "VOC") == auto_concentration_ppmv(mixed, "VOC")
 
 
-def test_a_fresh_load_has_no_methane_source():
-    """The defect the composition model fixed: CH4 for waste loaded hours ago."""
-    scenario = Scenario(waste_type="mixed-msw", age_h=8.0, gas_sources={"CH4": "auto"})
-    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(0.0)
-    assert "CH4" not in scenario.generated_gases
+def test_the_generated_source_share_is_the_same_at_every_age():
+    """The switch that made a fresh load read 0 ppmv and a 91-day load 550 000 is gone.
+
+    The produced gas is the regulation's F split at every age; what the holding
+    time changes is the amount produced, which the rate reports.
+    """
+    fresh = Scenario(waste_type="mixed-msw", age_h=8.0)
+    aged = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 30)
+    assert auto_concentration_ppmv(fresh, "CH4") == pytest.approx(500_000.0, rel=2e-3)
+    assert auto_concentration_ppmv(aged, "CH4") == pytest.approx(500_000.0, rel=2e-3)
+    assert auto_concentration_ppmv(fresh, "CO2") == pytest.approx(500_000.0, rel=2e-3)
+    assert auto_concentration_ppmv(aged, "CO2") == pytest.approx(500_000.0, rel=2e-3)
 
 
-def test_an_aged_load_reaches_the_cited_steady_state_methane():
+def test_the_rate_carries_the_age_difference_the_share_no_longer_does():
+    """A fresh load produces far less gas than an aged one, and faster per hour."""
+    fresh = Scenario(waste_type="mixed-msw", age_h=8.0)
+    aged = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 3)
+    fresh_gen = gen.generate(
+        fresh.composition, tonnage_t=10.0, age_h=fresh.age_h, moisture=0.4
+    )
+    aged_gen = gen.generate(
+        aged.composition, tonnage_t=10.0, age_h=aged.age_h, moisture=0.4
+    )
+    assert aged_gen.ch4_cumulative_kg > fresh_gen.ch4_cumulative_kg * 1000
+    assert fresh_gen.ch4_rate_kg_per_h > aged_gen.ch4_rate_kg_per_h
+
+
+def test_an_aged_load_reaches_the_regulation_default_mixture():
     scenario = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 30, gas_sources={"CH4": "auto"})
-    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(550_000.0, rel=1e-6)
+    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(500_000.0, rel=2e-3)
 
 
 def test_generated_methane_never_exceeds_the_ap42_ceiling():
@@ -68,18 +89,14 @@ def test_generated_methane_never_exceeds_the_ap42_ceiling():
 def test_resolve_sources_carries_the_generated_value_as_a_volume_fraction():
     scenario = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 30, gas_sources={"CH4": "auto"})
     resolved = resolve_sources(scenario)
-    assert resolved["CH4"] == pytest.approx(0.55, rel=1e-6)
+    assert resolved["CH4"] == pytest.approx(0.5, rel=2e-3)
 
 
-def test_moisture_changes_the_generation_mass_not_the_steady_state_share():
-    """Moisture moves the decay rate; the steady-state share is cited and fixed.
+def test_moisture_changes_the_generation_mass_not_the_mixture_share():
+    """Moisture moves the decay rate; the F split is fixed and cited.
 
-    The old assertion (``wet > dry`` on the ppmv source) passed only on float
-    noise — 549999.9999999999 vs 550000.0 — because CO2 and N2 are tied to CH4
-    at the AP-42 ratio, so the methane *share* is exactly 55% in phases III/IV
-    no matter what. What moisture really changes is how much gas the load
-    produces, which is what this asserts instead of a phantom concentration
-    difference.
+    What moisture really changes is how much gas the load produces, which is
+    what this asserts instead of a phantom concentration difference.
     """
     dry = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.10)
     wet = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.60)
@@ -87,24 +104,11 @@ def test_moisture_changes_the_generation_mass_not_the_steady_state_share():
     dry_gas = gen.generate(dry.composition, tonnage_t=1.0, age_h=dry.age_h, moisture=0.10)
     wet_gas = gen.generate(wet.composition, tonnage_t=1.0, age_h=wet.age_h, moisture=0.60)
 
-    assert wet_gas.ch4_kg > dry_gas.ch4_kg
+    assert wet_gas.ch4_cumulative_kg > dry_gas.ch4_cumulative_kg
     assert wet_gas.k_per_year > dry_gas.k_per_year
-    # The cited steady-state share is a ceiling, not a moisture function.
-    assert auto_concentration_ppmv(dry, "CH4") == pytest.approx(550_000.0, abs=1e-6)
-    assert auto_concentration_ppmv(wet, "CH4") == pytest.approx(550_000.0, abs=1e-6)
-
-
-def test_a_phase_one_carbon_dioxide_source_is_refused_rather_than_fabricated():
-    """Phase I is CO2-dominated with high N2, and AP-42 gives no split.
-
-    The model computed CO2 mass from the carbon and then reported its share of
-    a mixture that contained nothing else, so a fresh load's CO2 source read
-    1 000 000 ppmv (100%). The mass is real and stays in the batch report; the
-    volume share is not cited, so asking for it is an error naming the gap.
-    """
-    fresh = Scenario(waste_type="mixed-msw", age_h=8.0, moisture_fraction=0.40)
-    with pytest.raises(ValueError, match="not cited"):
-        auto_concentration_ppmv(fresh, "CO2")
+    # The F-based mixture share does not depend on moisture.
+    assert auto_concentration_ppmv(dry, "CH4") == pytest.approx(500_000.0, rel=2e-3)
+    assert auto_concentration_ppmv(wet, "CH4") == pytest.approx(500_000.0, rel=2e-3)
 
 
 def test_a_scenario_can_carry_an_explicit_composition_and_tonnage():

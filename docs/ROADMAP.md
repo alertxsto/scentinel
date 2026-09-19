@@ -37,9 +37,17 @@ the requested iteration count, the terminal execution status, and its results,
 so runs survive a restart and can be listed or looked up. Projects save and
 load; the UI switches language at runtime; results export to CSV. Concentration
 fields render from the solved case, ten cited AP-42 gases are selectable with
-per-gas Fuller-Schettler-Giddings diffusivities, the sensor sandbox replays each
+per-gas Fuller-Schettler-Giddings diffusivities, the sensor lab replays each
 placement through a device model, and the container image is pulled from the GUI
 into an app-private store.
+
+**Gas generation (Phase 2 done, 2026-09-19):** a batch's gas is computed from
+its composition and age by Equation HH-1, with ultimate potential, cumulative
+mass, and instantaneous rate as separate quantities and the produced mixture
+split by the regulation's `F = 0.5`. The phase label is an interpretation, not
+a switch, so generation is continuous across every age boundary; the AP-42
+55/40/5 mix is kept as a mature-landfill ceiling. Manifest format 5 records all
+three quantities.
 
 **What does not work:** absolute concentrations are not mesh-converged (see
 below); nothing reads the run history back into the UI, so there is still no
@@ -114,7 +122,7 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 4), `list_runs()` / `get_run()` |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 5), `list_runs()` / `get_run()` |
 | 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
@@ -138,11 +146,11 @@ The W0–W3 engine shipped in 0.2.1: composition, phase, Equation HH-1
 generation, mass balance, suitability, and the recommendation all exist as core
 modules with unit tests, and `ui/batch_panel.py` exposes them live. The batch
 panel now also mirrors its composition, holding time, tonnage, moisture, and
-stream into the scenario the run uses, and manifest format 4 records them.
+stream into the scenario the run uses, and manifest format 5 records them.
 
 | Sub-phase | Content | Status |
 |---|---|---|
-| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v4 | Done |
+| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v5 | Done |
 | W1 | Batch mass balance and per-stream yield | Done; split fractions remain labelled assumptions |
 | W2 | RDF quality parameters and route suitability scores | Engine done; T-120 is partly blocked on laboratory data |
 | W3 | Interpretation, batch history, forecast, recommendation | Recommendation done; interpretation/history/forecast not started |

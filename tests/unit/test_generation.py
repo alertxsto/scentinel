@@ -182,22 +182,48 @@ def test_methane_fraction_never_exceeds_the_ap42_ceiling():
             )
 
 
-def test_methane_fraction_matches_the_ap42_steady_state_ratio():
-    """CO2 and N2 are tied to CH4 at 40:5, so the mixture sits at exactly 55%.
+def test_the_mixture_is_the_regulations_f_at_every_age():
+    """The generated gas is ~50/50 CH4/CO2 at 8 hours and at 30 years alike.
 
-    The three cited components sum to 100% by volume, which is why the ceiling
-    is 0.55 and not 55/95 — N2 is part of the gas.
+    The AP-42 55/40/5 mix is a measured mature-landfill composition; applying it
+    to a fresh load was the basis error. The regulation that supplies Equation
+    HH-1 also supplies its default methane fraction, F = 0.5 (Table HH-1), and
+    that is what the produced gas is split by at every age.
     """
-    g = gen.generate(comp.PRESETS["mixed-msw"], tonnage_t=1.0, age_h=1e6, moisture=0.5)
-    assert g.methane_fraction == pytest.approx(comp.STEADY_STATE_METHANE_CEILING, abs=1e-9)
-    assert g.methane_fraction == pytest.approx(0.55, abs=1e-9)
+    preset = comp.PRESETS["mixed-msw"]
+    for age_h in (8.0, 24 * 90, 24 * 365 * 30):
+        g = gen.generate(preset, tonnage_t=10.0, age_h=age_h, moisture=0.4)
+        assert g.methane_fraction == pytest.approx(0.5, abs=1e-3), age_h
 
 
 def test_a_fresh_load_reports_no_methane_in_its_gas_set():
     g = gen.generate(comp.PRESETS["mixed-msw"], tonnage_t=10.0, age_h=8.0, moisture=0.4)
     assert g.phase == "I"
     assert "CH4" not in g.gases
-    assert any("pre-methanogenic" in note for note in g.notes)
+
+
+def test_rate_is_the_derivative_of_cumulative_mass():
+    """The rate must be the same first-order curve, differentiated — not a second model."""
+    preset = comp.PRESETS["mixed-msw"]
+    age = 24.0 * 365
+    eps = 0.5
+    plus = gen.generate(preset, tonnage_t=10.0, age_h=age + eps, moisture=0.4)
+    minus = gen.generate(preset, tonnage_t=10.0, age_h=age - eps, moisture=0.4)
+    at = gen.generate(preset, tonnage_t=10.0, age_h=age, moisture=0.4)
+    numeric = (plus.ch4_cumulative_kg - minus.ch4_cumulative_kg) / (2.0 * eps)
+    assert at.ch4_rate_kg_per_h == pytest.approx(numeric, rel=1e-6)
+
+
+def test_carbon_closes_between_methane_and_carbon_dioxide():
+    """Every degraded carbon atom leaves as CH4 or CO2, by the regulation's F."""
+    preset = comp.PRESETS["mixed-msw"]
+    g = gen.generate(preset, tonnage_t=10.0, age_h=24 * 365 * 10, moisture=0.4)
+    carbon_kg = gen.ultimate_carbon_kg(preset, 10.0) * g.decay_fraction
+    carbon_out = (
+        g.ch4_cumulative_kg / gen.METHANE_MOLAR_MASS * comp.CARBON_MOLAR_MASS
+        + g.co2_cumulative_kg / gen.CO2_MOLAR_MASS * comp.CARBON_MOLAR_MASS
+    )
+    assert carbon_out == pytest.approx(carbon_kg, rel=2e-3)
 
 
 def test_generation_scales_linearly_with_tonnage():
@@ -205,8 +231,9 @@ def test_generation_scales_linearly_with_tonnage():
     preset = comp.PRESETS["mixed-msw"]
     one = gen.generate(preset, tonnage_t=1.0, age_h=24 * 365 * 10, moisture=0.4)
     ten = gen.generate(preset, tonnage_t=10.0, age_h=24 * 365 * 10, moisture=0.4)
-    assert ten.ch4_kg == pytest.approx(one.ch4_kg * 10.0)
-    assert ten.co2_kg == pytest.approx(one.co2_kg * 10.0)
+    assert ten.ch4_cumulative_kg == pytest.approx(one.ch4_cumulative_kg * 10.0)
+    assert ten.co2_cumulative_kg == pytest.approx(one.co2_cumulative_kg * 10.0)
+    assert ten.ch4_rate_kg_per_h == pytest.approx(one.ch4_rate_kg_per_h * 10.0)
 
 
 def test_more_moisture_produces_more_gas_at_the_same_age():
@@ -215,14 +242,14 @@ def test_more_moisture_produces_more_gas_at_the_same_age():
     dry = gen.generate(preset, tonnage_t=10.0, age_h=24 * 365 * 2, moisture=0.10)
     wet = gen.generate(preset, tonnage_t=10.0, age_h=24 * 365 * 2, moisture=0.60)
     assert wet.k_per_year > dry.k_per_year
-    assert wet.ch4_kg > dry.ch4_kg
+    assert wet.ch4_cumulative_kg > dry.ch4_cumulative_kg
 
 
 def test_age_orders_generation():
     """Older waste has produced more gas. Monotone, no oscillation."""
     preset = comp.PRESETS["mixed-msw"]
     amounts = [
-        gen.generate(preset, tonnage_t=10.0, age_h=h, moisture=0.4).ch4_kg
+        gen.generate(preset, tonnage_t=10.0, age_h=h, moisture=0.4).ch4_cumulative_kg
         for h in (24 * 30, 24 * 365, 24 * 365 * 5, 24 * 365 * 30)
     ]
     assert amounts == sorted(amounts)
@@ -233,14 +260,15 @@ def test_an_all_inert_load_produces_nothing():
     g = gen.generate(
         comp.WasteComposition(inert=1.0), tonnage_t=10.0, age_h=24 * 365 * 10, moisture=0.5
     )
-    assert g.ch4_kg == 0.0
-    assert g.co2_kg == 0.0
+    assert g.ch4_cumulative_kg == 0.0
+    assert g.co2_cumulative_kg == 0.0
+    assert g.ch4_rate_kg_per_h == 0.0
     assert any("entirely inert" in note for note in g.notes)
 
 
 def test_zero_tonnage_is_allowed_and_yields_nothing():
     g = gen.generate(comp.PRESETS["mixed-msw"], tonnage_t=0.0, age_h=1000.0, moisture=0.4)
-    assert g.ch4_kg == 0.0
+    assert g.ch4_cumulative_kg == 0.0
     assert g.methane_fraction == 0.0
 
 
@@ -254,14 +282,6 @@ def test_invalid_inputs_are_rejected():
         gen.generate(preset, tonnage_t=1.0, age_h=-1.0, moisture=0.4)
 
 
-def test_co2_tracks_methane_at_the_cited_ratio():
-    """CO2 mass is (40/55) of the methane's molar amount, in CO2 mass units."""
-    ch4_kg = 100.0
-    moles_ch4 = ch4_kg / (gen.METHANE_MOLAR_MASS / 1000.0)
-    expected = moles_ch4 * (40.0 / 55.0) * (44.009 / 1000.0)
-    assert gen.co2_from_ch4(ch4_kg) == pytest.approx(expected)
-
-
 def test_reported_gases_can_be_overridden_but_never_invented():
     """A caller may narrow the set; the phase still governs what exists."""
     g = gen.generate(
@@ -272,6 +292,41 @@ def test_reported_gases_can_be_overridden_but_never_invented():
         gases=("CO2", "H2S"),
     )
     assert g.gases == ("CO2", "H2S")
+
+
+@pytest.mark.parametrize("boundary_h", [48.0, 24.0 * 90, 24.0 * 365])
+def test_generation_is_continuous_across_phase_boundaries(boundary_h):
+    """A holding time one hour older must not jump the gas output.
+
+    The old model suppressed methane entirely in phases I/II and switched it on
+    at 90 days, so the curve stepped from zero to a landfill mixture. This
+    asserts the curve is the same function on both sides of every boundary.
+    """
+    preset = comp.PRESETS["mixed-msw"]
+    before = gen.generate(preset, tonnage_t=10.0, age_h=boundary_h - 1.0, moisture=0.4)
+    after = gen.generate(preset, tonnage_t=10.0, age_h=boundary_h + 1.0, moisture=0.4)
+    assert after.ch4_cumulative_kg - before.ch4_cumulative_kg == pytest.approx(
+        before.ch4_rate_kg_per_h * 2.0, rel=1e-4
+    )
+    assert after.ch4_rate_kg_per_h == pytest.approx(before.ch4_rate_kg_per_h, rel=1e-4)
+
+
+def test_the_phase_label_changes_no_generation_number(monkeypatch):
+    """The phase is an interpretation of the curve, never an input to it."""
+    preset = comp.PRESETS["mixed-msw"]
+    baseline = gen.generate(preset, tonnage_t=10.0, age_h=8.0, moisture=0.4)
+    monkeypatch.setattr(gen, "phase_for", lambda age_h: "IV")
+    patched = gen.generate(preset, tonnage_t=10.0, age_h=8.0, moisture=0.4)
+    assert patched.phase == "IV"
+    for field in (
+        "ch4_cumulative_kg",
+        "co2_cumulative_kg",
+        "ch4_rate_kg_per_h",
+        "co2_rate_kg_per_h",
+        "decay_fraction",
+        "methane_fraction",
+    ):
+        assert getattr(patched, field) == getattr(baseline, field), field
 
 
 def test_legacy_waste_types_all_resolve_to_a_preset():

@@ -41,9 +41,12 @@ class BatchAssessment:
             f"age {self.age_h:.1f} h -> phase {self.phase}",
             f"  DOC {self.generation.doc:.3f}, k {self.generation.k_per_year:.4f} /yr, "
             f"decay reached {self.generation.decay_fraction:.4%}",
-            f"  CH4 {self.generation.ch4_kg:.3f} kg ({self.generation.ch4_m3:.3f} m3), "
-            f"CO2 {self.generation.co2_kg:.3f} kg, "
-            f"methane share {self.generation.methane_fraction:.1%}",
+            f"  CH4 cumulative {self.generation.ch4_cumulative_kg:.3f} kg "
+            f"({self.generation.ch4_cumulative_m3:.3f} m3), "
+            f"CO2 cumulative {self.generation.co2_cumulative_kg:.3f} kg",
+            f"  rate now CH4 {self.generation.ch4_rate_kg_per_h:.4f} kg/h, "
+            f"CO2 {self.generation.co2_rate_kg_per_h:.4f} kg/h "
+            f"(methane share {self.generation.methane_fraction:.1%})",
         ]
         for stream in mb.STREAMS:
             tonnes = self.balance.streams[stream].tonnes

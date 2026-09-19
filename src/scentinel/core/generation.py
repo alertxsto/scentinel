@@ -8,16 +8,30 @@ Implements Equation HH-1 of 40 CFR §98.343(a)(1):
 That equation describes annual generation from waste placed in year ``x``. This
 module applies the same first-order decay to a single batch of known mass and
 known age, which is the question the app actually asks: *what is this load
-producing now?*
+producing, and how fast?*
 
-Two properties matter for accuracy and are asserted by test:
+Three quantities are kept distinct, because conflating them is what made a
+fresh load read like a landfill:
 
-* **The steady-state ceiling holds.** AP-42 p.2.4-3 states landfill gas at
-  steady state is ~55% CH4, 40% CO2, 5% N2. No composition may produce a methane
-  fraction above that, and the old linear rule could reach 85%.
-* **A fresh load produces almost no methane.** With ``k`` in yr^-1 and a holding
-  time in hours, the decay factor for a truck bin is below 0.06% of the ultimate
-  yield. The model therefore agrees with the physics rather than contradicting it.
+* **Ultimate potential** — what the batch could produce if every degradable
+  tonne decayed: :func:`ultimate_methane_yield` and :func:`ultimate_carbon_kg`.
+  A property of the composition and the tonnage, not of the age.
+* **Cumulative generated** — what has been produced by ``age_h``:
+  ``Generation.ch4_cumulative_kg``. Monotone in age, zero at zero age.
+* **Instantaneous rate** — what is being produced *now*:
+  ``Generation.ch4_rate_kg_per_h``. The exact derivative of the cumulative
+  curve, so the two can never disagree.
+
+The produced gas is split by the regulation's own default methane fraction,
+``F = 0.5`` (Table HH-1 to Subpart HH), at every age. The AP-42 p.2.4-3
+steady-state mix (55% CH4 / 40% CO2 / 5% N2) is a *measured mature-landfill*
+composition; it is retained here as a ceiling and a comparison, never as the
+mixture the model produces. N2 is not a decay product and is not reported.
+
+Because the split does not depend on age, the generation curve is continuous:
+no phase boundary switches methane on or off. The phase label
+(:func:`composition.phase_for`) is recorded as an interpretation of the curve
+and gates no number.
 """
 
 from __future__ import annotations
@@ -32,7 +46,6 @@ from scentinel.core.composition import (
     METHANE_CORRECTION_FACTOR,
     METHANE_DENSITY_KG_PER_M3,
     METHANE_MOLAR_MASS,
-    STEADY_STATE_METHANE_CEILING,
     WasteComposition,
     phase_for,
 )
@@ -46,20 +59,28 @@ HOURS_PER_YEAR = 24.0 * 365.25
 STOICHIOMETRIC_RATIO = 16.0 / 12.0
 
 #: Molar masses for converting a mass of gas to its molar (volume) share.
-MOLAR_MASS_G_PER_MOL = {"CH4": METHANE_MOLAR_MASS, "CO2": 44.009, "N2": 28.014}
+CO2_MOLAR_MASS = 44.009
+MOLAR_MASS_G_PER_MOL = {"CH4": METHANE_MOLAR_MASS, "CO2": CO2_MOLAR_MASS}
 
 #: Internal alias kept so the module's own arithmetic reads unchanged.
 _MOLAR_MASS = MOLAR_MASS_G_PER_MOL
 
+#: CO2/C mass ratio for the carbon that does not leave as methane. The
+#: regulation fixes only the CH4 conversion (16/12); CO2 uses molar masses.
+CO2_CARBON_RATIO = CO2_MOLAR_MASS / CARBON_MOLAR_MASS
+
 #: AP-42 p.2.4-3 steady-state composition, by volume: 55% CH4, 40% CO2, 5% N2.
-#: The three sum to 100%, which is why the methane ceiling is exactly 0.55 and
-#: not 55/95.
+#: Kept as a measured mature-landfill ceiling for interpretation and comparison;
+#: it is **not** the mixture this model produces (that is F = 0.5).
 STEADY_STATE_MIX = {"CH4": 55.0, "CO2": 40.0, "N2": 5.0}
 
 
 @dataclass(frozen=True)
 class Generation:
-    """Gas produced by one batch at a given age."""
+    """Gas produced by one batch at a given age.
+
+    ``phase`` is an interpretation of ``age_h`` and gates no number here.
+    """
 
     phase: str
     age_h: float
@@ -69,10 +90,12 @@ class Generation:
     decay_fraction: float
     ultimate_ch4_kg_per_t: float
     ultimate_ch4_m3_per_t: float
-    ch4_kg: float
-    ch4_m3: float
-    co2_kg: float
-    n2_kg: float
+    ultimate_ch4_kg: float
+    ch4_cumulative_kg: float
+    ch4_cumulative_m3: float
+    co2_cumulative_kg: float
+    ch4_rate_kg_per_h: float
+    co2_rate_kg_per_h: float
     methane_fraction: float
     gases: tuple[str, ...]
     notes: tuple[str, ...]
@@ -96,6 +119,16 @@ def ultimate_methane_yield(composition: WasteComposition) -> tuple[float, float]
     return kg_per_t, kg_per_t / METHANE_DENSITY_KG_PER_M3
 
 
+def ultimate_carbon_kg(composition: WasteComposition, tonnage_t: float) -> float:
+    """Dissimilated carbon in the batch once every degradable tonne has decayed."""
+    return (
+        1000.0
+        * composition.weighted_doc()
+        * DISSIMILATED_DOC_FRACTION
+        * tonnage_t
+    )
+
+
 def decay_fraction(k_per_year: float, age_h: float) -> float:
     """Fraction of the ultimate yield reached by ``age_h``.
 
@@ -109,32 +142,38 @@ def decay_fraction(k_per_year: float, age_h: float) -> float:
     return 1.0 - math.exp(-k_per_year * (age_h / HOURS_PER_YEAR))
 
 
-def co2_from_ch4(ch4_kg: float) -> float:
-    """CO2 mass accompanying a methane mass at the AP-42 steady-state ratio.
+def co2_from_carbon(carbon_kg: float) -> float:
+    """CO2 mass from the carbon share the methane fraction leaves behind.
 
-    AP-42 p.2.4-3 gives 55% CH4 / 40% CO2 by volume, so CO2 carries ``(40/55)``
-    of the methane's molar quantity. Applied to the gas actually produced, not
-    to the ultimate potential.
+    ``(1 - F)`` of the degraded carbon is oxidised to CO2; the rest leaves as
+    CH4. CO2 carries the carbon at ``44.009 / 12.011`` by mass.
     """
-    if ch4_kg < 0.0:
-        raise ValueError("ch4_kg must not be negative")
-    moles_ch4 = ch4_kg / (_MOLAR_MASS["CH4"] / 1000.0)
-    moles_co2 = moles_ch4 * (STEADY_STATE_MIX["CO2"] / STEADY_STATE_MIX["CH4"])
-    return moles_co2 * (_MOLAR_MASS["CO2"] / 1000.0)
+    if carbon_kg < 0.0:
+        raise ValueError("carbon_kg must not be negative")
+    return carbon_kg * (1.0 - LANDFILL_GAS_METHANE_FRACTION) * CO2_CARBON_RATIO
 
 
-def nitrogen_from_ch4(ch4_kg: float) -> float:
-    """N2 mass accompanying a methane mass at the AP-42 steady-state ratio.
+def carbon_rate_kg_per_h(
+    composition: WasteComposition,
+    tonnage_t: float,
+    *,
+    k_per_year: float,
+    age_h: float,
+) -> float:
+    """Instantaneous degraded-carbon rate: the derivative of the decay curve.
 
-    The third component of the cited mixture. It carries no carbon and is not a
-    product of decay, but it is part of the gas, and leaving it out is what
-    would make the methane share read 57.9% instead of the cited 55%.
+    ``d/dt [ C_ult · (1 - e^(-k·t)) ] = C_ult · k · e^(-k·t)``. This is what
+    makes the rate the same model as the cumulative mass rather than a second,
+    independently-tuned one.
     """
-    if ch4_kg < 0.0:
-        raise ValueError("ch4_kg must not be negative")
-    moles_ch4 = ch4_kg / (_MOLAR_MASS["CH4"] / 1000.0)
-    moles_n2 = moles_ch4 * (STEADY_STATE_MIX["N2"] / STEADY_STATE_MIX["CH4"])
-    return moles_n2 * (_MOLAR_MASS["N2"] / 1000.0)
+    if age_h < 0.0:
+        raise ValueError("age_h must not be negative")
+    return (
+        ultimate_carbon_kg(composition, tonnage_t)
+        * k_per_year
+        / HOURS_PER_YEAR
+        * math.exp(-k_per_year * age_h / HOURS_PER_YEAR)
+    )
 
 
 def generate(
@@ -148,13 +187,15 @@ def generate(
     """Gas produced by ``tonnage_t`` tonnes of ``composition`` at ``age_h``.
 
     ``gases`` is the phase's allowable set; when omitted it is derived from the
-    phase. Methane is dropped from the reported set in phases where it is not
-    yet produced, which is what makes a fresh load read as a fresh load.
+    phase. The *amounts* do not consult the phase: methane exists from the first
+    hour, in the regulation's ``F`` share, and grows continuously with age.
     """
     if tonnage_t < 0.0:
         raise ValueError("tonnage_t must not be negative")
     if not 0.0 <= moisture <= 1.0:
         raise ValueError("moisture must be in [0, 1]")
+    if age_h < 0.0:
+        raise ValueError("age_h must not be negative")
 
     phase = phase_for(age_h)
     doc = composition.weighted_doc()
@@ -162,61 +203,38 @@ def generate(
     fraction = decay_fraction(k, age_h)
     kg_per_t, m3_per_t = ultimate_methane_yield(composition)
 
-    # Pre-methanogenic phases produce no methane at all: AP-42 §2.4.4 states the
-    # first phase is aerobic with "little methane" and methanogens establish only
-    # after oxygen depletes. Reporting a small nonzero value here would contradict
-    # the phase the same model just assigned, so the generation is suppressed
-    # rather than left as arithmetic residue.
-    producing_methane = phase in ("III", "IV")
-    effective_fraction = fraction if producing_methane else 0.0
+    carbon_kg = ultimate_carbon_kg(composition, tonnage_t) * fraction
+    ch4_cumulative_kg = (
+        carbon_kg * LANDFILL_GAS_METHANE_FRACTION * STOICHIOMETRIC_RATIO
+    )
+    co2_cumulative_kg = co2_from_carbon(carbon_kg)
+    ch4_cumulative_m3 = ch4_cumulative_kg / METHANE_DENSITY_KG_PER_M3
+    ultimate_ch4_kg = kg_per_t * tonnage_t
 
-    ch4_kg = kg_per_t * tonnage_t * effective_fraction
-    ch4_m3 = ch4_kg / METHANE_DENSITY_KG_PER_M3
+    carbon_rate = carbon_rate_kg_per_h(
+        composition, tonnage_t, k_per_year=k, age_h=age_h
+    )
+    ch4_rate_kg_per_h = (
+        carbon_rate * LANDFILL_GAS_METHANE_FRACTION * STOICHIOMETRIC_RATIO
+    )
+    co2_rate_kg_per_h = co2_from_carbon(carbon_rate)
 
-    if producing_methane:
-        # Methanogenic phases: CO2 accompanies CH4 at the AP-42 steady-state ratio.
-        co2_kg = co2_from_ch4(ch4_kg)
-        n2_kg = nitrogen_from_ch4(ch4_kg)
-    else:
-        # Aerobic phase I: carbon is oxidised to CO2 without methane. The gas is
-        # CO2-dominated, which is exactly what AP-42 §2.4.4 describes, and it is
-        # why a fresh bin smells of decomposition rather than of landfill gas.
-        # The carbon available is the same DOC, oxidised to CO2 instead of CH4.
-        # This is a *mass* balance, not a mixture composition: AP-42 gives no
-        # CO2/N2 split for phase I, so ``methane_fraction`` below is 0.0 rather
-        # than a share, and consumers that need a phase-I CO2 volume fraction
-        # must treat it as uncited (see ``scenario.generated_source_ppmv``).
-        carbon_kg = (
-            1000.0
-            * doc
-            * DISSIMILATED_DOC_FRACTION
-            * tonnage_t
-            * fraction
-        )
-        co2_kg = carbon_kg * (_MOLAR_MASS["CO2"] / CARBON_MOLAR_MASS)
-        n2_kg = 0.0
-
-    # The 55% ceiling in AP-42 is a *volume* (molar) fraction over the whole gas
-    # mixture — CH4 + CO2 + N2 — so the check is on moles, not mass. Mass
-    # fractions differ: CO2 is ~2.75x heavier per mole than CH4.
-    moles = {
-        gas: mass / (_MOLAR_MASS[gas] / 1000.0)
-        for gas, mass in (("CH4", ch4_kg), ("CO2", co2_kg), ("N2", n2_kg))
-    }
-    total_moles = sum(moles.values())
-    methane_fraction = moles["CH4"] / total_moles if total_moles > 0.0 else 0.0
+    # The methane volume share over the produced gas. With F = 0.5 the two
+    # species carry the same molar carbon, so this sits at ~0.5; the exact value
+    # differs slightly because the regulation's 16/12 is not the molar-mass
+    # ratio. The AP-42 55% steady state is a ceiling, not a target.
+    moles_ch4 = ch4_cumulative_kg / (_MOLAR_MASS["CH4"] / 1000.0)
+    moles_co2 = co2_cumulative_kg / (_MOLAR_MASS["CO2"] / 1000.0)
+    total_moles = moles_ch4 + moles_co2
+    methane_fraction = moles_ch4 / total_moles if total_moles > 0.0 else 0.0
 
     notes: list[str] = []
-    if methane_fraction > STEADY_STATE_METHANE_CEILING + 1e-9:
-        # Unreachable while CO2 is derived from CH4 at the AP-42 ratio; kept as
-        # an assertion of that invariant rather than a silent clamp.
+    if methane_fraction > STEADY_STATE_MIX["CH4"] / 100.0 + 1e-9:
+        # Unreachable while the split is F-based; kept as an assertion of the
+        # ceiling rather than a silent clamp.
         raise AssertionError(
             f"methane volume fraction {methane_fraction:.4f} exceeds the AP-42 "
-            f"ceiling {STEADY_STATE_METHANE_CEILING}"
-        )
-    if phase in ("I", "II"):
-        notes.append(
-            f"phase {phase} is pre-methanogenic: methane is reported as negligible"
+            f"measured ceiling {STEADY_STATE_MIX['CH4'] / 100.0}"
         )
     if composition.inert >= 1.0:
         notes.append("composition is entirely inert: no gas is produced")
@@ -233,10 +251,12 @@ def generate(
         decay_fraction=fraction,
         ultimate_ch4_kg_per_t=kg_per_t,
         ultimate_ch4_m3_per_t=m3_per_t,
-        ch4_kg=ch4_kg,
-        ch4_m3=ch4_m3,
-        co2_kg=co2_kg,
-        n2_kg=n2_kg,
+        ultimate_ch4_kg=ultimate_ch4_kg,
+        ch4_cumulative_kg=ch4_cumulative_kg,
+        ch4_cumulative_m3=ch4_cumulative_m3,
+        co2_cumulative_kg=co2_cumulative_kg,
+        ch4_rate_kg_per_h=ch4_rate_kg_per_h,
+        co2_rate_kg_per_h=co2_rate_kg_per_h,
         methane_fraction=methane_fraction,
         gases=allowed,
         notes=tuple(notes),

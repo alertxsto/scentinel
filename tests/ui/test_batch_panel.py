@@ -38,14 +38,23 @@ def test_changing_holding_time_updates_the_phase_live(panel):
     assert _text(panel, "phase") == "IV"
 
 
-def test_changing_holding_time_updates_the_gas_readout_live(panel):
-    panel._age_h.setValue(8.0)
-    fresh = _text(panel, "gas_now")
+def test_the_gas_readout_separates_cumulative_mass_from_rate(panel):
+    """Cumulative kg and kg/h are different quantities; one label cannot serve both."""
     panel._age_h.setValue(24.0 * 365 * 5)
-    aged = _text(panel, "gas_now")
-    assert fresh != aged
-    assert "CH4 0.000" in fresh
-    assert "CH4 0.000" not in aged
+    cumulative = _text(panel, "gas_cumulative")
+    rate = _text(panel, "gas_rate")
+    assert "kg" in cumulative and "kg/h" not in cumulative
+    assert "kg/h" in rate
+    assert cumulative != rate
+
+
+def test_holding_time_moves_both_readouts_without_a_jump(panel):
+    panel._age_h.setValue(24.0 * 89)
+    before = (_text(panel, "gas_cumulative"), _text(panel, "gas_rate"))
+    panel._age_h.setValue(24.0 * 91)
+    after = (_text(panel, "gas_cumulative"), _text(panel, "gas_rate"))
+    assert before != after
+    assert "kg/h" in after[1]
 
 
 def test_changing_tonnage_updates_the_yield_live(panel):

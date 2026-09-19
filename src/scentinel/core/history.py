@@ -81,7 +81,11 @@ from scentinel.core.scenario import (
 #:     derived generation chemistry (phase, DOC, k, methane fraction). A version
 #:     3 manifest stores a stream label, not the fractions the model actually
 #:     used, so an edited composition cannot be reconstructed from it.
-RUN_FORMAT_VERSION = 4
+#: 5 — separates the three generation quantities a version 4 record conflated:
+#:     the ultimate potential, the cumulative gas produced by the recorded age,
+#:     and the instantaneous generation rate. A version 4 record has one
+#:     ``ch4_kg`` and cannot say whether it was cumulative or a rate.
+RUN_FORMAT_VERSION = 5
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -219,8 +223,12 @@ _GENERATION_KEYS = (
     "k_per_year",
     "decay_fraction",
     "methane_fraction",
-    "ch4_kg",
-    "co2_kg",
+    "ultimate_ch4_kg_per_t",
+    "ultimate_ch4_kg",
+    "ch4_cumulative_kg",
+    "co2_cumulative_kg",
+    "ch4_rate_kg_per_h",
+    "co2_rate_kg_per_h",
 )
 _VENTILATION_KEYS = ("requested_on", "modelled")
 _GAS_SOURCE_KEYS = ("mode", "requested_ppmv", "resolved_ppmv", "provenance")
@@ -340,8 +348,12 @@ class GenerationRecord:
     k_per_year: float
     decay_fraction: float
     methane_fraction: float
-    ch4_kg: float
-    co2_kg: float
+    ultimate_ch4_kg_per_t: float
+    ultimate_ch4_kg: float
+    ch4_cumulative_kg: float
+    co2_cumulative_kg: float
+    ch4_rate_kg_per_h: float
+    co2_rate_kg_per_h: float
 
 
 @dataclass(frozen=True)
@@ -885,8 +897,12 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 k_per_year=generation.k_per_year,
                 decay_fraction=generation.decay_fraction,
                 methane_fraction=generation.methane_fraction,
-                ch4_kg=generation.ch4_kg,
-                co2_kg=generation.co2_kg,
+                ultimate_ch4_kg_per_t=generation.ultimate_ch4_kg_per_t,
+                ultimate_ch4_kg=generation.ultimate_ch4_kg,
+                ch4_cumulative_kg=generation.ch4_cumulative_kg,
+                co2_cumulative_kg=generation.co2_cumulative_kg,
+                ch4_rate_kg_per_h=generation.ch4_rate_kg_per_h,
+                co2_rate_kg_per_h=generation.co2_rate_kg_per_h,
             ),
         ),
         sensors=tuple(
@@ -1189,8 +1205,12 @@ def _payload(record: RunRecord) -> dict[str, object]:
                     "k_per_year": scenario.generation.k_per_year,
                     "decay_fraction": scenario.generation.decay_fraction,
                     "methane_fraction": scenario.generation.methane_fraction,
-                    "ch4_kg": scenario.generation.ch4_kg,
-                    "co2_kg": scenario.generation.co2_kg,
+                    "ultimate_ch4_kg_per_t": scenario.generation.ultimate_ch4_kg_per_t,
+                    "ultimate_ch4_kg": scenario.generation.ultimate_ch4_kg,
+                    "ch4_cumulative_kg": scenario.generation.ch4_cumulative_kg,
+                    "co2_cumulative_kg": scenario.generation.co2_cumulative_kg,
+                    "ch4_rate_kg_per_h": scenario.generation.ch4_rate_kg_per_h,
+                    "co2_rate_kg_per_h": scenario.generation.co2_rate_kg_per_h,
                 },
             },
             "sensors": [
@@ -1513,8 +1533,39 @@ def _decode_generation(payload: object, where: str) -> GenerationRecord:
             minimum=0.0,
             maximum=1.0,
         ),
-        ch4_kg=_number(mapping["ch4_kg"], f"{field}.ch4_kg", where, minimum=0.0),
-        co2_kg=_number(mapping["co2_kg"], f"{field}.co2_kg", where, minimum=0.0),
+        ultimate_ch4_kg_per_t=_number(
+            mapping["ultimate_ch4_kg_per_t"],
+            f"{field}.ultimate_ch4_kg_per_t",
+            where,
+            minimum=0.0,
+        ),
+        ultimate_ch4_kg=_number(
+            mapping["ultimate_ch4_kg"], f"{field}.ultimate_ch4_kg", where, minimum=0.0
+        ),
+        ch4_cumulative_kg=_number(
+            mapping["ch4_cumulative_kg"],
+            f"{field}.ch4_cumulative_kg",
+            where,
+            minimum=0.0,
+        ),
+        co2_cumulative_kg=_number(
+            mapping["co2_cumulative_kg"],
+            f"{field}.co2_cumulative_kg",
+            where,
+            minimum=0.0,
+        ),
+        ch4_rate_kg_per_h=_number(
+            mapping["ch4_rate_kg_per_h"],
+            f"{field}.ch4_rate_kg_per_h",
+            where,
+            minimum=0.0,
+        ),
+        co2_rate_kg_per_h=_number(
+            mapping["co2_rate_kg_per_h"],
+            f"{field}.co2_rate_kg_per_h",
+            where,
+            minimum=0.0,
+        ),
     )
 
 

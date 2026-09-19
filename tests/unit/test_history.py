@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 4
+    assert payload["format_version"] == 5
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -179,18 +179,20 @@ def test_the_manifest_records_the_composition_and_its_derived_chemistry(tmp_path
     assert chemistry["phase"] == "IV"
     assert chemistry["doc"] == pytest.approx(composition.weighted_doc())
     assert chemistry["k_per_year"] == pytest.approx(composition.weighted_decay(0.55))
-    assert chemistry["methane_fraction"] == pytest.approx(0.55, abs=1e-9)
+    assert chemistry["methane_fraction"] == pytest.approx(0.5, abs=2e-3)
+    assert chemistry["ch4_cumulative_kg"] > 0.0
+    assert chemistry["ch4_rate_kg_per_h"] > 0.0
 
     # And it round-trips: load_run reconstructs the same typed record.
     assert history.load_run(record.run_dir).project.scenario.tonnage_t == pytest.approx(7.5)
 
 
-def test_a_version_3_manifest_is_rejected_naming_both_versions(tmp_path):
-    """A version 3 record cannot say which composition produced it."""
+def test_a_version_4_manifest_is_rejected_naming_both_versions(tmp_path):
+    """A version 4 record cannot separate cumulative gas from the generation rate."""
     record = _begin(tmp_path)
-    _rewrite(record, lambda payload: payload.__setitem__("format_version", 3))
+    _rewrite(record, lambda payload: payload.__setitem__("format_version", 4))
 
-    with pytest.raises(HistoryError, match="3"):
+    with pytest.raises(HistoryError, match="4"):
         history.load_run(record.run_dir)
 
 
@@ -290,10 +292,11 @@ def test_auto_and_manual_sources_keep_their_mode_and_provenance(tmp_path):
 def test_a_generated_source_cites_the_model_that_produced_it(tmp_path):
     """A decomposition product must not be labelled with a static table value.
 
-    The auto CH4 source is computed by the generation model (550 000 ppmv at
-    steady state), but the manifest attached ``gas_data.citation("CH4")``, whose
-    text still reads "500000 ppmv — EPA LMOP". The record then stated a value
-    and a provenance that disagreed with each other.
+    The auto CH4 source is computed by the generation model (the regulation's
+    F = 0.5 split, ~500 000 ppmv), but the manifest attached
+    ``gas_data.citation("CH4")``, whose text still reads "500000 ppmv — EPA
+    LMOP". The record then stated a value and a provenance that disagreed with
+    each other.
     """
     project = _project(
         scenario=Scenario(
@@ -306,12 +309,14 @@ def test_a_generated_source_cites_the_model_that_produced_it(tmp_path):
     record = _begin(tmp_path, project)
 
     source = record.project.scenario.gas_sources["CH4"]
-    assert source.resolved_ppmv == pytest.approx(550_000.0)
+    assert source.resolved_ppmv == pytest.approx(500_000.0, rel=2e-3)
     # The citation names the model and the resolved value; it cannot contradict
     # the number persisted beside it.
     assert "Equation HH-1" in source.provenance
-    assert "550000" in source.provenance
-    assert "500000" not in source.provenance
+    assert "F=0.5" in source.provenance
+    # The provenance quotes the value it actually resolved, not a table number.
+    assert f"{source.resolved_ppmv:.0f}" in source.provenance
+    assert "550000" not in source.provenance
 
 
 def test_an_unknown_auto_gas_aborts_without_reserving_a_directory(tmp_path):
@@ -1210,10 +1215,11 @@ def test_source_and_probe_ppmv_values_follow_the_documented_recipe(tmp_path):
 
     sources = record.project.scenario.gas_sources
     assert sources["CO"].resolved_ppmv == pytest.approx(105.0)
-    # The default project is a fresh load (8 h), so the decomposition model
-    # reports no methane. The value is computed, not read from the old
-    # AP-42 landfill default of 500 000 ppmv, which described aged waste.
-    assert sources["CH4"].resolved_ppmv == pytest.approx(0.0)
+    # The default project is a fresh load (8 h). The generated gas is the
+    # regulation's F = 0.5 split at every age, so the fresh load's methane share
+    # is ~50% by volume, not the 0 the phase switch used to force and not the
+    # 550 000 ppmv of the old mature-landfill default.
+    assert sources["CH4"].resolved_ppmv == pytest.approx(500_000.0, rel=2e-3)
     assert sources["VOC"].resolved_ppmv == pytest.approx(12.5)
     assert sources["VOC"].requested_ppmv == pytest.approx(12.5)
     assert sources["VOC"].provenance == "user input"
