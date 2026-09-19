@@ -1,7 +1,6 @@
 {
   "app.title": "Scentinel",
   "app.subtitle": "Studio penempatan sensor gas untuk truk pengangkut sampah",
-
   "menu.file": "Berkas",
   "menu.file.home": "Kembali ke Dashboard",
   "menu.file.new": "Proyek Baru",
@@ -18,19 +17,16 @@
   "menu.help.about": "Tentang Scentinel",
   "menu.run": "Jalankan",
   "menu.run.setup_container": "Siapkan container OpenFOAM",
-
   "panel.setup": "Pengaturan",
   "panel.viewport": "Penampang bak",
   "panel.results": "Hasil",
   "panel.log": "Log solver",
-
   "group.geometry": "Geometri bak",
   "group.waste": "Aliran sampah",
   "group.scenario": "Skenario",
   "group.sensors": "Posisi sensor",
   "group.gas_sources": "Sumber gas (ppmv)",
   "group.simulation": "Kontrol simulasi",
-
   "field.length": "Panjang bak",
   "field.height": "Tinggi bak",
   "field.mound_shape": "Tumpukan sampah",
@@ -45,7 +41,6 @@
   "field.actual_fill": "Isian aktual",
   "field.mesh_size": "Ukuran mesh",
   "field.end_iteration": "Iterasi maksimum",
-
   "shape.flat": "Datar",
   "shape.mounded": "Menggunung",
   "shape.irregular": "Tidak beraturan",
@@ -60,11 +55,9 @@
   "waste.green-waste": "Sampah hijau",
   "waste.rdf-feedstock": "Bahan baku RDF",
   "waste.dry-recyclables": "Daur ulang kering",
-
   "unit.m": "m",
   "unit.m_s": "m/s",
   "unit.ppmv": "ppmv",
-
   "help.geometry": "Dimensi dan profil ini membentuk domain mesh 2D. Isian aktual dapat lebih kecil jika puncak menyentuh atap bak.",
   "help.waste": "Jenis sampah memilih rezim AP-42 dan gas default. Fraksi organik menskala auto CH₄/VOC/H₂S untuk aliran MSW-only terhadap baseline MSW 50%. Co-disposal memakai konsentrasi alternatif yang dikutip.",
   "help.scenario": "Angin menentukan inlet dan outlet. Ventilasi masih dicatat sebagai permintaan dan belum dimodelkan.",
@@ -82,9 +75,6 @@
   "help.waste.green-waste": "Sampah taman. Default CH₄ dan VOC dengan fraksi organik tinggi.",
   "help.waste.rdf-feedstock": "Bahan RDF/SRF lebih kering. Default CO dan VOC dengan fraksi organik rendah.",
   "help.waste.dry-recyclables": "Mayoritas daur ulang kering. Default VOC saja.",
-  "nav.home": "Dasbor",
-  "nav.studio": "Simulasi",
-  "nav.sandbox": "Sandbox",
   "home.title": "Desain, simulasi, validasi.",
   "home.subtitle": "Satu proyek untuk screening CFD, penempatan sensor, dan evaluasi TVOC virtual. Buka proyek sebelumnya untuk melanjutkan.",
   "home.recent": "Proyek terakhir",
@@ -98,7 +88,6 @@
   "action.clear_sensors": "Hapus sensor",
   "action.fit": "Sesuaikan",
   "action.setup_container": "Siapkan container OpenFOAM",
-
   "status.ready": "Siap",
   "status.running": "Berjalan…",
   "status.done": "Selesai",
@@ -109,11 +98,9 @@
   "status.done_history_failed": "Selesai — riwayat tidak tercatat",
   "status.container_ready": "Container siap",
   "status.container_failed": "Setup container gagal",
-
   "viewport.hint": "Klik di dalam bak untuk menempatkan sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
   "viewport.hint.outside": "Klik di dalam bak untuk menempatkan sensor.",
-
   "results.empty": "Belum ada hasil. Jalankan simulasi untuk mengisi tabel ini.",
   "results.sensor": "Sensor",
   "results.busy": "Menunggu keluaran solver…",
@@ -186,35 +173,33 @@
   "results.value.not_assessed": "Belum dinilai",
   "results.status.failed": "GAGAL",
   "results.status.cancelled": "DIBATALKAN",
-
-
   "log.empty": "Log akan muncul di sini saat solver berjalan.",
-
   "validation.fill_range": "Fraksi terisi harus lebih dari 0 dan maksimum 1.",
   "validation.positive": "Nilai harus lebih besar dari nol.",
   "validation.wind_negative": "Kecepatan angin tidak boleh negatif.",
-
   "run.podman_missing": "Podman belum terpasang — solver belum bisa dijalankan.",
   "run.image_missing": "Image container OpenFOAM belum di-pull.",
   "run.needs_gas": "Pilih minimal satu sumber gas sebelum menjalankan.",
   "run.needs_sensor": "Tempatkan minimal satu sensor sebelum menjalankan.",
   "run.blocked": "Simulasi belum tersedia pada build ini.",
   "run.history_failed": "Riwayat run gagal dicatat — simulasi tidak dijalankan.",
-
   "error.open_failed": "Gagal membuka proyek.",
   "error.save_failed": "Gagal menyimpan proyek.",
   "error.export_failed": "Gagal mengekspor laporan.",
-
   "dialog.unsaved.title": "Perubahan belum disimpan",
   "dialog.unsaved.text": "Simpan perubahan pada {name} sebelum melanjutkan?",
   "dialog.overwrite.title": "Timpa berkas",
   "dialog.overwrite.text": "{name} sudah ada. Timpa?",
-
   "about.title": "Tentang Scentinel",
   "about.text": "<b>Scentinel</b> {version}<br><br>Studio screening CFD untuk penempatan sensor gas pada bak truk pengangkut sampah.<br><br>Data default gas dari EPA AP-42 Ch.2.4 dan EPA LMOP; lihat docs/references.md.",
-
   "log.saved": "Tersimpan {path}",
   "log.opened": "Terbuka {path}",
   "log.exported": "Terekspor {path}",
-  "log.run_reserved": "Run {run_id} dicadangkan — manifes {path}"
+  "log.run_reserved": "Run {run_id} dicadangkan — manifes {path}",
+  "nav.start": "Mulai",
+  "menu.view.workspace": "Ruang kerja",
+  "menu.view.panels": "Panel",
+  "menu.view.save_layout": "Simpan Tata Letak",
+  "menu.view.reset_layout": "Reset Tata Letak",
+  "panel.sensor_lab": "Lab sensor"
 }

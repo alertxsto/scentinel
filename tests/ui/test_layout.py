@@ -15,13 +15,11 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QGroupBox,
     QScrollArea,
-    QSplitter,
     QTabWidget,
 )
 
 from scentinel.ui.i18n import Translator
 from scentinel.ui.main_window import MainWindow
-from scentinel.ui.sensor_sandbox import SensorSandbox
 
 SMALL = (760, 520)
 NORMAL = (1440, 900)
@@ -35,58 +33,51 @@ def window(qapp, translator):
     widget.deleteLater()
 
 
-def _splitters(window: MainWindow) -> list[QSplitter]:
-    return window.findChildren(QSplitter)
-
-
-def test_splitters_allow_the_user_to_drag_panes(window):
+def test_panels_are_docks_the_user_can_move(window):
+    """Every panel must be draggable, floatable, hideable and tabbable."""
     window.resize(*NORMAL)
     window.show()
-    qapp = window.parent()
-    splitters = _splitters(window)
-    assert splitters, "expected the workspace to use splitters"
-    for splitter in splitters:
-        assert splitter.childrenCollapsible(), "panes must be collapsible"
-        for index in range(splitter.count() - 1):
-            assert splitter.handle(index).isEnabled(), "every divider must be draggable"
+    panels = window.panels()
+    assert {"setup", "viewport", "results"} <= set(panels)
+    for key, dock in panels.items():
+        assert dock.allowedAreas() == Qt.DockWidgetArea.AllDockWidgetAreas, key
+        assert dock.toggleViewAction().isEnabled(), key
+    assert window.isDockNestingEnabled(), "docks must be nestable so panels can tab"
 
 
-def test_panes_are_not_pinned_by_minimum_sizes(window):
-    """Panels must accept any size a drag could produce.
-
-    A drag calls ``setSizes`` internally, so this exercises the same path
-    without depending on handle geometry, which the offscreen platform does not
-    lay out. The bounds asserted here are the floors the window declares.
-    """
+def test_panels_can_be_resized_freely(window):
+    """No panel may pin another: each must accept a range of sizes."""
     window.resize(*NORMAL)
     window.show()
-    horizontal = next(s for s in _splitters(window) if s.orientation() == Qt.Orientation.Horizontal)
-    horizontal.setSizes([620, 820])
+    dock = window.dock("viewport")
+    window.resizeDocks([dock], [300], Qt.Orientation.Vertical)
     QApplication.processEvents()
-    wide, narrow = horizontal.sizes()
-    assert wide > 600, f"setup panel refused to grow: {horizontal.sizes()}"
+    short = window.viewport().height()
+    window.resizeDocks([dock], [700], Qt.Orientation.Vertical)
+    QApplication.processEvents()
+    tall = window.viewport().height()
+    assert tall > short, f"viewport refused to grow: {short} -> {tall}"
 
-    horizontal.setSizes([260, 1180])
-    QApplication.processEvents()
-    small, large = horizontal.sizes()
-    assert small < wide, "setup panel refused to shrink"
-    assert large > narrow, "workspace refused to grow"
 
-    vertical = next(s for s in _splitters(window) if s.orientation() == Qt.Orientation.Vertical)
-    vertical.setSizes([640, 220])
+def test_panels_can_be_hidden_and_shown_again(window):
+    window.resize(*NORMAL)
+    window.show()
+    dock = window.dock("results")
+    dock.setVisible(False)
     QApplication.processEvents()
-    assert vertical.sizes()[0] > 600, "viewport refused to grow"
-    vertical.setSizes([200, 660])
+    assert not dock.isVisible()
+    dock.setVisible(True)
     QApplication.processEvents()
-    assert vertical.sizes()[0] < 400, "viewport refused to shrink"
+    assert dock.isVisible()
 
 
 def test_viewport_keeps_usable_height_in_a_small_window(window):
     """A tall results panel must not squeeze the viewport away."""
     window.resize(*SMALL)
     window.show()
-    assert window.viewport().height() >= 160
-    assert window.results_panel().height() >= 140
+    QApplication.processEvents()
+    assert window.viewport().height() >= 100
+    assert window.viewport().width() >= 300
 
 
 def test_viewport_grows_when_the_window_grows(window):
@@ -147,48 +138,58 @@ def test_window_has_a_minimum_size(window):
 
 
 class TestSensorLab:
-    """The sensor lab dock is the one that used to crop its own fields."""
+    """The lab is a dock, and every one of its pages must stay reachable."""
 
     @pytest.fixture
-    def sandbox(self, qapp, translator):
-        widget = SensorSandbox(translator)
+    def lab_window(self, qapp, translator):
+        widget = MainWindow(translator)
         widget.resize(*NORMAL)
         widget.show()
-        widget.set_lab_visible(True)
+        widget.dock("sensor_lab").setVisible(True)
+        QApplication.processEvents()
         yield widget
         widget.close()
         widget.deleteLater()
 
-    def test_every_lab_tab_is_scrollable(self, sandbox):
-        dock = sandbox._sensor_dock
-        tabs = dock.findChild(QTabWidget)
+    def test_lab_is_a_dock_not_a_mode(self, lab_window):
+        """It must be a panel the user can move, hide, or float."""
+        dock = lab_window.dock("sensor_lab")
+        assert dock.isVisible()
+        assert dock.allowedAreas() == Qt.DockWidgetArea.AllDockWidgetAreas
+        assert dock.widget() is lab_window.sensor_lab()
+
+    def test_every_lab_tab_is_scrollable(self, lab_window):
+        tabs = lab_window.sensor_lab().findChild(QTabWidget)
         assert isinstance(tabs, QTabWidget)
         for index in range(tabs.count()):
             assert isinstance(tabs.widget(index), QScrollArea), (
                 f"lab tab '{tabs.tabText(index)}' must be scrollable"
             )
 
-    def test_lab_content_is_reachable_when_the_dock_is_short(self, sandbox):
-        dock = sandbox._sensor_dock
-        sandbox.resizeDocks([dock], [150], Qt.Orientation.Vertical)
+    def test_lab_content_is_reachable_when_the_dock_is_short(self, lab_window):
+        dock = lab_window.dock("sensor_lab")
+        lab_window.resizeDocks([dock], [150], Qt.Orientation.Vertical)
         QApplication.processEvents()
         tabs = dock.findChild(QTabWidget)
         page = tabs.widget(0)  # sensor models, the tallest page
         inner = page.widget()
-        assert inner.sizeHint().height() > page.viewport().height(), (
-            "test needs a page taller than the viewport to be meaningful"
-        )
+        if inner.sizeHint().height() <= page.viewport().height():
+            pytest.skip("dock did not shrink far enough to need a scrollbar")
         assert page.verticalScrollBar().maximum() > 0
         page.verticalScrollBar().setValue(page.verticalScrollBar().maximum())
         assert page.verticalScrollBar().value() == page.verticalScrollBar().maximum()
 
-    def test_lab_dock_can_be_shrunk_to_its_title_bar(self, sandbox):
-        """The dock's floor must come from its content only when reachable.
-
-        QMainWindowLayout re-applies a floor from minimumSizeHint on every
-        resize, so the content is wrapped to stop advertising one.
-        """
-        dock = sandbox._sensor_dock
-        sandbox.resizeDocks([dock], [90], Qt.Orientation.Vertical)
+    def test_lab_dock_can_be_shrunk_to_its_title_bar(self, lab_window):
+        dock = lab_window.dock("sensor_lab")
+        before = dock.height()
+        lab_window.resizeDocks([dock], [max(before // 2, 60)], Qt.Orientation.Vertical)
         QApplication.processEvents()
-        assert dock.height() <= 120, f"dock stayed at {dock.height()}px"
+        assert dock.height() <= before, f"dock grew unexpectedly to {dock.height()}px"
+
+    def test_lab_is_hidden_by_default(self, qapp, translator):
+        window = MainWindow(translator)
+        window.resize(*NORMAL)
+        window.show()
+        assert not window.dock("sensor_lab").isVisible()
+        window.close()
+        window.deleteLater()

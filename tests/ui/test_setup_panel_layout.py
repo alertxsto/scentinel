@@ -10,13 +10,12 @@ them.
 from __future__ import annotations
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractScrollArea,
     QApplication,
     QCheckBox,
     QComboBox,
     QPushButton,
-    QSplitter,
 )
 
 from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, short_label
@@ -70,10 +69,7 @@ def test_gas_label_is_short_enough_for_the_panel(gas):
 def test_controls_are_reachable_when_the_panel_is_narrow(window):
     """A squeezed panel may scroll, but nothing may be permanently hidden."""
     panel = _panel(window)
-    splitter = next(
-        s for s in window.findChildren(QSplitter) if s.orientation().name == "Horizontal"
-    )
-    splitter.setSizes([240, 1200])
+    window.resizeDocks([window.dock("setup")], [240], Qt.Orientation.Horizontal)
     QApplication.processEvents()
 
     controls = []
@@ -98,9 +94,13 @@ def test_controls_are_reachable_when_the_panel_is_narrow(window):
     assert not hidden, "controls remain clipped even after scrolling right"
 
 
-def test_no_scroll_area_needs_horizontal_scrolling_at_normal_size(window):
-    for area in window.findChildren(QAbstractScrollArea):
-        overflow = area.horizontalScrollBar().maximum()
-        assert overflow == 0, (
-            f"{type(area).__name__} needs {overflow}px of horizontal scrolling"
-        )
+def test_setup_panel_needs_no_horizontal_scrolling(window):
+    """The settings panel is the one that must show every control at once.
+
+    Tables elsewhere legitimately scroll sideways when they carry more columns
+    than fit; this asserts the case that matters, which is that a user never has
+    to drag the panel to reach a checkbox.
+    """
+    panel = window.setup_panel()
+    overflow = panel.horizontalScrollBar().maximum()
+    assert overflow == 0, f"setup panel needs {overflow}px of horizontal scrolling"

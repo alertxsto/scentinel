@@ -34,7 +34,9 @@ from scentinel.core.history import HistoryError, RunRecord
 from scentinel.core.project import FILE_FILTER, SUFFIX, Project, load_project, save_project
 from scentinel.core.scenario import Scenario
 from scentinel.ui.i18n import LANGUAGES, Translator
+from scentinel.ui.workspace import DockedWorkspace
 from scentinel.ui.results_panel import ResultsPanel, SensorReading
+from scentinel.ui.sensor_lab import SensorLabPanel
 from scentinel.ui.setup_panel import SetupPanel
 from scentinel.ui.solver_worker import (
     DEFAULT_END_ITERATION,
@@ -85,8 +87,8 @@ class ContainerSetupThread(QThread):
         self._worker.run()
 
 
-class MainWindow(QMainWindow):
-    """Scentinel main window."""
+class MainWindow(DockedWorkspace):
+    """The project editor: a dock-based workspace with its own menus."""
 
     home_requested = Signal()
     project_path_changed = Signal(object)  # Path | None
@@ -101,7 +103,7 @@ class MainWindow(QMainWindow):
         path: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__(translator, parent=parent)
         self._t = translator
         self._project = project or _default_project()
         self._path = path
@@ -138,32 +140,31 @@ class MainWindow(QMainWindow):
         )
         self._viewport = ViewportWidget()
         self._results_panel = ResultsPanel(self._t)
+        self._sensor_lab = SensorLabPanel(self._t)
 
-        # Both splitters stay collapsible and evenly stretchable: the user can
-        # drag either divider to any size, and neither pane can pin the other.
-        workspace = QSplitter(Qt.Orientation.Vertical)
-        workspace.setChildrenCollapsible(True)
-        workspace.addWidget(self._viewport)
-        workspace.addWidget(self._results_panel)
-        workspace.setStretchFactor(0, 1)
-        workspace.setStretchFactor(1, 1)
-        workspace.setSizes([560, 340])
+        # Panels are docks, not fixed splitter panes: each one can be dragged to
+        # another edge, tabbed together with another, floated, or hidden, and the
+        # arrangement is remembered per workspace.
+        self.add_panel(
+            "setup", self._t.t("panel.setup"), self._setup_panel,
+            Qt.DockWidgetArea.LeftDockWidgetArea, min_size=(240, 0),
+        )
+        self.add_panel(
+            "viewport", self._t.t("panel.viewport"), self._viewport,
+            Qt.DockWidgetArea.RightDockWidgetArea,
+        )
+        self.add_panel(
+            "results", self._t.t("panel.results"), self._results_panel,
+            Qt.DockWidgetArea.BottomDockWidgetArea,
+        )
+        self.add_panel(
+            "sensor_lab", self._t.t("panel.sensor_lab"), self._sensor_lab,
+            Qt.DockWidgetArea.RightDockWidgetArea,
+        )
+        self.tabifyDockWidget(self.dock("viewport"), self.dock("sensor_lab"))
+        self.dock("viewport").raise_()
+        self.dock("sensor_lab").setVisible(False)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        splitter.setChildrenCollapsible(True)
-        splitter.addWidget(self._setup_panel)
-        splitter.addWidget(workspace)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([380, 1060])
-
-        # A floor on the whole window stops the panes from being squeezed below
-        # usability; within it, every divider moves.
-        self._setup_panel.setMinimumWidth(240)
-        self._viewport.setMinimumHeight(160)
-        self._results_panel.setMinimumHeight(140)
-        splitter.setMinimumWidth(760)
-        self.setCentralWidget(splitter)
         self.resize(1440, 900)
         self.setMinimumSize(760, 520)
 
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         self._viewport.cursor_moved.connect(self._on_cursor_moved)
         self._results_panel.cancel_requested.connect(self.cancel_run)
         self._results_panel.run_requested.connect(self.start_run)
+        self._sensor_lab.config_changed.connect(self._on_lab_config_changed)
 
     def _build_menus(self) -> None:
         file_menu = self.menuBar().addMenu("")
@@ -200,20 +202,9 @@ class MainWindow(QMainWindow):
 
         view_menu = self.menuBar().addMenu("")
         self._view_menu = view_menu
-        self._language_menu = view_menu.addMenu("")
-        group = QActionGroup(self)
-        group.setExclusive(True)
-        self._language_actions: dict[str, QAction] = {}
-        for code, label in LANGUAGES.items():
-            action = QAction(label, self, checkable=True)
-            action.setChecked(code == self._t.locale)
-            action.triggered.connect(lambda _checked, value=code: self._set_locale(value))
-            group.addAction(action)
-            self._language_menu.addAction(action)
-            self._language_actions[code] = action
-        view_menu.addSeparator()
         self._action_fit = _action(view_menu, "Ctrl+0", self._viewport.fit_to_window)
         self._action_reset = _action(view_menu, "Ctrl+Shift+0", self._viewport.reset_view)
+        view_menu.addSeparator()
 
         help_menu = self.menuBar().addMenu("")
         self._help_menu = help_menu
@@ -259,6 +250,13 @@ class MainWindow(QMainWindow):
 
     def results_panel(self) -> ResultsPanel:
         return self._results_panel
+
+    def sensor_lab(self) -> SensorLabPanel:
+        return self._sensor_lab
+
+    def view_menu(self):
+        """The editor's View menu, which the shell extends with layout controls."""
+        return self._view_menu
 
     def is_dirty(self) -> bool:
         return self._dirty
@@ -362,6 +360,8 @@ class MainWindow(QMainWindow):
             self._setup_panel.set_values(project.geometry, project.scenario)
             self._viewport.set_geometry(project.geometry)
             self._viewport.set_sensors(project.sensors)
+            self._sensor_lab.set_config(project.sensor_lab)
+            self._sensor_lab.set_context(project.sensors, self._results_panel.readings())
         finally:
             self._loading = False
         self._refresh_title()
@@ -629,8 +629,16 @@ class MainWindow(QMainWindow):
         if self._loading:
             return
         self._project.sensors = self._viewport.sensors()
+        self._sensor_lab.set_context(self._project.sensors, self._results_panel.readings())
         self._mark_dirty()
         self._refresh_counters()
+
+    def _on_lab_config_changed(self, config) -> None:
+        """Persist a device model edited in the lab panel."""
+        if self._loading:
+            return
+        self._project.sensor_lab = config
+        self._mark_dirty()
 
     def _on_cursor_moved(self, x: float, y: float) -> None:
         self._cursor_label.setText(self._t.t("viewport.cursor", x=x, y=y))
@@ -691,7 +699,6 @@ class MainWindow(QMainWindow):
         self._action_export.setText(t("menu.file.export_csv"))
         self._action_quit.setText(t("menu.file.quit"))
         self._view_menu.setTitle(t("menu.view"))
-        self._language_menu.setTitle(t("menu.view.language"))
         self._action_fit.setText(t("menu.view.fit"))
         self._action_reset.setText(t("menu.view.reset"))
         self._help_menu.setTitle(t("menu.help"))
@@ -703,8 +710,6 @@ class MainWindow(QMainWindow):
         self._container_toolbar.setWindowTitle(t("menu.run.setup_container"))
         self._refresh_run_action()
         self._viewport.setToolTip(t("viewport.hint"))
-        for code, action in self._language_actions.items():
-            action.setChecked(code == self._t.locale)
         self._refresh_title()
         self._refresh_counters()
         self._refresh_solver_note()

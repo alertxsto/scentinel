@@ -1,7 +1,6 @@
 {
   "app.title": "Scentinel",
   "app.subtitle": "Gas sensor placement studio for waste collection vehicles",
-
   "menu.file": "File",
   "menu.file.home": "Back to Dashboard",
   "menu.file.new": "New Project",
@@ -18,19 +17,16 @@
   "menu.help.about": "About Scentinel",
   "menu.run": "Run",
   "menu.run.setup_container": "Set up OpenFOAM container",
-
   "panel.setup": "Setup",
   "panel.viewport": "Bin cross-section",
   "panel.results": "Results",
   "panel.log": "Solver log",
-
   "group.geometry": "Bin geometry",
   "group.waste": "Waste stream",
   "group.scenario": "Scenario",
   "group.sensors": "Sensor positions",
   "group.gas_sources": "Gas sources (ppmv)",
   "group.simulation": "Simulation controls",
-
   "field.length": "Bin length",
   "field.height": "Bin height",
   "field.mound_shape": "Waste mound",
@@ -45,7 +41,6 @@
   "field.actual_fill": "Actual fill",
   "field.mesh_size": "Mesh size",
   "field.end_iteration": "Maximum iterations",
-
   "shape.flat": "Flat",
   "shape.mounded": "Mounded",
   "shape.irregular": "Irregular",
@@ -60,11 +55,9 @@
   "waste.green-waste": "Green waste",
   "waste.rdf-feedstock": "RDF feedstock",
   "waste.dry-recyclables": "Dry recyclables",
-
   "unit.m": "m",
   "unit.m_s": "m/s",
   "unit.ppmv": "ppmv",
-
   "help.geometry": "These dimensions and profile form the 2D mesh domain. Actual fill can be lower when a peak reaches the bin roof.",
   "help.waste": "Waste type selects the AP-42 regime and default gases. Organic fraction scales auto CH₄/VOC/H₂S for MSW-only streams against a 50% mixed-MSW baseline. Co-disposal keeps the cited alternate concentrations.",
   "help.scenario": "Wind selects the inlet and outlet. Ventilation is recorded as requested but is not modelled yet.",
@@ -82,9 +75,6 @@
   "help.waste.green-waste": "Yard and garden waste. Defaults to CH₄ and VOC at a high organic fraction.",
   "help.waste.rdf-feedstock": "Drier RDF/SRF feedstock. Defaults to CO and VOC at a low organic fraction.",
   "help.waste.dry-recyclables": "Mostly dry recyclables. Defaults to VOC only.",
-  "nav.home": "Dashboard",
-  "nav.studio": "Simulation",
-  "nav.sandbox": "Sandbox",
   "home.title": "Design, simulate, validate.",
   "home.subtitle": "One project for CFD screening, sensor placement, and virtual TVOC evaluation. Open a previous project to continue.",
   "home.recent": "Recent projects",
@@ -98,7 +88,6 @@
   "action.clear_sensors": "Clear sensors",
   "action.fit": "Fit",
   "action.setup_container": "Set up OpenFOAM container",
-
   "status.ready": "Ready",
   "status.running": "Running…",
   "status.done": "Finished",
@@ -109,11 +98,9 @@
   "status.done_history_failed": "Finished — run not recorded",
   "status.container_ready": "Container ready",
   "status.container_failed": "Container setup failed",
-
   "viewport.hint": "Click inside the bin to place a sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
   "viewport.hint.outside": "Click inside the bin to place a sensor.",
-
   "results.empty": "No results yet. Run a simulation to fill this table.",
   "results.sensor": "Sensor",
   "results.busy": "Waiting for solver output…",
@@ -186,35 +173,33 @@
   "results.value.not_assessed": "Not assessed",
   "results.status.failed": "FAILED",
   "results.status.cancelled": "CANCELLED",
-
-
   "log.empty": "Log output appears here while the solver runs.",
-
   "validation.fill_range": "Fill fraction must be greater than 0 and at most 1.",
   "validation.positive": "Value must be greater than zero.",
   "validation.wind_negative": "Wind speed must not be negative.",
-
   "run.podman_missing": "Podman is not installed — the solver cannot run yet.",
   "run.image_missing": "OpenFOAM container image is not pulled yet.",
   "run.needs_gas": "Select at least one gas source before running.",
   "run.needs_sensor": "Place at least one sensor before running.",
   "run.blocked": "Simulation is not available in this build.",
   "run.history_failed": "Could not record the run — the simulation was not started.",
-
   "error.open_failed": "Could not open project.",
   "error.save_failed": "Could not save project.",
   "error.export_failed": "Could not export the report.",
-
   "dialog.unsaved.title": "Unsaved changes",
   "dialog.unsaved.text": "Save changes to {name} before continuing?",
   "dialog.overwrite.title": "Overwrite file",
   "dialog.overwrite.text": "{name} already exists. Overwrite it?",
-
   "about.title": "About Scentinel",
   "about.text": "<b>Scentinel</b> {version}<br><br>CFD screening studio for gas sensor placement in waste collection vehicles.<br><br>Gas defaults from EPA AP-42 Ch.2.4 and EPA LMOP; see docs/references.md.",
-
   "log.saved": "Saved {path}",
   "log.opened": "Opened {path}",
   "log.exported": "Exported {path}",
-  "log.run_reserved": "Run {run_id} reserved — manifest {path}"
+  "log.run_reserved": "Run {run_id} reserved — manifest {path}",
+  "nav.start": "Start",
+  "menu.view.workspace": "Workspace",
+  "menu.view.panels": "Panels",
+  "menu.view.save_layout": "Save Layout",
+  "menu.view.reset_layout": "Reset Layout",
+  "panel.sensor_lab": "Sensor lab"
 }

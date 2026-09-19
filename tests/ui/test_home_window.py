@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import QApplication
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.project import Project, Sensor, save_project
 from scentinel.core.scenario import Scenario
@@ -15,78 +16,88 @@ def _settings(tmp_path: Path) -> QSettings:
     return QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
 
 
-def test_home_routes_to_studio_and_sandbox_on_one_editor(qapp, translator, tmp_path):
+def test_the_shell_has_one_editor_and_a_start_screen(qapp, translator, tmp_path):
+    """There is no mode switch: opening a project raises the one workspace."""
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    assert window._stack.currentWidget() is window._home
-    window.show_studio()
+    assert window._stack.currentWidget() is window._start
+    window.show_workspace()
     assert window._stack.currentWidget() is window._editor
-    assert not window._editor.lab_visible()
-    window.show_sandbox()
-    assert window._editor.lab_visible()
-    window._editor.back_requested.emit()
-    assert window._stack.currentWidget() is window._home
+    window.show_start()
+    assert window._stack.currentWidget() is window._start
     window.deleteLater()
 
 
-def test_studio_and_sandbox_share_the_same_project(qapp, translator, tmp_path):
+def test_opening_a_project_never_swaps_the_editor(qapp, translator, tmp_path):
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    window.show_studio()
-    window._editor.viewport().add_sensor(3.0, 2.0)
-    window.show_sandbox()
-    assert [sensor.sensor_id for sensor in window._editor.viewport().sensors()] == ["S1"]
+    editor = window._editor
+    window.show_workspace()
+    editor.viewport().add_sensor(3.0, 2.0)
+    window.show_start()
+    window.show_workspace()
+    assert window._editor is editor
+    assert [s.sensor_id for s in editor.viewport().sensors()] == ["S1"]
     window.deleteLater()
 
 
-def test_sandbox_generates_virtual_telemetry(qapp, translator, tmp_path):
+def test_the_lab_is_a_panel_on_the_same_project(qapp, translator, tmp_path):
+    """The lab reads the editor's sensors and results; it is not a second copy."""
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    sandbox = window._editor
-    sandbox.viewport().add_sensor(3.0, 2.0)
-    sandbox.truth.setValue(50)
-    sandbox.advance()
-    assert sandbox._telemetry.item(0, 4).text().endswith(" ppm")
-    assert sandbox._values["S1"] > 0
-    summary = sandbox.results_panel()._summary_fields
-    assert summary["tvoc_concentration"].text().endswith("ppm (virtual)")
-    assert "no hardware required" in summary["calibration"].text()
+    editor = window._editor
+    editor.viewport().add_sensor(3.0, 2.0)
+    QApplication.processEvents()
+    assert [s.sensor_id for s in editor.sensor_lab()._sensors] == ["S1"]
     window.deleteLater()
 
 
-def test_sandbox_uses_cfd_voc_and_lab_settings(qapp, translator, tmp_path):
+def test_lab_replay_produces_telemetry(qapp, translator, tmp_path):
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    sandbox = window._editor
-    sandbox.viewport().add_sensor(3.0, 2.0)
-    sandbox.truth.setValue(50)
-    sandbox.results_panel().set_results(
+    editor = window._editor
+    editor.viewport().add_sensor(3.0, 2.0)
+    QApplication.processEvents()
+    lab = editor.sensor_lab()
+    lab.truth.setValue(50)
+    lab.advance()
+    assert lab._telemetry.item(0, 4).text().endswith(" ppm")
+    assert lab._values["S1"] > 0
+    window.deleteLater()
+
+
+def test_lab_uses_cfd_readings_as_ground_truth(qapp, translator, tmp_path):
+    window = HomeWindow(translator, settings=_settings(tmp_path))
+    editor = window._editor
+    editor.viewport().add_sensor(3.0, 2.0)
+    editor.results_panel().set_results(
         [SensorReading(sensor_id="S1", x=3.0, y=2.0, values={"VOC": 12.5, "CH4": 80.0})]
     )
-    sandbox.advance()
-    assert sandbox._telemetry.item(0, 2).text() == "cfd-voc"
-    assert sandbox._telemetry.item(0, 3).text().startswith("12.5000")
+    QApplication.processEvents()
+    lab = editor.sensor_lab()
+    lab.set_context(editor.viewport().sensors(), editor.results_panel().readings())
+    lab.advance()
+    assert lab._telemetry.item(0, 2).text() == "cfd-voc"
+    assert lab._telemetry.item(0, 3).text().startswith("12.5000")
     window.deleteLater()
 
 
-def test_sandbox_publishes_lab_readings_into_the_results_table(qapp, translator, tmp_path):
-    """The device model's output is what a reviewer reads, not a separate widget."""
+def test_lab_reset_clears_its_state(qapp, translator, tmp_path):
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    sandbox = window._editor
-    sandbox.viewport().add_sensor(3.0, 2.0)
-    sandbox.truth.setValue(50)
-    sandbox.advance()
-    readings = sandbox.results_panel().readings()
-    assert [reading.sensor_id for reading in readings] == ["S1"]
-    assert readings[0].values["TVOC"] == pytest.approx(sandbox._values["S1"])
-    assert readings[0].values["GROUND_TRUTH"] == pytest.approx(50.0)
+    editor = window._editor
+    editor.viewport().add_sensor(3.0, 2.0)
+    QApplication.processEvents()
+    lab = editor.sensor_lab()
+    lab.advance()
+    lab.reset_sensor_state()
+    assert lab._values == {}
     window.deleteLater()
 
 
-def test_sandbox_results_table_survives_a_reset(qapp, translator, tmp_path):
+def test_lab_edits_persist_into_the_project(qapp, translator, tmp_path):
+    """A device model edited in the panel is part of the project, not the widget."""
     window = HomeWindow(translator, settings=_settings(tmp_path))
-    sandbox = window._editor
-    sandbox.viewport().add_sensor(3.0, 2.0)
-    sandbox.advance()
-    sandbox.reset_sensor_state()
-    assert sandbox._values == {}
-    assert sandbox.results_panel().readings() == []
+    editor = window._editor
+    lab = editor.sensor_lab()
+    lab.lod.setValue(0.5)
+    QApplication.processEvents()
+    assert editor.project().sensor_lab.detection_limit_ppm == pytest.approx(0.5)
     window.deleteLater()
 
 

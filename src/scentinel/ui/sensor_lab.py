@@ -1,11 +1,19 @@
-"""Simulation studio plus a virtual-sensor laboratory on the same project."""
+"""Virtual-sensor laboratory: a dockable panel, not a separate mode.
+
+The lab used to be a whole window that the toolbar swapped in place of the
+editor, which forced a mode switch to compare a device model against the CFD
+result. It is now an ordinary panel: dock it beside the viewport, tab it with
+the results, float it, or hide it, and the project stays the same object.
+
+The panel reads the project's sensor list and its latest run readings, so it
+never holds a second copy of the geometry or the results.
+"""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
-    QDockWidget,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -13,11 +21,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -25,12 +31,11 @@ from PySide6.QtWidgets import (
 from scentinel.core.project import Project
 from scentinel.core.virtual_sensor import SENSOR_FAMILIES, VirtualSensorConfig, step_response
 from scentinel.ui.i18n import Translator
-from scentinel.ui.main_window import MainWindow
 from scentinel.ui.results_panel import SensorReading
 
 
 def _scrollable(page: QWidget) -> QScrollArea:
-    """Wrap a tab page so its content stays reachable at any dock height."""
+    """Wrap a tab page so its content stays reachable at any panel height."""
     area = QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QScrollArea.Shape.NoFrame)
@@ -39,90 +44,94 @@ def _scrollable(page: QWidget) -> QScrollArea:
     return area
 
 
-class _ShrinkableDock(QDockWidget):
-    """A dock whose floor is the title bar, not its content.
+class SensorLabPanel(QWidget):
+    """Per-sensor emulation driven by lab settings, fed by the project's results.
 
-    ``QDockWidget`` takes its minimum from ``minimumSizeHint``, which for a tab
-    widget is the tab bar plus one row of content. ``QMainWindowLayout``
-    re-applies that floor on every resize, so clearing ``minimumHeight`` is not
-    enough — the content itself has to stop advertising a minimum. Wrapping the
-    tabs in a container with an ignored vertical size policy does that. Every
-    page inside is a scroll area, so nothing becomes unreachable.
+    The panel does not own the project. The host window pushes state in through
+    :meth:`set_context` and listens to :attr:`config_changed`, so the lab can be
+    docked, floated, or hidden without holding a reference to the editor.
     """
 
-    def set_content(self, content: QWidget) -> None:
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(content)
-        container.setMinimumSize(0, 0)
-        container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
-        self.setWidget(container)
+    config_changed = Signal(object)  # VirtualSensorConfig
 
-
-class SensorSandbox(MainWindow):
-    """The CFD editor plus per-sensor emulation driven by lab settings."""
-
-    back_requested = Signal()
-
-    def __init__(
-        self,
-        translator: Translator,
-        project: Project | None = None,
-        path=None,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(translator, project=project, path=path, parent=parent)
-        self.setWindowTitle("Scentinel — Universal Sensor Sandbox")
+    def __init__(self, translator: Translator, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._t = translator
         self._elapsed = 0.0
         self._sample = 0
         self._values: dict[str, float] = {}
         self._detected_at: dict[str, float] = {}
-        self.home_requested.connect(self.back_requested.emit)
-        self._build_sensor_lab()
-        self._set_lab_widgets(self.project().sensor_lab)
-        self.viewport().sensors_changed.connect(self._sync_sensors)
-        self._timer = QTimer(self)
-        self._timer.setInterval(250)
-        self._timer.timeout.connect(self.advance)
-        self._sync_sensors()
-        self.set_lab_visible(False)
+        self._sensors: list = []
+        self._readings: list[SensorReading] = []
+        self._loading = False
 
-    def _build_sensor_lab(self) -> None:
-        dock = _ShrinkableDock("Virtual Sensor Lab", self)
-        dock.setAllowedAreas(
-            Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
-        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         tabs = QTabWidget()
-        # Every page is scrollable: the model page alone needs ~630 px, and a
-        # fixed minimum on the dock would otherwise crop its lower fields with
-        # no way to reach them.
+        tabs.setMinimumHeight(0)
         tabs.addTab(_scrollable(self._build_model_tab()), "Sensor models")
         tabs.addTab(_scrollable(self._build_telemetry_tab()), "Telemetry")
         tabs.addTab(_scrollable(self._build_evaluation_tab()), "Evaluation")
-        tabs.setMinimumHeight(0)
-        dock.set_content(tabs)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
-        dock.setMinimumHeight(0)
-        dock.setMinimumWidth(0)
-        toolbar = QToolBar("Sandbox tools", self)
-        toolbar.setMovable(False)
-        toolbar.addAction(dock.toggleViewAction())
-        dock.toggleViewAction().setText("Sensor Lab")
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
-        self._sandbox_toolbar = toolbar
-        self._sensor_dock = dock
-        self.resizeDocks([dock], [340], Qt.Orientation.Vertical)
+        layout.addWidget(tabs)
+        self._tabs = tabs
 
-    def set_lab_visible(self, visible: bool) -> None:
-        self._lab_mode = visible
-        self._sensor_dock.setVisible(visible)
-        self._sandbox_toolbar.setVisible(visible)
-        self.results_panel().set_sandbox_mode(visible)
+        self._timer = QTimer(self)
+        self._timer.setInterval(250)
+        self._timer.timeout.connect(self.advance)
 
-    def lab_visible(self) -> bool:
-        return getattr(self, "_lab_mode", False)
+    # -- host interface ------------------------------------------------------
+
+    def set_context(self, sensors: list, readings: list[SensorReading]) -> None:
+        """Push the current sensor list and run readings into the lab."""
+        self._sensors = list(sensors)
+        self._readings = list(readings)
+        self._sync_sensors()
+
+    def set_config(self, config: VirtualSensorConfig) -> None:
+        """Load a saved device model without emitting :attr:`config_changed`."""
+        self._loading = True
+        try:
+            widgets = (
+                self.family, self.range, self.lod, self.response,
+                self.recovery, self.noise, self.drift, self.cross_factor,
+            )
+            for widget in widgets:
+                widget.blockSignals(True)
+            index = self.family.findText(config.family)
+            if index >= 0:
+                self.family.setCurrentIndex(index)
+            self.range.setValue(config.range_ppm)
+            self.lod.setValue(config.detection_limit_ppm)
+            self.response.setValue(config.response_time_s)
+            self.recovery.setValue(config.recovery_time_s)
+            self.noise.setValue(config.noise_ppm)
+            self.drift.setValue(config.drift_ppm_h)
+            self.cross_factor.setValue(config.cross_sensitivity)
+            for widget in widgets:
+                widget.blockSignals(False)
+        finally:
+            self._loading = False
+
+    def config(self) -> VirtualSensorConfig:
+        return VirtualSensorConfig(
+            family=self.family.currentText(),
+            range_ppm=self.range.value(),
+            detection_limit_ppm=self.lod.value(),
+            response_time_s=self.response.value(),
+            recovery_time_s=self.recovery.value(),
+            cross_sensitivity=self.cross_factor.value(),
+            noise_ppm=self.noise.value(),
+            drift_ppm_h=self.drift.value(),
+        )
+
+    def is_replaying(self) -> bool:
+        return self._timer.isActive()
+
+    def stop(self) -> None:
+        self._timer.stop()
+        self._replay_button.setText("Start sensor replay")
+
+    # -- construction --------------------------------------------------------
 
     def _build_model_tab(self) -> QWidget:
         tab = QWidget()
@@ -178,16 +187,8 @@ class SensorSandbox(MainWindow):
         layout.addLayout(controls)
         layout.addStretch(1)
         for widget in (
-            self.family,
-            self.range,
-            self.lod,
-            self.response,
-            self.recovery,
-            self.noise,
-            self.drift,
-            self.cross_factor,
-            self.temperature,
-            self.humidity,
+            self.family, self.range, self.lod, self.response, self.recovery,
+            self.noise, self.drift, self.cross_factor, self.temperature, self.humidity,
         ):
             if widget is self.family:
                 widget.currentIndexChanged.connect(self._store_lab)
@@ -202,14 +203,8 @@ class SensorSandbox(MainWindow):
         self._telemetry.setMinimumHeight(0)
         self._telemetry.setHorizontalHeaderLabels(
             [
-                "Sensor",
-                "Technology",
-                "Source",
-                "Ground truth",
-                "Indicated",
-                "Error",
-                "State",
-                "Detection time",
+                "Sensor", "Technology", "Source", "Ground truth",
+                "Indicated", "Error", "State", "Detection time",
             ]
         )
         layout.addWidget(self._telemetry)
@@ -237,68 +232,20 @@ class SensorSandbox(MainWindow):
         spin.setKeyboardTracking(False)
         return spin
 
-    def config(self) -> VirtualSensorConfig:
-        return VirtualSensorConfig(
-            family=self.family.currentText(),
-            range_ppm=self.range.value(),
-            detection_limit_ppm=self.lod.value(),
-            response_time_s=self.response.value(),
-            recovery_time_s=self.recovery.value(),
-            cross_sensitivity=self.cross_factor.value(),
-            noise_ppm=self.noise.value(),
-            drift_ppm_h=self.drift.value(),
-        )
+    # -- state ---------------------------------------------------------------
 
     def _store_lab(self, *_args: object) -> None:
         if self._loading:
             return
-        self._project.sensor_lab = self.config()
-        self._mark_dirty()
-
-    def _set_lab_widgets(self, config: VirtualSensorConfig) -> None:
-        widgets = (
-            self.family,
-            self.range,
-            self.lod,
-            self.response,
-            self.recovery,
-            self.noise,
-            self.drift,
-            self.cross_factor,
-        )
-        for widget in widgets:
-            widget.blockSignals(True)
-        try:
-            index = self.family.findText(config.family)
-            if index >= 0:
-                self.family.setCurrentIndex(index)
-            self.range.setValue(config.range_ppm)
-            self.lod.setValue(config.detection_limit_ppm)
-            self.response.setValue(config.response_time_s)
-            self.recovery.setValue(config.recovery_time_s)
-            self.noise.setValue(config.noise_ppm)
-            self.drift.setValue(config.drift_ppm_h)
-            self.cross_factor.setValue(config.cross_sensitivity)
-        finally:
-            for widget in widgets:
-                widget.blockSignals(False)
-
-    def _apply_project(self, project: Project, path=None) -> None:
-        super()._apply_project(project, path=path)
-        if not hasattr(self, "humidity"):
-            return
-        self._set_lab_widgets(project.sensor_lab)
-        self.humidity.setValue(project.scenario.moisture_fraction * 100.0)
-        self._sync_sensors()
+        self.config_changed.emit(self.config())
 
     def _exposure(self, sensor_id: str) -> tuple[float, float, str]:
         """Return (truth ppm, cross ppm, source label) for one sensor."""
-        for reading in self.results_panel().readings():
+        for reading in self._readings:
             if reading.sensor_id != sensor_id:
                 continue
             if "VOC" in reading.values:
-                truth = reading.values["VOC"]
-                source = "cfd-voc"
+                truth, source = reading.values["VOC"], "cfd-voc"
             elif reading.values:
                 gas, truth = next(iter(reading.values.items()))
                 source = f"cfd-{gas.lower()}"
@@ -312,13 +259,12 @@ class SensorSandbox(MainWindow):
         return self.truth.value(), self.cross.value(), "lab-fallback"
 
     def _sync_sensors(self) -> None:
-        sensors = self.viewport().sensors()
-        live = {sensor.sensor_id for sensor in sensors}
-        self._values = {key: value for key, value in self._values.items() if key in live}
-        self._detected_at = {key: value for key, value in self._detected_at.items() if key in live}
-        self._telemetry.setRowCount(len(sensors))
-        for row, sensor in enumerate(sensors):
-            truth, cross, source = self._exposure(sensor.sensor_id)
+        live = {sensor.sensor_id for sensor in self._sensors}
+        self._values = {k: v for k, v in self._values.items() if k in live}
+        self._detected_at = {k: v for k, v in self._detected_at.items() if k in live}
+        self._telemetry.setRowCount(len(self._sensors))
+        for row, sensor in enumerate(self._sensors):
+            truth, _cross, source = self._exposure(sensor.sensor_id)
             indicated = self._values.get(sensor.sensor_id)
             cells = (
                 sensor.sensor_id,
@@ -329,45 +275,16 @@ class SensorSandbox(MainWindow):
                 f"{indicated - truth:+.4f} ppm" if indicated is not None else "—",
                 "ready" if indicated is None else "measuring",
                 f"{self._detected_at[sensor.sensor_id]:.2f} s"
-                if sensor.sensor_id in self._detected_at
-                else "—",
+                if sensor.sensor_id in self._detected_at else "—",
             )
             for column, text in enumerate(cells):
                 self._telemetry.setItem(row, column, QTableWidgetItem(text))
-        self._publish_sensor_table()
         self._refresh_evaluation()
 
-    def _publish_sensor_table(self) -> None:
-        """Push the current replay into the results table, so the lab output is visible.
-
-        The table is the same one a solve fills, so the numbers a reviewer reads
-        are the numbers the device model produced. Until the first sample lands
-        the ground truth is shown with the indicated value still pending, which
-        is why the entries are only written once a value exists.
-        """
-        rows = []
-        for sensor in self.viewport().sensors():
-            indicated = self._values.get(sensor.sensor_id)
-            if indicated is None:
-                continue
-            truth, cross, source = self._exposure(sensor.sensor_id)
-            values = {"TVOC": indicated, "GROUND_TRUTH": truth}
-            if cross:
-                values["INTERFERENCE"] = cross
-            rows.append(
-                SensorReading(
-                    sensor_id=sensor.sensor_id,
-                    x=sensor.x,
-                    y=sensor.y,
-                    values=values,
-                )
-            )
-        if rows:
-            self.results_panel().set_results(rows)
+    # -- replay --------------------------------------------------------------
 
     def toggle(self) -> None:
-        if not self.viewport().sensors():
-            self.results_panel().append_log("Place at least one sensor before replaying its response.")
+        if not self._sensors:
             return
         if self._timer.isActive():
             self._timer.stop()
@@ -383,17 +300,14 @@ class SensorSandbox(MainWindow):
         self._values.clear()
         self._detected_at.clear()
         self._replay_button.setText("Start sensor replay")
-        self.results_panel().set_results([])
         self._sync_sensors()
 
     def advance(self) -> None:
         step = self._timer.interval() / 1000.0
         self._elapsed += step
         config = self.config()
-        truths: list[float] = []
-        for row, sensor in enumerate(self.viewport().sensors()):
+        for row, sensor in enumerate(self._sensors):
             truth, cross, source = self._exposure(sensor.sensor_id)
-            truths.append(truth)
             reading = step_response(
                 config,
                 ground_truth_ppm=truth,
@@ -411,7 +325,11 @@ class SensorSandbox(MainWindow):
                 and sensor.sensor_id not in self._detected_at
             ):
                 self._detected_at[sensor.sensor_id] = self._elapsed
-            state = "saturated" if reading.saturated else "below LOD" if reading.below_detection else "measuring"
+            state = (
+                "saturated" if reading.saturated
+                else "below LOD" if reading.below_detection
+                else "measuring"
+            )
             values = (
                 sensor.sensor_id,
                 config.family,
@@ -421,8 +339,7 @@ class SensorSandbox(MainWindow):
                 f"{reading.indicated_ppm - truth:+.4f} ppm",
                 state,
                 f"{self._detected_at[sensor.sensor_id]:.2f} s"
-                if sensor.sensor_id in self._detected_at
-                else "—",
+                if sensor.sensor_id in self._detected_at else "—",
             )
             for column, text in enumerate(values):
                 item = self._telemetry.item(row, column)
@@ -430,28 +347,14 @@ class SensorSandbox(MainWindow):
                     self._telemetry.setItem(row, column, QTableWidgetItem(text))
                 else:
                     item.setText(text)
-        if self._values and truths:
-            mean_error = sum(
-                abs(self._values[sensor.sensor_id] - truth)
-                for sensor, truth in zip(self.viewport().sensors(), truths)
-            ) / len(truths)
-            self.results_panel().set_virtual_sensor_summary(
-                technology=config.family,
-                indicated_ppm=sum(self._values.values()) / len(self._values),
-                detection_limit_ppm=config.detection_limit_ppm,
-                temperature_c=self.temperature.value(),
-                humidity_rh=self.humidity.value(),
-                mean_error_ppm=mean_error,
-            )
         self._sample += 1
-        self._publish_sensor_table()
         self._refresh_evaluation()
 
     def _refresh_evaluation(self) -> None:
-        count = len(self.viewport().sensors())
+        count = len(self._sensors)
         detected = len(self._detected_at)
         errors = []
-        for sensor in self.viewport().sensors():
+        for sensor in self._sensors:
             if sensor.sensor_id not in self._values:
                 continue
             truth, _, _ = self._exposure(sensor.sensor_id)
@@ -467,6 +370,8 @@ class SensorSandbox(MainWindow):
         else:
             self._evaluation.setText(
                 f"Placed sensors: {count}\nDetected exposure: {detected}/{count}\n"
-                "Run CFD or replay a controlled exposure to populate device-performance metrics.\n\n"
-                "Coverage and blind-zone scores require a spatial concentration field; they are not inferred from probe-only data."
+                "Run CFD or replay a controlled exposure to populate "
+                "device-performance metrics.\n\n"
+                "Coverage and blind-zone scores require a spatial concentration "
+                "field; they are not inferred from probe-only data."
             )
