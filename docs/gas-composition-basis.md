@@ -432,6 +432,27 @@ manifest lama**:
 | `gas_defaults.py` | Perlu gas baru (CO₂, NH₃, terpena) dengan sumber baru |
 | Dokumentasi | `references.md` perlu tabel fasa dan model HH-1 |
 
+### 7.1 Sumber CFD: dari konsentrasi ke fluks massa (Phase 5)
+
+Kekuatan sumber di CFD tidak lagi berupa konsentrasi permukaan (`fixedValue`)
+melainkan **fluks massa emisi** (kg/m²/s), karena konsentrasi permukaan membuat
+fluks masuk bergantung pada tinggi sel pertama sehingga mesh tidak konvergen.
+
+Rantainya: laju batch dari model generasi (kg/s) → luas permukaan emisi
+(panjang profil gundukan × `BinGeometry.width_m`) → fluks (kg/m²/s) → gradien
+skalar (`J/D`) sebagai `fixedGradient`. Karena persamaan transpor linear, fluks
+dalam satuan fraksi volume setara dengan fluks massa; konversinya memakai
+`V_m/MW` pada 25 °C, 1 atm.
+
+Yang berubah karena umur adalah **laju** (dan karena itu fluks), bukan fraksi
+campuran — persis pemisahan yang ditetapkan di §6.6. Tonase dan lebar bin
+menggerakkan fluks secara linear.
+
+**Catatan jujur:** gate mesh-independence masih belum lolos (<10%). Boundary
+fluks sudah bukan penyebabnya lagi; akar yang terukur adalah medan kecepatan
+k-epsilon yang belum konvergen terhadap mesh dan skalar yang hanya memakai
+difusivitas molekuler (lihat [ROADMAP.md](ROADMAP.md)).
+
 ### Urutan pengerjaan yang disarankan
 
 1. **Ekstrak nilai** dari tiga sumber §5.1 — tanpa angka, fasa I tidak dapat

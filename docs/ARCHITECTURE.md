@@ -53,7 +53,7 @@ reports rather than restating it.
 
 | Module | Lines | Owns |
 |---|---|---|
-| `geometry.py` | 160 | `BinGeometry`; mound surface, polygon, height, area, fill fraction |
+| `geometry.py` | 187 | `BinGeometry` (incl. `width_m`); mound surface, polygon, height, area, emitting area |
 | `scenario.py` | 255 | `Scenario`: wind, ventilation flag, waste stream, composition/tonnage overrides, per-gas sources (ppmv or `"auto"`) |
 | `composition.py` | 300 | `WasteComposition`, Table HH-1 `DOC`/`k`, `PhaseModel`, `interpret_phase` |
 | `generation.py` | 280 | 40 CFR 98.343(a)(1) Equation HH-1: ultimate, cumulative, and rate; F = 0.5 mixture |
@@ -65,7 +65,7 @@ reports rather than restating it.
 | `gas_data.py` | 378 | AP-42 loader: `GasSpec`, `GasApplicability`, `offered_gases(age_h)`, `citation` |
 | `gas_defaults.py` | 780 | Generated data — do not edit by hand (see `scripts/build_gas_data.py`) |
 | `mesh.py` | 238 | gmsh: air-region outline, 1-cell extrusion, physical groups → `MeshResult` |
-| `casegen.py` | 741 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, applied-physics constants, case-input digest |
+| `casegen.py` | 836 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, emission rate/flux, applied-physics constants, case-input digest |
 | `runner.py` | 273 | Podman invocation, log streaming, cancellation/timeout, per-stage logs |
 | `container.py` | 268 | Isolated Podman storage, image pull and tool verification |
 | `assessment.py` | 315 | Exposure thresholds, peak-to-mean coverage, gas-phase Cl/S loading |
@@ -147,7 +147,7 @@ MainWindow._on_run_finished
 | Turbulence | k-epsilon RAS | `k`, `epsilon`, `nut` written per case |
 | Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D = casegen.scalar_diffusivity(gas)` — each gas's own FSG-computed diffusivity from `gas_data` |
 | Waste mound | Not meshed | Solid, no flow; contributes only the `source` patch |
-| Source term | `fixedValue` concentration | 105 ppmv CO etc., as volume fraction |
+| Source term | Emission mass flux | kg/m²/s over the emitting area, imposed as a `fixedGradient` on the scalar |
 
 ### Boundary conditions
 
@@ -156,7 +156,7 @@ only changes which open side is the inlet.
 
 | Patch | Velocity | Pressure | k | epsilon | nut | Scalar |
 |---|---|---|---|---|---|---|
-| `source` (waste) | noSlip | zeroGradient | zeroGradient | zeroGradient | calculated | **fixedValue (ppmv)** |
+| `source` (waste) | noSlip | zeroGradient | zeroGradient | zeroGradient | calculated | **fixedGradient (flux/D)** |
 | `wallLeft`, `wallRight` (bin) | noSlip | zeroGradient | kqRWallFunction | epsilonWallFunction | nutkWallFunction | zeroGradient |
 | `openLeft`, `openRight` | inlet: fixedValue / outlet: zeroGradient | outlet: fixedValue 0 | inlet: fixedValue | inlet: fixedValue | calculated | inlet: 0 / outlet: zeroGradient |
 | `top` | slip | zeroGradient | zeroGradient | zeroGradient | calculated | zeroGradient |
@@ -322,19 +322,21 @@ guess a registry when it cannot prompt.
 
 ### Why mesh independence fails
 
-The source is a `fixedValue` concentration on a diffusive patch. The near-surface
-gradient — and therefore the sampled value — scales with the first cell height,
-which uniform refinement of the mound profile does not resolve. Measured:
+The source is now an emission mass flux (`fixedGradient`), so the imposed flux
+is independent of the first cell height. That cut the worst-probe deviation
+substantially, but the gate is still missed because the *velocity field* is not
+mesh-converged and the scalar is carried with molecular diffusivity only.
+Measured 2026-09-19:
 
 | Mesh size | Cells | S1 (ppmv) | S3 (ppmv) |
 |---|---|---|---|
-| 0.50 m | 3 444 | 0.342 | 4.340 |
-| 0.25 m | 7 248 | 0.465 | 3.363 |
-| 0.125 m | 28 016 | 0.887 | 6.358 |
+| 0.50 m | 431 | 2.67e-4 | 3.15e-3 |
+| 0.25 m | 907 | 3.34e-4 | 2.31e-3 |
+| Deviation | | 25.3% | 26.7% |
 
-Treat absolute concentrations as screening estimates. The fix is a mass-flux
-source term (kg/m²/s) with a resolved near-wall cell, which is planned work —
-see [ROADMAP.md](ROADMAP.md).
+Treat absolute concentrations as screening estimates. The remaining fixes are
+turbulent scalar transport (T-240) and a mesh-converged velocity field
+(T-021) — see [ROADMAP.md](ROADMAP.md).
 
 ## 8. Conventions
 

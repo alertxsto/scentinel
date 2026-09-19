@@ -48,7 +48,7 @@ and per-sensor ppmv results. Records survive restarts and are readable through
 `scentinel.core.history` (`list_runs()` / `get_run()`); failed and cancelled
 attempts are recorded too.
 
-Manifest format 6 also records the batch the run solved: the composition
+Manifest format 7 also records the batch the run solved: the composition
 fractions, the tonnage, and the generation chemistry the model derived from
 them — the ultimate potential, the cumulative gas produced by the recorded age,
 and the instantaneous generation rate, each a separate quantity. The batch
@@ -103,12 +103,14 @@ refined 2×. Measured on the current pipeline:
 | 0.25 m | 7 248 | 0.465 | 3.363 |
 | 0.125 m | 28 016 | 0.887 | 6.358 |
 
-Deviation is 76.5% at the first refinement, and the sequence is not converging.
-The source is a `fixedValue` concentration on a diffusive patch, so the flux
-entering the domain scales with the first cell height. The fix is a mass-flux
-source term in kg/m²/s; until it lands, **treat absolute concentrations as
-screening estimates and use results for relative comparison only.** The full
-analysis and the ranked fix options are in
+The source is now an emission mass flux (kg/m²/s over the emitting area),
+imposed as a `fixedGradient` on the scalar, so the flux entering the domain no
+longer scales with the first cell height. The worst-probe deviation fell from
+~87% to ~63%, but the <10% gate is still missed: the k-epsilon velocity field is
+not mesh-converged at the current cell counts and the scalar is carried with
+molecular diffusivity only. Until the gate passes, **treat absolute
+concentrations as screening estimates and use results for relative comparison
+only.** The full analysis and the ranked fix options are in
 [docs/ROADMAP.md](docs/ROADMAP.md#blocking-issue-mesh-independence).
 
 ## Documentation

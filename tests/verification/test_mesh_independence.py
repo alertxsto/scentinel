@@ -43,15 +43,23 @@ def test_mesh_independence_is_not_yet_satisfied(tmp_path):
     """Documents the current refinement behaviour, which misses the spec gate.
 
     The design spec asks for <10% probe deviation between the coarse mesh and a
-    2x refined one. Measured on this pipeline the deviation is far larger and
-    the sequence is not convergent, so the gate is recorded as failing rather
-    than asserted. The cause is the source boundary: a fixed surface
-    concentration on a diffusive patch makes the near-surface gradient — and
-    therefore the sampled value — depend on the first cell height, which is not
-    resolved by uniform refinement of the mound profile.
+    2x refined one. The source rework (T-020) replaced the surface-concentration
+    boundary with a mass-flux (``fixedGradient``) boundary and cut the deviation
+    substantially — measured 2026-09-19, the worst probe fell from ~87% to ~63%
+    — but the gate is still missed, so it is recorded as failing rather than
+    asserted.
 
-    Flipping this test to assert convergence is the exit criterion for the
-    source-term rework.
+    Root cause, measured on the same pipeline: the two meshes each converge
+    (final Ux residual ~1e-4), but the *velocity field* differs between them at
+    the probes (S1: 0.236 vs 0.116 m/s). The k-epsilon RANS field around a mound
+    is not mesh-converged at 431/907 cells, and the scalar — carried with
+    molecular diffusivity only — follows those streamlines. Raising the
+    molecular diffusivity made the deviation worse, so this is not
+    diffusion-limited; it is the missing turbulent scalar transport (T-240) and
+    the unresolved velocity field (T-021) that the gate needs.
+
+    Flipping this test to assert convergence is the exit criterion for T-240
+    plus a mesh-converged velocity field, not for T-020 alone.
     """
     if not runner.image_available():
         pytest.skip(f"{casegen.IMAGE} not pulled")

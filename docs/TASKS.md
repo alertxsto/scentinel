@@ -406,6 +406,42 @@ Files: `tests/verification/test_mesh_independence.py`
 Current state: the test measures the deviation and asserts it is *still* above 10%, so it fails loudly once the fix lands and forces a convergence assertion to replace it.
 Acceptance: asserts <10% and the trend is monotone with refinement.
 
+### Phase 5 — CFD mass-flux source
+
+#### T-020 Mass-flux source term · PARTIAL — 2026-09-19
+Files: `src/scentinel/core/geometry.py`, `src/scentinel/core/casegen.py`,
+`src/scentinel/core/history.py`, `src/scentinel/core/project.py`,
+`src/scentinel/ui/setup_panel.py`, `tests/unit/test_geometry.py`,
+`tests/unit/test_casegen.py`, `tests/unit/test_history.py`,
+`tests/unit/test_project.py`, `tests/ui/test_setup_panel.py`
+Why: the `fixedValue` concentration boundary made sampled values depend on the
+first cell height, so mesh independence failed and did not converge.
+Change: the source is now an emission mass flux. `BinGeometry.width_m` gives the
+emitting area (mound profile × width); `casegen.emission_rate_kg_per_s` derives
+the batch's rate from the generation model; `emission_flux_kg_per_m2_s` spreads
+it over the area; `source_gradient_ppmv_per_m` converts it to the `fixedGradient`
+the scalar boundary imposes. Project format is v2 (adds `width_m`, v1 migrates);
+manifest is v7 (records `emitting_area_m2` and `emission_flux_kg_per_m2_s`).
+Acceptance met for the mechanism: the boundary is a flux, tonnage and age move
+it, and the mesh deviation fell from ~87% to ~63% (worst probe, 2026-09-19).
+**Not met for the gate:** probe deviation is still >10%. Measured root cause:
+the k-epsilon velocity field itself differs between meshes (S1: 0.236 vs
+0.116 m/s) and is not mesh-converged at 431/907 cells; the scalar, carried with
+molecular diffusivity only, follows it. Raising molecular D made it worse, so
+the remaining error is the missing turbulent scalar transport (T-240) and the
+unresolved velocity field (T-021), not the source boundary. The gate test
+remains asserted-as-failing with this evidence recorded.
+Note: this changes the design spec's §4.2/§4.3 `fixedValue` concentration
+boundary; the spec's gas-source field comment left the basis open
+(`kg/m2/s or ppm basis`), and this resolves it toward a flux.
+
+#### T-021 Mesh-independence gate · BLOCKED on T-240 + mesh-converged velocity
+Files: `tests/verification/test_mesh_independence.py`
+Current state: the test measures the deviation and asserts it is *still* above
+10%, recording the measured cause (unresolved velocity field + molecular-only
+scalar transport).
+Acceptance: asserts <10% and the trend is monotone with refinement.
+
 ### F2 remainder
 
 #### T-022 Mass-balance check · TODO

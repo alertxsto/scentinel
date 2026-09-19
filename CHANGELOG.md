@@ -67,6 +67,26 @@ Two things are worth knowing before reading:
   `phase_uncertainty`; version 5 manifests are rejected naming both versions.
   The batch panel's phase readout states the applicability.
 
+### Phase 5 — CFD mass-flux source
+
+- **The source is now an emission mass flux, not a surface concentration.**
+  `BinGeometry.width_m` (default 2.4 m) gives the emitting area; the batch's
+  generation rate is spread over it to give kg/m²/s; the scalar source patch
+  imposes that flux as a `fixedGradient`. The near-wall flux is now independent
+  of the first cell height, and tonnage, age, and bin width move the field.
+- Project format v2 adds `width_m`; a v1 file loads with the default rather
+  than being rejected. Manifest format v7 records `emitting_area_m2` and
+  `emission_flux_kg_per_m2_s` per gas; v6 is rejected naming both.
+- The setup panel's derived readout tooltip states the emission flux the case
+  will impose.
+- **Mesh independence is still not met.** The flux boundary cut the worst-probe
+  deviation from ~87% to ~63%, but the gate is >10%. Measured cause: the
+  k-epsilon velocity field is not mesh-converged at 431/907 cells and differs
+  between meshes, and the scalar is carried with molecular diffusivity only.
+  The remaining fix is turbulent scalar transport (Phase 6) plus a converged
+  velocity field, not the source boundary. The gate test records this and
+  remains asserted-as-failing.
+
 ### Phase 4 — fresh-waste model
 
 - **Gas applicability is explicit.** Each catalogue gas carries

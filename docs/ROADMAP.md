@@ -52,12 +52,15 @@ not offer methane. Manifest format 6 records the generation and phase
 provenance. Fresh-waste VOC research is partly extracted (Statheropoulos 2005)
 and partly recorded unavailable (Waste Manag. 2017 paywalled).
 
-**What does not work:** absolute concentrations are not mesh-converged (see
-below); nothing reads the run history back into the UI, so there is still no
-scenario comparison view and no PDF reporting; the ventilation flag is stored —
-recorded as requested but unmodelled — but has no effect on the case; and the
-fuel-basis RDF parameters (NCV, ash, Cl) still need laboratory input, so no
-EN 15359 / ISO 21640 class is claimed.
+**What does not work:** absolute concentrations are not mesh-converged. The
+source is now a mass flux (Phase 5), which cut the worst-probe deviation from
+~87% to ~63%, but the <10% gate is still missed: the k-epsilon velocity field is
+not mesh-converged at the current cell counts and the scalar is carried with
+molecular diffusivity only. Nothing reads the run history back into the UI, so
+there is still no scenario comparison view and no PDF reporting; the ventilation
+flag is stored — recorded as requested but unmodelled — but has no effect on the
+case; and the fuel-basis RDF parameters (NCV, ash, Cl) still need laboratory
+input, so no EN 15359 / ISO 21640 class is claimed.
 
 A recorded run separates four things that are easy to conflate. The *requested*
 inputs are the project snapshot; the *applied* experiment is the block of
@@ -125,7 +128,7 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 6), `list_runs()` / `get_run()` |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 7), `list_runs()` / `get_run()` |
 | 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
@@ -149,7 +152,7 @@ The W0–W3 engine shipped in 0.2.1: composition, phase, Equation HH-1
 generation, mass balance, suitability, and the recommendation all exist as core
 modules with unit tests, and `ui/batch_panel.py` exposes them live. The batch
 panel now also mirrors its composition, holding time, tonnage, moisture, and
-stream into the scenario the run uses, and manifest format 6 records them.
+stream into the scenario the run uses, and manifest format 7 records them.
 
 | Sub-phase | Content | Status |
 |---|---|---|
@@ -168,34 +171,49 @@ filling it.
 ## Blocking issue: mesh independence
 
 The design spec requires probe values to change by less than 10% when the mesh
-is refined 2×. Measured on the current pipeline, 2026-09-19, on CO with the
-analytical-benchmark harness:
+is refined 2×. The mass-flux source (Phase 5, 2026-09-19) changed the numbers;
+measured on the current pipeline on CO:
 
 | Mesh size | Cells | S1 (ppmv) | S2 (ppmv) | S3 (ppmv) |
 |---|---|---|---|---|
-| 0.50 m | 3 444 | 0.0775 | 0.0939 | 0.3543 |
-| 0.25 m | 7 248 | 0.0338 | 0.1758 | 0.3845 |
-| **Deviation** | | **56.4%** | **87.2%** | 8.5% |
+| 0.50 m | 431 | 2.67e-4 | 1.88e-4 | 3.15e-3 |
+| 0.25 m | 907 | 3.34e-4 | 3.06e-4 | 2.31e-3 |
+| **Deviation** | | **25.3%** | **63.0%** | 26.7% |
 
-The sequence is not converging — refining further moves the values more, not
-less. An earlier measurement on a different sensor set read 76.5%; both are far
-outside the gate, and the number depends on where the probes sit, which is
-itself part of the problem.
+The flux boundary cut the worst probe from ~87% (the pre-Phase-5
+`fixedValue` measurement, on the old inflated cell counts) to ~63%, but the
+gate is still missed.
 
-**Cause.** The source is a `fixedValue` concentration on a diffusive patch. The
-flux entering the domain is `D · ∂C/∂n` at the wall, and the near-wall gradient
-scales as `1/Δy` for a fixed concentration difference. Uniform refinement of the
-mound profile refines the surface *tangentially* but not the first cell height
-*normal* to it, so the computed flux drifts.
+**Cause, measured.** The two meshes each converge (final Ux residual ~1e-4), but
+the *velocity field* differs between them at the probes (S1: 0.236 vs
+0.116 m/s). The k-epsilon RANS field around a mound is not mesh-converged at
+431/907 cells, and the scalar — carried with molecular diffusivity only —
+follows those streamlines. Raising the molecular diffusivity made the deviation
+*worse*, so it is not diffusion-limited: it is the missing turbulent scalar
+transport plus the unresolved velocity field. The source boundary itself is no
+longer the cause; it is now a flux independent of the first cell height.
 
 **What is trustworthy in the meantime.** The transport itself is verified
 against closed-form solutions: pure advection reproduces the inlet value with
 zero error, and axial diffusion matches the exponential profile within 5.5% at
-Pe = 5 (`tests/verification/test_analytical_benchmarks.py`). The error is in the
-*source boundary*, not the solver — so relative comparisons and placement
-rankings hold, while absolute concentrations do not.
+Pe = 5 (`tests/verification/test_analytical_benchmarks.py`). Relative
+comparisons and placement rankings hold; absolute concentrations do not.
 
 **Fix options, in order of preference:**
+
+1. **Turbulent scalar transport (T-240).** Carry the scalar with an effective
+   diffusivity `D + ν_t/Sc_t` instead of molecular `D` alone. This is the
+   dominant missing physics and the current best explanation for the residual
+   deviation.
+2. **Mesh-converged velocity field (T-021).** Refine until the velocity at the
+   probes is itself stable, then demonstrate the scalar converges.
+3. **Near-wall refinement.** Add boundary-layer grading normal to the waste
+   surface so the first cell height is resolved.
+4. **Accept and document.** Keep the flux boundary and state clearly that values
+   are relative screening estimates. This is the current position.
+
+Phase 5 (mass-flux) is the prerequisite for all of these and is done; the gate
+now depends on T-240 and T-021, not on the source boundary.
 
 1. **Mass-flux source.** Switch to a `fixedFluxPressure`-style or
    `externalWallHeatFluxTemperature`-equivalent scalar flux boundary so the
@@ -206,13 +224,12 @@ rankings hold, while absolute concentrations do not.
    left the basis open, and this is the resolution.
 2. **Near-wall refinement.** Add boundary-layer grading normal to the waste
    surface so the first cell height is resolved, then demonstrate convergence.
-3. **Accept and document.** Keep the concentration boundary and state clearly
-   that values are relative screening estimates. This is the current position.
+3. **Accept and document.** Keep the flux boundary and state clearly that
+   values are relative screening estimates. This is the current position.
 
-Option 1 is the real fix and unblocks the gate. It changes the units shown in
-the UI (a source strength in kg/m²/s rather than a surface concentration) and
-needs a conversion using molecular weight: `C_surface` from `S / (h_m · MW)`
-with `h_m` a mass-transfer coefficient, or the flux directly.
+Option 1 (turbulent scalar transport, Phase 6) is the current best fix and the
+gate now depends on it plus a mesh-converged velocity field. The source
+conversion is done: the UI and manifest already carry the flux in kg/m²/s.
 
 ---
 
