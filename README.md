@@ -27,15 +27,20 @@ the container, and fills the results table with per-sensor concentrations.
 Step 6 (scenario comparison) is not built: runs are not yet collected into a
 history, and PDF reporting is missing. CSV export of the sensor table works.
 
-**Known gap — mesh independence.** The design spec asks for <10% deviation in
-probe values when the mesh is refined 2x. Measured on this pipeline the
-deviation is much larger and does not decrease with refinement, so the gate
-currently fails; `tests/verification/test_mesh_independence.py` records the
-measured behaviour instead of asserting the target. The cause is the source
-boundary: a fixed surface concentration on a diffusive patch makes the sampled
-value depend on the near-wall cell height, which uniform refinement does not
-resolve. Treat absolute concentrations as screening estimates, not calibrated
-values.
+**Known gap — mesh independence.** Probe values are not converged with respect
+to mesh refinement (76.5% deviation under a 2× refinement, and the sequence does
+not converge), so absolute concentrations are screening estimates rather than
+calibrated values. The cause and the fix are in
+[docs/ROADMAP.md](docs/ROADMAP.md#blocking-issue-mesh-independence).
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, data flow, physics setup, load-bearing implementation details |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase plan, current position, milestones, risks |
+| [docs/TASKS.md](docs/TASKS.md) | Every task with status, files, and acceptance test |
+| [docs/references.md](docs/references.md) | Data provenance: every gas default and its source |
 
 ## Requirements
 
