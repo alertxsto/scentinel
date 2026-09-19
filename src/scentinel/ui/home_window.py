@@ -38,56 +38,56 @@ class HomeWindow(QMainWindow):
 
     def _prepare_embedded(self, window: QMainWindow) -> None:
         window.setWindowFlags(Qt.WindowType.Widget)
-        window.menuBar().hide()
         window.statusBar().hide()
 
     def _build_navigation(self) -> QWidget:
-        rail = QFrame(); rail.setFixedWidth(218)
+        rail = QFrame(); rail.setObjectName("navigationRail"); rail.setFixedWidth(218)
         layout = QVBoxLayout(rail); layout.setContentsMargins(0,20,0,16); layout.setSpacing(4)
-        brand = QLabel("SCENTINEL")
+        brand = QLabel("SCENTINEL"); brand.setObjectName("brandLabel")
         layout.addWidget(brand)
         self._nav_home = self._nav_button("⌂  Dashboard", self.show_home)
         self._nav_studio = self._nav_button("◫  Simulation Studio", self.show_studio)
         self._nav_sandbox = self._nav_button("⌁  Sensor Sandbox", self.show_sandbox)
         for button in (self._nav_home,self._nav_studio,self._nav_sandbox): layout.addWidget(button)
         layout.addStretch(1)
-        fidelity = QLabel("  FIDELITY\n  2D SCREENING")
+        fidelity = QLabel("FIDELITY\n2D SCREENING"); fidelity.setObjectName("railCaption")
         layout.addWidget(fidelity)
         return rail
 
     @staticmethod
     def _nav_button(text: str, callback) -> QPushButton:
-        button=QPushButton(text); button.setCheckable(True); button.clicked.connect(callback); return button
+        button=QPushButton(text); button.setObjectName("navigationButton"); button.setCheckable(True); button.clicked.connect(callback); return button
 
     def _build_context_bar(self) -> QWidget:
-        bar=QFrame(); bar.setFixedHeight(64); bar.setFrameShape(QFrame.Shape.StyledPanel)
+        bar=QFrame(); bar.setObjectName("contextBar"); bar.setFixedHeight(64)
         layout=QHBoxLayout(bar); layout.setContentsMargins(22,0,22,0)
-        self._page_title=QLabel()
-        self._page_context=QLabel()
+        self._page_title=QLabel(); self._page_title.setObjectName("pageTitle")
+        self._page_context=QLabel(); self._page_context.setObjectName("pageContext")
         layout.addWidget(self._page_title); layout.addSpacing(14); layout.addWidget(self._page_context); layout.addStretch(1)
-        badge=QLabel("OpenFOAM 2512")
+        badge=QLabel("OpenFOAM 2512"); badge.setObjectName("solverBadge")
         layout.addWidget(badge); return bar
 
     def _build_home(self) -> QWidget:
         page=QWidget(); page.setObjectName("homePage"); root=QVBoxLayout(page); root.setContentsMargins(38,32,38,32); root.setSpacing(20)
-        title=QLabel("Design, simulate, validate.")
+        title=QLabel("Design, simulate, validate."); title.setObjectName("dashboardTitle")
         subtitle=QLabel("Satu workflow untuk CFD screening, spatial sensor placement, virtual-device evaluation, dan kesiapan validasi lapangan.")
-        subtitle.setWordWrap(True)
+        subtitle.setWordWrap(True); subtitle.setObjectName("secondaryText")
         root.addWidget(title); root.addWidget(subtitle)
         cards=QHBoxLayout(); cards.setSpacing(18)
         cards.addWidget(self._card("Simulation Studio","Bangun geometri, sumber gas, mesh, placement, dan run OpenFOAM. Semua hasil diberi quality gates.","Open 2D Screening",self.show_studio,"PHYSICS"))
         cards.addWidget(self._card("Universal Sensor Sandbox","Studio yang sama ditambah device models, telemetry, response error, detection time, dan evaluation.","Open Sensor Sandbox",self.show_sandbox,"DIGITAL TWIN"))
         root.addLayout(cards,1)
+        notice=QFrame(); notice.setObjectName("noticeBox"); notice_layout=QVBoxLayout(notice)
         warning=QLabel("3D engineering, live hardware, coverage, dan blind-zone analysis hanya akan ditandai tersedia setelah engine dan bukti validasinya benar-benar ada.")
-        warning.setWordWrap(True)
-        root.addWidget(warning); return page
+        warning.setObjectName("noticeText"); warning.setWordWrap(True); notice_layout.addWidget(warning)
+        root.addWidget(notice); return page
 
     def _card(self,title:str,text:str,action:str,callback,badge:str)->QFrame:
-        card=QFrame(); card.setFrameShape(QFrame.Shape.StyledPanel)
+        card=QFrame(); card.setObjectName("modeCard")
         layout=QVBoxLayout(card); layout.setContentsMargins(24,22,24,22); layout.setSpacing(12)
-        tag=QLabel(badge)
-        heading=QLabel(title)
-        body=QLabel(text); body.setWordWrap(True)
+        tag=QLabel(badge); tag.setObjectName("cardTag")
+        heading=QLabel(title); heading.setObjectName("cardHeading")
+        body=QLabel(text); body.setObjectName("secondaryText"); body.setWordWrap(True)
         button=QPushButton(action); button.setObjectName("modeButton"); button.clicked.connect(callback)
         layout.addWidget(tag); layout.addWidget(heading); layout.addWidget(body); layout.addStretch(1); layout.addWidget(button); return card
 
