@@ -31,6 +31,37 @@ def mesh(tmp_path: Path) -> MeshResult:
     return MeshResult(msh_path=msh, patches={name: i for i, name in enumerate(PATCHES, 1)})
 
 
+def test_the_source_patch_imposes_a_gradient_not_a_value(tmp_path, mesh):
+    """The flux boundary is the fix: a value makes the near-wall gradient scale
+    with the first cell height; a gradient does not."""
+    scenario = Scenario(gas_sources={"CO": "auto"}, tonnage_t=10.0)
+    case = write_case(scenario, mesh, tmp_path / "case", geom=BinGeometry())
+    field = (case / "0" / "CO").read_text()
+    source_block = field.split("source")[1].split("}")[0]
+    assert "fixedGradient" in source_block
+    assert "gradient" in source_block
+    assert "fixedValue" not in source_block
+
+
+def test_the_gradient_matches_the_flux_over_diffusivity(tmp_path, mesh):
+    from scentinel.core.casegen import source_gradient_ppmv_per_m
+
+    scenario = Scenario(gas_sources={"CO": "auto"}, tonnage_t=10.0)
+    geom = BinGeometry()
+    case = write_case(scenario, mesh, tmp_path / "case", geom=geom)
+    field = (case / "0" / "CO").read_text()
+    source_block = field.split("source")[1].split("}")[0]
+    expected = source_gradient_ppmv_per_m(scenario, geom, "CO")
+    assert f"{expected:g}" in source_block
+
+
+def test_applied_physics_records_the_flux_and_area(tmp_path, mesh):
+    scenario = Scenario(gas_sources={"CO": "auto"})
+    applied = casegen.applied_physics(scenario, BinGeometry())
+    assert applied["emitting_area_m2"] > 0.0
+    assert applied["emission_flux_kg_per_m2_s"]["CO"] > 0.0
+
+
 def test_auto_sources_use_the_cited_ap42_defaults():
     scenario = Scenario(gas_sources={"CO": "auto", "H2S": "auto"})
     resolved = resolve_sources(scenario)
@@ -191,13 +222,17 @@ def test_control_dict_names_the_solver(tmp_path, mesh):
     assert f"application     {SOLVER};" in (case / "system" / "controlDict").read_text()
 
 
-def test_scalar_field_carries_the_source_concentration(tmp_path, mesh):
-    case = write_case(
-        Scenario(gas_sources={"CO": 105.0}), mesh, tmp_path / "case", geom=BinGeometry()
-    )
+def test_scalar_field_imposes_the_source_flux(tmp_path, mesh):
+    """The field's source patch carries a gradient, not a fixed concentration."""
+    from scentinel.core.casegen import source_gradient_ppmv_per_m
+
+    scenario = Scenario(gas_sources={"CO": 105.0})
+    geom = BinGeometry()
+    case = write_case(scenario, mesh, tmp_path / "case", geom=geom)
     text = (case / "0" / "CO").read_text()
     assert "source" in text
-    assert "0.000105" in text
+    assert "fixedGradient" in text
+    assert f"{source_gradient_ppmv_per_m(scenario, geom, 'CO'):g}" in text
 
 
 def test_wind_sign_reaches_the_inlet_velocity(tmp_path, mesh):
@@ -358,8 +393,10 @@ def test_an_added_gas_resolves_and_writes_under_a_co_disposal_stream(tmp_path, m
     sources = resolve_sources(scenario)
     assert sources["ETHANE"] == pytest.approx(890e-6)
     assert sources["TOLUENE"] == pytest.approx(170e-6)
-    assert "0.00089" in (case / "0" / "ETHANE").read_text()
-    assert "0.00017" in (case / "0" / "TOLUENE").read_text()
+    # The field now carries the flux as a gradient; the resolved volume fraction
+    # still drives it through the flux calculation.
+    assert "fixedGradient" in (case / "0" / "ETHANE").read_text()
+    assert "fixedGradient" in (case / "0" / "TOLUENE").read_text()
 
 
 def test_the_case_digest_covers_each_selected_gas(tmp_path, mesh):

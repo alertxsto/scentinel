@@ -418,7 +418,10 @@ def write_case(
     _write(out_dir / "0" / "epsilon", _field_epsilon(roles, inlet_speed))
     _write(out_dir / "0" / "nut", _field_nut(roles))
     for gas, fraction in sources.items():
-        _write(out_dir / "0" / gas, _field_scalar(gas, roles, fraction))
+        _write(
+            out_dir / "0" / gas,
+            _field_scalar(gas, roles, source_gradient_ppmv_per_m(scenario, geom, gas)),
+        )
 
     _write(out_dir / "constant" / "transportProperties", _physical_properties())
     _write(out_dir / "constant" / "turbulenceProperties", _momentum_transport())
@@ -462,6 +465,10 @@ def applied_physics(scenario: Scenario, geom: BinGeometry) -> dict[str, object]:
         "wind_reference_height_m": WIND_REFERENCE_HEIGHT_M,
         "nu_m2_s": NU_AIR,
         "scalar_diffusivity_m2_s": {gas: scalar_diffusivity(gas) for gas in sources},
+        "emitting_area_m2": emission_area_m2(geom),
+        "emission_flux_kg_per_m2_s": {
+            gas: emission_flux_kg_per_m2_s(scenario, geom, gas) for gas in sources
+        },
         "linear_solver_settings": linear_solver_settings(sources),
         "residual_targets": residual_targets(sources),
         "relaxation_factors": dict(RELAXATION_FACTORS),
@@ -606,7 +613,17 @@ def _field_nut(roles: dict[str, PatchRole]) -> str:
     return "".join(lines)
 
 
-def _field_scalar(gas: str, roles: dict[str, PatchRole], source_fraction: float) -> str:
+def _field_scalar(
+    gas: str,
+    roles: dict[str, PatchRole],
+    gradient: float,
+) -> str:
+    """One scalar field, with the source patch imposing a flux as a gradient.
+
+    The source is a ``fixedGradient`` rather than a ``fixedValue``: the flux
+    ``J = D * gradient`` is then independent of the first cell height, which is
+    what the surface-concentration boundary could not achieve.
+    """
     lines = [
         _header("volScalarField", gas),
         "dimensions      [0 0 0 0 0 0 0];\n",
@@ -615,7 +632,10 @@ def _field_scalar(gas: str, roles: dict[str, PatchRole], source_fraction: float)
     ]
     for name, role in roles.items():
         if role.kind == "source":
-            lines.append(f"    {name}\n    {{\n        type            fixedValue;\n        value           uniform {source_fraction:g};\n    }}\n")
+            lines.append(
+                f"    {name}\n    {{\n        type            fixedGradient;\n"
+                f"        gradient        uniform {gradient:g};\n    }}\n"
+            )
         elif role.kind == "inlet":
             lines.append(f"    {name}\n    {{\n        type            fixedValue;\n        value           uniform 0;\n    }}\n")
         elif role.kind == "empty":
