@@ -39,6 +39,7 @@ from scentinel.ui.workspace import DockedWorkspace
 from scentinel.ui.results_panel import ResultsPanel, SensorReading
 from scentinel.ui.sensor_lab import SensorLabPanel
 from scentinel.ui.setup_panel import SetupPanel
+from scentinel.ui.batch_panel import BatchPanel
 from scentinel.ui.solver_worker import (
     DEFAULT_END_ITERATION,
     DEFAULT_MESH_SIZE_M,
@@ -117,6 +118,7 @@ class MainWindow(DockedWorkspace):
         self._container_thread: ContainerSetupThread | None = None
         self._container_setup_active = False
         self._active_run: RunRecord | None = None
+        self._last_assessment = None
 
         self._build_panels()
         self._build_menus()
@@ -142,6 +144,7 @@ class MainWindow(DockedWorkspace):
         self._viewport = ViewportWidget()
         self._results_panel = ResultsPanel(self._t)
         self._sensor_lab = SensorLabPanel(self._t)
+        self._batch_panel = BatchPanel(self._t)
 
         # Panels are docks, not fixed splitter panes: each one can be dragged to
         # another edge, tabbed together with another, floated, or hidden, and the
@@ -162,6 +165,10 @@ class MainWindow(DockedWorkspace):
             "sensor_lab", self._t.t("panel.sensor_lab"), self._sensor_lab,
             Qt.DockWidgetArea.RightDockWidgetArea,
         )
+        self.add_panel(
+            "batch", self._t.t("panel.batch"), self._batch_panel,
+            Qt.DockWidgetArea.RightDockWidgetArea, min_size=(260, 0),
+        )
         self.tabifyDockWidget(self.dock("viewport"), self.dock("sensor_lab"))
         self.dock("viewport").raise_()
         self.dock("sensor_lab").setVisible(False)
@@ -170,6 +177,7 @@ class MainWindow(DockedWorkspace):
         self.setMinimumSize(760, 520)
 
         self._setup_panel.changed.connect(self._on_setup_changed)
+        self._batch_panel.assessed.connect(self._on_batch_assessed)
         self._viewport.sensors_changed.connect(self._on_sensors_changed)
         self._viewport.cursor_moved.connect(self._on_cursor_moved)
         self._results_panel.cancel_requested.connect(self.cancel_run)
@@ -254,6 +262,9 @@ class MainWindow(DockedWorkspace):
 
     def sensor_lab(self) -> SensorLabPanel:
         return self._sensor_lab
+
+    def batch_panel(self) -> BatchPanel:
+        return self._batch_panel
 
     def view_menu(self):
         """The editor's View menu, which the shell extends with layout controls."""
@@ -652,6 +663,18 @@ class MainWindow(DockedWorkspace):
         # Selecting a gas or placing a sensor can unblock Run, so the action's
         # enabled state has to follow the inputs, not just the solver probe.
         self._refresh_run_action()
+
+    def _on_batch_assessed(self, assessment) -> None:
+        """Keep the panel's waste selection and the CFD scenario in step.
+
+        The batch panel is the surface where composition is edited; the setup
+        panel still carries the scenario the case generator reads. Mirroring the
+        selected preset and moisture across means the run cannot use a different
+        waste than the one the assessment describes.
+        """
+        if self._loading:
+            return
+        self._last_assessment = assessment
 
     def _on_sensors_changed(self) -> None:
         if self._loading:
