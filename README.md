@@ -48,7 +48,7 @@ and per-sensor ppmv results. Records survive restarts and are readable through
 `scentinel.core.history` (`list_runs()` / `get_run()`); failed and cancelled
 attempts are recorded too.
 
-Manifest format 5 also records the batch the run solved: the composition
+Manifest format 6 also records the batch the run solved: the composition
 fractions, the tonnage, and the generation chemistry the model derived from
 them — the ultimate potential, the cumulative gas produced by the recorded age,
 and the instantaneous generation rate, each a separate quantity. The batch

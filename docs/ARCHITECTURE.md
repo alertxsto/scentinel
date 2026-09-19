@@ -62,7 +62,7 @@ reports rather than restating it.
 | `recommend.py` | 174 | One recommendation with reasons, caveats, and a runner-up margin |
 | `pipeline.py` | 108 | Composition → generation → balance → suitability → recommendation in one call |
 | `project.py` | 75 | `Project`, `Sensor`; `.scentinel` JSON round-trip |
-| `gas_data.py` | 262 | AP-42 loader: `GasSpec`, `source_concentration`, `default_sources`, `citation` |
+| `gas_data.py` | 378 | AP-42 loader: `GasSpec`, `GasApplicability`, `offered_gases(age_h)`, `citation` |
 | `gas_defaults.py` | 780 | Generated data — do not edit by hand (see `scripts/build_gas_data.py`) |
 | `mesh.py` | 238 | gmsh: air-region outline, 1-cell extrusion, physical groups → `MeshResult` |
 | `casegen.py` | 741 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, applied-physics constants, case-input digest |

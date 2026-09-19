@@ -151,7 +151,8 @@ class MainWindow(DockedWorkspace):
         # arrangement is remembered per workspace.
         self.add_panel(
             "setup", self._t.t("panel.setup"), self._setup_panel,
-            Qt.DockWidgetArea.LeftDockWidgetArea, min_size=(240, 0),
+            Qt.DockWidgetArea.LeftDockWidgetArea,
+            min_size=(self._setup_panel.content_minimum_width() + 40, 0),
         )
         self.add_panel(
             "viewport", self._t.t("panel.viewport"), self._viewport,

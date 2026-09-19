@@ -1,0 +1,43 @@
+{
+  "statheropoulos_2005": {
+    "title": "A study of volatile organic compounds evolved in urban waste disposal bins",
+    "authors": "M. Statheropoulos, A. Agapiou, G. Pallis",
+    "venue": "Atmospheric Environment, 2005",
+    "doi": "10.1016/j.atmosenv.2005.04.013",
+    "canonical_url": "https://doi.org/10.1016/j.atmosenv.2005.04.013",
+    "status": "extracted",
+    "extraction_scope": "abstract medians only; the full text is paywalled",
+    "retrieved_utc": "2026-09-19T15:35:31Z",
+    "raw_artifact": "docs/references/statheropoulos_2005_urban_bins.txt",
+    "artifact_sha256": "b6a99088e820ec92dcb36c8904a339c46e066d8a093dc0c514a6dc5d5d90e7d8",
+    "reference": "Statheropoulos et al. 2005, Atmos. Environ., abstract",
+    "values": [
+      {"species": "decane", "median_ug_per_m3": 694.9, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "acetic acid ethyl ester", "median_ug_per_m3": 353.1, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "limonene", "median_ug_per_m3": 334.9, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "nonane", "median_ug_per_m3": 257.4, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "ethanol", "median_ug_per_m3": 216.1, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "1,2,4-trimethylbenzene", "median_ug_per_m3": 212.6, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"},
+      {"species": "undecane", "median_ug_per_m3": 159.1, "unit": "ug/m3", "reference": "Statheropoulos et al. 2005, abstract median"}
+    ],
+    "notes": "Bin VOCs are reported in mass concentration (ug/m3), not a gas-phase volume fraction. Converting to ppmv requires a temperature and pressure and is not done here; the value is recorded as measured."
+  },
+  "waste_management_2017": {
+    "title": "Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of municipal solid waste",
+    "authors": "H. Tan, Y. Zhao, Y. Ling, Y. Wang, X. Wang",
+    "venue": "Waste Management, 2017, 68:677-687",
+    "doi": "10.1016/j.wasman.2017.07.015",
+    "canonical_url": "https://doi.org/10.1016/j.wasman.2017.07.015",
+    "status": "unavailable",
+    "reason": "Paywalled. The publisher returns HTTP 400/403 to automated retrieval and no open-access copy was reachable on 2026-09-19; the values are not estimated in its place.",
+    "retrieved_utc": "2026-09-19T15:35:31Z"
+  },
+  "niosh_3900": {
+    "title": "NIOSH Manual of Analytical Methods, Method 3900 (volatile organic compounds, analyte list)",
+    "venue": "NIOSH NMAM",
+    "canonical_url": "https://www.cdc.gov/niosh/nmam/pdf/3900.pdf",
+    "status": "unavailable",
+    "reason": "HTTP 403 to automated retrieval on 2026-09-19. This is an analytical-method analyte list, not a set of concentration values; it would inform which species to measure, not their strengths.",
+    "retrieved_utc": "2026-09-19T15:35:31Z"
+  }
+}

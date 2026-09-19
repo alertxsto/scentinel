@@ -110,8 +110,10 @@ def test_save_then_open_round_trips_through_the_window(window, tmp_path):
 
     window.open_project(path)
     assert window.project().geometry.length_m == pytest.approx(7.0)
+    # The default holding time is 8 h (aerobic), so methane is filtered out and
+    # the explicit CO value plus the other headline gases round-trip.
     assert window.project().scenario.gas_sources == {
-        "CO": 105.0, "CH4": "auto", "VOC": "auto", "H2S": "auto",
+        "CO": 105.0, "VOC": "auto", "H2S": "auto",
     }
     assert [sensor.sensor_id for sensor in window.project().sensors] == ["S1"]
     assert not window.is_dirty()

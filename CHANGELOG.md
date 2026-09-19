@@ -67,6 +67,23 @@ Two things are worth knowing before reading:
   `phase_uncertainty`; version 5 manifests are rejected naming both versions.
   The batch panel's phase readout states the applicability.
 
+### Phase 4 — fresh-waste model
+
+- **Gas applicability is explicit.** Each catalogue gas carries
+  `GasApplicability(phases, source, uncertainty)`; the AP-42 Table 2.4-1 values
+  are labelled as mature-landfill measurements, so using them for a fresh
+  aerobic load is stated as an extrapolation rather than presented as exact.
+- **The gas list follows holding time.** A fresh load no longer offers methane
+  (its row is hidden, not merely disabled); an aged load offers it again. The
+  setup panel filters its rows by phase, and `gas_sources()` cannot leak a
+  non-applicable gas.
+- **Fresh-waste research artifact** (`docs/data/fresh_waste_references.json`):
+  Statheropoulos 2005 extracted (median bin-VOC mass concentrations with
+  units); Waste Management 2017 and NIOSH 3900 recorded `unavailable` with the
+  HTTP reason. No value was estimated to fill the gap.
+- The setup dock's declared width floor is preserved by the layout pass, so
+  hiding a gas row cannot collapse the panel and clip the remaining controls.
+
 ## [0.2.2] — 2026-09-19
 
 Audit fixes: each item below was reproduced before it was fixed, and each fix

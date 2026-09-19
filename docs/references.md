@@ -213,7 +213,25 @@ Semua metadata dari Crossref API, terverifikasi dengan DOI.
 |---|---|---|
 | 40 CFR Part 60 Subpart XXX | NSPS for MSW Landfills | Ambang emisi NMOC |
 | 40 CFR Part 60 Subpart Cf | Emission Guidelines | Regulasi GCCS |
+| 40 CFR §98.343(a)(1), Tabel HH-1 | GHGRP Subpart HH, persamaan HH-1 | Basis generasi gas: DOC/k per material, DOC_F = 0.5, F = 0.5 |
 | ISO 21640:2021 | Solid recovered fuels — Specifications and classes | Konteks RDF/SRF |
+
+---
+
+## 6b. Sampah segar (fase aerobik) — T-106
+
+Sumber komposisi gas untuk sampah **segar** (bak truk), bukan landfill tua.
+Artefak terstruktur: `docs/data/fresh_waste_references.json`.
+
+| Sumber | Status | Catatan |
+|---|---|---|
+| Statheropoulos, M., Agapiou, A., Pallis, G. (2005). *A study of volatile organic compounds evolved in urban waste disposal bins*. Atmospheric Environment. DOI `10.1016/j.atmosenv.2005.04.013` | **Terekstrak (abstrak)** | Nilai median µg/m³: dekana 694.9, etil asetat 353.1, limonena 334.9, nonana 257.4, etanol 216.1, 1,2,4-trimetilbenzena 212.6, undekana 159.1. Satuan massa, bukan fraksi volume. |
+| Tan, H. et al. (2017). *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW*. Waste Management 68:677-687. DOI `10.1016/j.wasman.2017.07.015` | **Tidak tersedia** | Paywalled; HTTP 400/403 pada pengambilan otomatis 2026-09-19. Nilai tidak diestimasi. |
+| NIOSH NMAM Method 3900 | **Tidak tersedia** | HTTP 403 pada pengambilan otomatis 2026-09-19. Ini daftar analit metode, bukan nilai konsentrasi. |
+
+Nilai Statheropoulos adalah **konsentrasi massa (µg/m³)**, bukan fraksi volume
+gas; konversi ke ppmv memerlukan suhu dan tekanan dan tidak dilakukan di sini.
+Nilainya dicatat apa adanya dan belum masuk ke model sebagai kekuatan sumber.
 
 ---
 

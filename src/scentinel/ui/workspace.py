@@ -45,6 +45,7 @@ class DockedWorkspace(QMainWindow):
         self._t = translator
         self._settings = settings or QSettings("Scentinel", "Scentinel")
         self._docks: dict[str, QDockWidget] = {}
+        self._dock_min_sizes: dict[str, tuple[int, int]] = {}
         self._workspace = WORKSPACES[0]
         self._applying_layout = False
         self._needs_layout_pass = True
@@ -78,6 +79,7 @@ class DockedWorkspace(QMainWindow):
         dock.setWidget(_flexible(widget))
         if min_size is not None:
             dock.setMinimumSize(*min_size)
+            self._dock_min_sizes[key] = min_size
         self.addDockWidget(area, dock)
         self._docks[key] = dock
         return dock
@@ -177,8 +179,13 @@ class DockedWorkspace(QMainWindow):
         """Give the panels a sane split; without it Qt picks arbitrary ratios."""
         width = max(self.width(), 1200)
         height = max(self.height(), 800)
-        for dock in self._docks.values():
-            dock.setMinimumSize(0, 0)
+        # Keep each dock's declared floor instead of zeroing it. A panel whose
+        # content can shrink (the phase-filtered gas list, say) would otherwise
+        # collapse its dock when rows are hidden, clipping the controls that
+        # remain. The flexible wrapper already lets a dock be dragged down to
+        # whatever minimum the panel declares.
+        for key, dock in self._docks.items():
+            dock.setMinimumSize(*self._dock_min_sizes.get(key, (0, 0)))
         self.resizeDocks(
             [self._docks["setup"], self._docks["viewport"]],
             [380, width - 380],

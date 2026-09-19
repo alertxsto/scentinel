@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation, short_label
+from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation, offered_gases, short_label
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
 from scentinel.core.composition import PHASE_GASES, phase_for
 from scentinel.core.scenario import WASTE_SPECS, WASTE_TYPES, WIND_DIRECTIONS, Scenario
@@ -154,9 +154,14 @@ class SetupPanel(QScrollArea):
         form.addRow(self._waste_type_help)
 
         self._waste_type.currentIndexChanged.connect(self._on_waste_type_changed)
-        self._age_h.valueChanged.connect(self._emit)
+        self._age_h.valueChanged.connect(self._on_age_changed)
         self._moisture.valueChanged.connect(self._emit)
         return self._waste_group
+
+    def _on_age_changed(self) -> None:
+        """The holding time decides which gases exist, so re-filter the rows."""
+        self._apply_phase_filter(apply_stream_defaults=True)
+        self._emit()
 
     def _build_scenario_group(self) -> QGroupBox:
         self._scenario_group = QGroupBox(self)
@@ -199,11 +204,39 @@ class SetupPanel(QScrollArea):
         # letting each row be as narrow as its own label. The constant names
         # ("METHYL_MERCAPTAN") are 187 px wide on their own; the cited display
         # names are what a reader needs, and they fit.
-        grid = QGridLayout()
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(4)
-        grid.setVerticalSpacing(4)
-        grid.setColumnStretch(1, 1)
+        self._gas_grid = QGridLayout()
+        self._gas_grid.setContentsMargins(0, 0, 0, 0)
+        self._gas_grid.setHorizontalSpacing(4)
+        self._gas_grid.setVerticalSpacing(4)
+        self._gas_grid.setColumnStretch(1, 1)
+        self._build_gas_rows()
+        layout.addLayout(self._gas_grid)
+        return self._sources_group
+
+    def offered_gas_keys(self) -> tuple[str, ...]:
+        """The catalogue gases the current holding time can produce.
+
+        A fresh load offers no methane: the phase's applicability excludes it,
+        so its row is hidden rather than merely disabled.
+        """
+        return offered_gases(self._age_h.value())
+
+    def content_minimum_width(self) -> int:
+        """The narrowest width that shows the panel's controls without clipping.
+
+        The dock takes this as its floor so that hiding a gas row for the
+        current phase cannot shrink the dock and clip the rows that remain.
+        """
+        return self.widget().minimumSizeHint().width()
+
+    def _build_gas_rows(self) -> None:
+        """Build one row per catalogue gas, once.
+
+        Every gas gets a row up front; :meth:`_apply_phase_filter` hides the
+        ones the current phase cannot produce. Building all rows once keeps the
+        dock's width stable — replacing widgets on every holding-time change
+        made the panel collapse and require horizontal scrolling.
+        """
         for row_index, gas in enumerate(DEFAULT_SOURCE_GASES):
             box = QCheckBox(short_label(gas))
             box.setToolTip(citation(gas))
@@ -229,14 +262,34 @@ class SetupPanel(QScrollArea):
             auto.toggled.connect(self._emit)
             spin.valueChanged.connect(self._emit)
 
-            grid.addWidget(box, row_index, 0)
-            grid.addWidget(spin, row_index, 1)
-            grid.addWidget(auto, row_index, 2)
+            self._gas_grid.addWidget(box, row_index, 0)
+            self._gas_grid.addWidget(spin, row_index, 1)
+            self._gas_grid.addWidget(auto, row_index, 2)
             self._gas_boxes[gas] = box
             self._gas_spins[gas] = spin
             self._gas_auto[gas] = auto
-        layout.addLayout(grid)
-        return self._sources_group
+        self._apply_phase_filter()
+
+    def _apply_phase_filter(self, *, apply_stream_defaults: bool = False) -> None:
+        """Hide the gases the current phase cannot produce.
+
+        Checked state, ``auto``, and the manual value are preserved for every
+        gas, so a row that reappears when the load ages carries the user's
+        previous choice. ``apply_stream_defaults`` is used when the holding time
+        changes: a gas that becomes available is checked from its stream's
+        defaults, which is what brings methane back for an aged load.
+        """
+        offered = set(self.offered_gas_keys())
+        stream_defaults = WASTE_SPECS[self._waste_type.currentData()].default_gases
+        for gas, box in self._gas_boxes.items():
+            visible = gas in offered
+            was_hidden = box.isHidden()
+            box.setVisible(visible)
+            self._gas_spins[gas].setVisible(visible)
+            self._gas_auto[gas].setVisible(visible)
+            if visible and was_hidden and apply_stream_defaults:
+                self._gas_auto[gas].setChecked(True)
+                box.setChecked(gas in stream_defaults)
 
     def _build_simulation_group(self) -> QGroupBox:
         self._simulation_group = QGroupBox(self)
@@ -286,10 +339,16 @@ class SetupPanel(QScrollArea):
         return self._end_iteration.value()
 
     def gas_sources(self) -> dict[str, float | str]:
-        """Selected gases, as ``"auto"`` or an explicit ppmv value."""
+        """Selected gases, as ``"auto"`` or an explicit ppmv value.
+
+        Only gases the current phase can produce are included, so a checked
+        methane row left over from an aged setting cannot leak into a fresh
+        scenario.
+        """
+        offered = set(self.offered_gas_keys())
         selected: dict[str, float | str] = {}
         for gas, box in self._gas_boxes.items():
-            if not box.isChecked():
+            if gas not in offered or not box.isChecked():
                 continue
             selected[gas] = "auto" if self._gas_auto[gas].isChecked() else self._gas_spins[gas].value()
         return selected

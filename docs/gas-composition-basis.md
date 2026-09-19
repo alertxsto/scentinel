@@ -230,10 +230,14 @@ diekstrak** dan karenanya belum boleh dipakai:
 
 | Sumber | Relevansi | Status |
 |---|---|---|
-| *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW* — Waste Management, 2017, 68:677-687, DOI `10.1016/j.wasman.2017.07.015` | Komposisi VOC fasa dekomposisi awal MSW — persis kasus bak truk | Belum diekstrak |
-| Statheropoulos et al., 2005 — *A study of VOCs evolved in urban waste disposal bins*, Atmos. Environ. | VOC di dalam bin sampah kota | Belum diekstrak |
+| *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW* — Waste Management, 2017, 68:677-687, DOI `10.1016/j.wasman.2017.07.015` | Komposisi VOC fasa dekomposisi awal MSW — persis kasus bak truk | **Tidak tersedia** — paywalled (HTTP 400/403), nilai tidak diestimasi |
+| Statheropoulos et al., 2005 — *A study of VOCs evolved in urban waste disposal bins*, Atmos. Environ., DOI `10.1016/j.atmosenv.2005.04.013` | VOC di dalam bin sampah kota | **Terekstrak (abstrak)** — median µg/m³ tercatat di `docs/data/fresh_waste_references.json` |
 | Salinas et al., 2026 — *Odour and Composition Assessment of MSW* | Pengaruh komposisi & tingkat pengisian terhadap emisi bau | Belum diekstrak |
-| NIOSH NMAM Method 3900 | Daftar analyte yang diukur di udara sampah (termasuk α-pinene, d-limonene) | Metode analitik, bukan nilai |
+| NIOSH NMAM Method 3900 | Daftar analyte yang diukur di udara sampah (termasuk α-pinene, d-limonene) | **Tidak tersedia** — HTTP 403; metode, bukan nilai |
+
+**Catatan konversi:** nilai Statheropoulos adalah konsentrasi massa (µg/m³),
+bukan fraksi volume. Konversi ke ppmv memerlukan suhu dan tekanan dan belum
+dilakukan; nilai dicatat apa adanya, belum menjadi kekuatan sumber di model.
 
 ### 5.2 Yang secara fisika tidak mungkin (kondisi sebelum W0; diperbaiki)
 

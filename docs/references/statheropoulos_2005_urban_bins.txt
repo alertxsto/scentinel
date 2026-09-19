@@ -1,0 +1,26 @@
+A study of volatile organic compounds evolved in urban waste disposal bins
+M. Statheropoulos, A. Agapiou, G. Pallis
+Atmospheric Environment, 2005
+DOI: 10.1016/j.atmosenv.2005.04.013
+
+Abstract (retrieved 2026-09-19):
+Volatile organic compounds (VOCs) evolved in urban waste disposal bins in
+different situations were studied. Waste of various loads (full, empty,
+partially filled bins), remained uncollected in the containers for variable
+time and under different weather conditions. Analysis of VOCs was carried out
+by thermal desorption/gas chromatography/mass spectrometry (TD/GC/MS). Over 150
+compounds have been identified and the 30 most abundant were quantified.
+Generally, VOCs were determined in the range of micrograms per cubic meter.
+Median concentrations of the most prominent VOCs were: decane (694.9 ug/m3),
+acetic acid ethyl ester (353.1 ug/m3), limonene (334.9 ug/m3), nonane
+(257.4 ug/m3), ethanol (216.1 ug/m3), benzene 1,2,4-trimethyl (212.6 ug/m3) and
+undecane (159.1 ug/m3). High levels of alkanes, alkylbenzenes and terpenes are
+responsible for undesirable odours. The variety and concentration of VOCs
+evolved depends on the prevailing conditions such as time of waste exposure,
+load and weather. When waste accumulates in bins under unforeseen
+circumstances, some compounds produced may exceed olfactory and safety
+thresholds representing a source of potential health impact.
+
+Retrieval note: the full text is paywalled; this artifact records the abstract
+values published in the indexed record (Google Scholar / ScienceDirect
+abstract), not the full paper tables.

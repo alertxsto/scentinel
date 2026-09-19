@@ -69,6 +69,122 @@ DEFAULT_SOURCE_GASES = tuple(
     dict.fromkeys(gas for family in GAS_FAMILIES.values() for gas in family)
 )
 
+
+@dataclass(frozen=True)
+class GasApplicability:
+    """Which decomposition phases a gas applies to, and how well we know.
+
+    The AP-42 Table 2.4-1 values are landfill-gas measurements: they describe an
+    aged, anaerobic landfill. Offering them for a fresh, aerobic bin would be the
+    same basis error the generation model was fixed for, so each gas states the
+    phases it applies to and the uncertainty of using it outside them.
+    """
+
+    phases: tuple[str, ...]
+    source: str
+    uncertainty: str
+
+
+#: Gases that exist in every phase. CO2 and the trace odour species are produced
+#: aerobically as well as anaerobically; CO is a combustion/oxidation product
+#: present throughout.
+_ALL_PHASES = ("I", "II", "III", "IV")
+#: Methanogenic phases only. Methane is not produced in a fresh aerobic load.
+_METHANOGENIC = ("III", "IV")
+
+_AP42_LANDFILL = "AP-42 Ch.2.4 Table 2.4-1, landfill gas (aged, anaerobic)"
+_AP42_PHASE_I_NOTE = (
+    "The table value is a landfill measurement; using it for a fresh aerobic "
+    "load is an extrapolation, and the true fresh-bin strength is not cited here."
+)
+_AP42_TRANSITION_NOTE = (
+    "The table value is a mature-landfill measurement; the transition phase is "
+    "between aerobic and anaerobic and the value applies only approximately."
+)
+_AP42_APPLIES = "The table value describes this anaerobic phase directly."
+
+#: Per-gas phase applicability. A gas absent from this map is offered in every
+#: phase with the landfill caveat; the map narrows the exceptions.
+_GAS_APPLICABILITY: dict[str, GasApplicability] = {
+    "CH4": GasApplicability(
+        phases=_METHANOGENIC,
+        source=_AP42_LANDFILL,
+        uncertainty=_AP42_APPLIES,
+    ),
+    "CO": GasApplicability(
+        phases=_ALL_PHASES,
+        source=_AP42_LANDFILL,
+        uncertainty=_AP42_PHASE_I_NOTE,
+    ),
+    "VOC": GasApplicability(
+        phases=_ALL_PHASES,
+        source=_AP42_LANDFILL,
+        uncertainty=_AP42_PHASE_I_NOTE,
+    ),
+    "H2S": GasApplicability(
+        phases=_ALL_PHASES,
+        source=_AP42_LANDFILL,
+        uncertainty=_AP42_PHASE_I_NOTE,
+    ),
+}
+
+#: Gases produced by the generation model rather than read from a table. CO2 is
+#: cited on the F = 0.5 carbon balance (40 CFR 98.343) in every phase; CH4 is the
+#: methanogenic product.
+_GENERATED_APPLICABILITY: dict[str, GasApplicability] = {
+    "CO2": GasApplicability(
+        phases=_ALL_PHASES,
+        source="Generation model, 40 CFR 98.343 F = 0.5 carbon balance",
+        uncertainty=(
+            "The CO2 volume share follows the cited F split; in the aerobic phase "
+            "the anaerobic model is extrapolated."
+        ),
+    ),
+    "CH4": GasApplicability(
+        phases=_METHANOGENIC,
+        source="Generation model, 40 CFR 98.343(a)(1) Equation HH-1",
+        uncertainty=_AP42_APPLIES,
+    ),
+}
+
+
+
+def applicability(gas_key: str) -> GasApplicability:
+    """Which phases ``gas_key`` applies to, with its source and uncertainty.
+
+    Covers both catalogue gases and the generated gases (CO2, CH4). A catalogue
+    gas not in the explicit map applies to every phase with the landfill caveat
+    stated, so no gas silently lacks an applicability.
+    """
+    if gas_key in _GENERATED_APPLICABILITY:
+        return _GENERATED_APPLICABILITY[gas_key]
+    if gas_key not in GAS_PROPERTIES:
+        raise KeyError(f"Unknown gas: {gas_key}")
+    if gas_key in _GAS_APPLICABILITY:
+        return _GAS_APPLICABILITY[gas_key]
+    return GasApplicability(
+        phases=_ALL_PHASES,
+        source=_AP42_LANDFILL,
+        uncertainty=_AP42_TRANSITION_NOTE,
+    )
+
+
+def offered_gases(age_h: float) -> tuple[str, ...]:
+    """The selectable catalogue gases whose applicability includes the age's phase.
+
+    The offered set is a function of holding time: a fresh load does not offer
+    methane, and an aged one does. Gases are returned in catalogue order. The
+    generated gases (CO2, CH4) are not selectable sources here — CO2 is reported
+    as a generated mass/share, and CH4 is a catalogue gas — so this covers the
+    checkboxes the UI can actually build.
+    """
+    from scentinel.core.composition import phase_for
+
+    phase = phase_for(age_h)
+    return tuple(
+        gas for gas in DEFAULT_SOURCE_GASES if phase in applicability(gas).phases
+    )
+
 #: Compact labels for dense rows such as the source list, where the full
 #: ``name`` does not fit. The headline gases use the formula engineers write;
 #: the rest use a trimmed common name. The full name and its citation belong in

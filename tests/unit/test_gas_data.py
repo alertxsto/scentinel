@@ -6,14 +6,49 @@ from scentinel.core.gas_data import (
     DEFAULT_SOURCE_GASES,
     GAS_FAMILIES,
     HEADLINE_GASES,
+    GasApplicability,
+    applicability,
     available_gases,
     citation,
     default_sources,
     get_gas,
+    offered_gases,
     regime_concentration,
     short_label,
     source_concentration,
 )
+
+
+def test_every_offered_gas_has_an_applicability():
+    for key in available_gases():
+        app = applicability(key)
+        assert isinstance(app, GasApplicability), key
+        assert app.phases, key
+        assert app.source, key
+        assert app.uncertainty, key
+
+
+def test_methane_is_not_offered_for_a_fresh_load():
+    """The whole reason a truck bin is not a landfill: CH4 is absent below the phase."""
+    assert "CH4" not in offered_gases(8.0)
+    assert "CH4" in offered_gases(24.0 * 365 * 5)
+
+
+def test_phase_one_offers_only_phase_one_gases():
+    """A fresh load offers the odour/trace gases but not the methanogenic ones.
+
+    CO2 is not a selectable source — it is reported by the generation model — so
+    the offered set here is the catalogue gases that apply to phase I.
+    """
+    offered = offered_gases(8.0)
+    assert "H2S" in offered
+    assert "VOC" in offered
+    assert all("I" in applicability(g).phases for g in offered)
+
+
+def test_unknown_gas_applicability_raises():
+    with pytest.raises(KeyError):
+        applicability("UNOBTAINIUM")
 
 
 def test_available_gases_includes_core_set():

@@ -100,6 +100,36 @@ Acceptance met: `RUN_FORMAT_VERSION` is 6; the generation block records
 manifest is rejected naming both; the batch panel's phase readout states the
 applicability.
 
+### Phase 4 — Fresh-waste model
+
+#### T-106 Extract fresh-waste VOC data · DONE (partial — see note) — 2026-09-19
+Files: `docs/data/fresh_waste_references.json` (new),
+`docs/references/statheropoulos_2005_urban_bins.txt` (new),
+`docs/references.md`, `docs/gas-composition-basis.md`,
+`tests/unit/test_fresh_waste_data.py` (new)
+Acceptance met: the artifact records a status for each of the three named
+sources with retrieval metadata; Statheropoulos 2005 is extracted with units and
+references (median µg/m³); the two inaccessible sources are recorded
+`unavailable` with the HTTP reason, and no value is estimated in their place.
+Note: the primary source (Waste Manag. 2017) is paywalled and NIOSH 3900 returns
+403; the extraction is partial by access, not by effort. The Statheropoulos
+values are mass concentrations and have not been converted to a source strength.
+
+#### T-107 Phase-I gas set · DONE — 2026-09-19
+Files: `src/scentinel/core/gas_data.py`, `src/scentinel/ui/setup_panel.py`,
+`src/scentinel/ui/main_window.py`, `src/scentinel/ui/workspace.py`,
+`tests/unit/test_gas_data.py`, `tests/ui/test_setup_panel.py`,
+`tests/ui/test_setup_panel_layout.py`
+Acceptance met: `GasApplicability(phases, source, uncertainty)` and
+`offered_gases(age_h)` gate the catalogue by the age's phase; methane is not
+offered for a fresh load (its row is hidden, not disabled) and reappears when
+the load ages; every offered gas carries a source and an uncertainty; the setup
+panel filters its rows by holding time and `gas_sources()` cannot leak a
+non-applicable gas. The setup dock's floor is preserved so hiding a row cannot
+collapse the panel.
+Note: CO2 is a generated gas, not a selectable catalogue source, so it is not in
+`offered_gases`; it is reported as a generated mass/share.
+
 ---
 
 ## Done

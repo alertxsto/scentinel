@@ -29,7 +29,11 @@ def window(qapp, translator):
     widget = MainWindow(translator)
     widget.resize(*NORMAL)
     widget.show()
+    qapp.processEvents()
     yield widget
+    # An edit made during the test marks the project dirty; clear it so the
+    # close does not open the modal unsaved-changes dialog and block teardown.
+    widget._dirty = False
     widget.close()
     widget.deleteLater()
 
@@ -48,9 +52,17 @@ def test_setup_panel_fits_without_horizontal_scrolling(window):
 
 
 @pytest.mark.parametrize("gas", DEFAULT_SOURCE_GASES)
-def test_each_gas_row_is_fully_visible(window, gas):
-    """Checkbox, value field and auto box must all be on screen."""
+def test_each_gas_row_is_fully_visible(qapp, window, gas):
+    """Checkbox, value field and auto box must all be on screen.
+
+    The row set depends on the holding time; an aged load offers the whole
+    catalogue, so the widest case is checked here.
+    """
     panel = _panel(window)
+    panel._age_h.setValue(24.0 * 365 * 5)
+    qapp.processEvents()
+    if not panel._gas_boxes[gas].isVisibleTo(panel):
+        pytest.skip(f"{gas} is not offered for this phase")
     viewport = panel.viewport().width()
     for widget in (panel._gas_boxes[gas], panel._gas_spins[gas], panel._gas_auto[gas]):
         right = widget.mapTo(panel.viewport(), widget.rect().topRight()).x()
@@ -74,7 +86,9 @@ def test_controls_are_reachable_when_the_panel_is_narrow(window):
 
     controls = []
     for cls in (QCheckBox, QPushButton, QComboBox):
-        controls.extend(panel.findChildren(cls))
+        # A row hidden for the current phase is not clipped; it is absent by
+        # design, and its stale geometry must not count.
+        controls.extend(c for c in panel.findChildren(cls) if c.isVisibleTo(panel))
     viewport = panel.viewport().width()
     clipped = [
         c for c in controls if c.mapTo(panel.viewport(), c.rect().topRight()).x() > viewport

@@ -22,6 +22,18 @@ def test_defaults_match_the_default_project(panel):
     assert panel.gas_sources() == {}
 
 
+def test_a_fresh_holding_time_removes_methane_from_the_gas_list(panel):
+    """A fresh aerobic load cannot select methane: its row is hidden, not disabled."""
+    panel._age_h.setValue(8.0)
+    assert "CH4" not in panel.offered_gas_keys()
+    assert not panel._gas_boxes["CH4"].isVisibleTo(panel)
+    assert panel.gas_sources() == {}
+    panel._age_h.setValue(24.0 * 365 * 5)
+    assert "CH4" in panel.offered_gas_keys()
+    assert panel._gas_boxes["CH4"].isVisibleTo(panel)
+    assert "CH4" in panel.gas_sources()
+
+
 def test_editing_a_field_emits_the_new_geometry(panel):
     received = []
     panel.changed.connect(lambda geom, scenario: received.append((geom, scenario)))
@@ -133,7 +145,15 @@ def test_selecting_a_waste_type_applies_default_gases_and_fractions(panel):
         WASTE_SPECS["organic-rich"].composition.degradable_fraction()
     )
     assert scenario.moisture_fraction == pytest.approx(0.60)
-    assert scenario.gas_sources == {"CH4": "auto", "VOC": "auto", "H2S": "auto"}
+    # At the default 8 h holding time the load is aerobic, so methane is not
+    # offered; the preset's other gases are.
+    assert scenario.gas_sources == {"VOC": "auto", "H2S": "auto"}
+
+
+def test_an_aged_holding_time_brings_methane_back(panel):
+    panel._waste_type.setCurrentIndex(panel._waste_type.findData("organic-rich"))
+    panel._age_h.setValue(24.0 * 365 * 5)
+    assert panel.scenario().gas_sources == {"CH4": "auto", "VOC": "auto", "H2S": "auto"}
 
 
 def test_set_values_restores_waste_age_without_resetting_gases(panel):
