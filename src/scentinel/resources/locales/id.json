@@ -32,7 +32,10 @@
   "field.mound_shape": "Tumpukan sampah",
   "field.fill": "Fraksi terisi",
   "field.waste_type": "Jenis sampah",
-  "field.organic_fraction": "Fraksi organik",
+  "field.age_hours": "Lama penampungan",
+  "field.derived_readout": "Fasa {phase} · DOC {doc} · CH4 {methane}",
+  "field.methane_yes": "terbentuk",
+  "field.methane_no": "belum terbentuk",
   "field.moisture_fraction": "Fraksi kelembapan",
   "field.wind_speed": "Kecepatan angin",
   "field.wind_direction": "Arah angin",
@@ -201,5 +204,6 @@
   "menu.view.panels": "Panel",
   "menu.view.save_layout": "Simpan Tata Letak",
   "menu.view.reset_layout": "Reset Tata Letak",
-  "panel.sensor_lab": "Lab sensor"
+  "panel.sensor_lab": "Lab sensor",
+  "menu.view.saved": "Tata letak tersimpan"
 }

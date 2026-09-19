@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation, short_label
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
+from scentinel.core.composition import PHASE_GASES, phase_for
 from scentinel.core.scenario import WASTE_SPECS, WASTE_TYPES, WIND_DIRECTIONS, Scenario
 from scentinel.ui.i18n import Translator
 
@@ -127,19 +128,33 @@ class SetupPanel(QScrollArea):
         self._waste_type = QComboBox()
         for key in WASTE_TYPES:
             self._waste_type.addItem("", key)
-        self._organic = _spin(0.05, 1.0, 0.50, 0.05, "", 2, decimals=2)
         self._moisture = _spin(0.0, 1.0, 0.40, 0.05, "", 2, decimals=2)
+        # Holding time, in hours. This is the parameter that decides which
+        # decomposition phase the load is in, and therefore whether methane is
+        # produced at all: a truck bin is hours old, a landfill is years.
+        self._age_h = _spin(0.0, 24.0 * 365 * 50, 8.0, 1.0, " h", 1)
         self._waste_type_label = QLabel()
-        self._organic_label = QLabel()
+        self._age_label = QLabel()
         self._moisture_label = QLabel()
+        self._derived_label = QLabel("—")
+        self._derived_label.setObjectName("derivedLabel")
+        self._derived_label.setWordWrap(True)
+        self._derived_label.setMinimumWidth(0)
+        self._derived_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         self._waste_type_help = _help_label()
         form.addRow(self._waste_type_label, self._waste_type)
-        form.addRow(self._organic_label, self._organic)
+        form.addRow(self._age_label, self._age_h)
         form.addRow(self._moisture_label, self._moisture)
+        # A full-width row: in the field column the readout's minimum width
+        # (its longest unbreakable token) sets the panel's minimum, which is
+        # what pushed the gas checkboxes off the right edge.
+        form.addRow(self._derived_label)
         form.addRow(self._waste_type_help)
 
         self._waste_type.currentIndexChanged.connect(self._on_waste_type_changed)
-        self._organic.valueChanged.connect(self._emit)
+        self._age_h.valueChanged.connect(self._emit)
         self._moisture.valueChanged.connect(self._emit)
         return self._waste_group
 
@@ -259,7 +274,7 @@ class SetupPanel(QScrollArea):
             wind_direction=self._wind_direction.currentData(),
             ventilation_on=self._ventilation.isChecked(),
             waste_type=self._waste_type.currentData(),
-            organic_fraction=self._organic.value(),
+            age_h=self._age_h.value(),
             moisture_fraction=self._moisture.value(),
             gas_sources=self.gas_sources(),
         )
@@ -287,7 +302,7 @@ class SetupPanel(QScrollArea):
             self._shape,
             self._fill,
             self._waste_type,
-            self._organic,
+            self._age_h,
             self._moisture,
             self._wind_speed,
             self._wind_direction,
@@ -305,7 +320,7 @@ class SetupPanel(QScrollArea):
             self._shape.setCurrentIndex(self._shape.findData(geom.mound_shape))
             self._fill.setValue(geom.mound_fill_fraction)
             self._waste_type.setCurrentIndex(self._waste_type.findData(scenario.waste_type))
-            self._organic.setValue(scenario.organic_fraction)
+            self._age_h.setValue(scenario.age_h)
             self._moisture.setValue(scenario.moisture_fraction)
             self._wind_speed.setValue(scenario.wind_speed_m_s)
             self._wind_direction.setCurrentIndex(
@@ -345,7 +360,7 @@ class SetupPanel(QScrollArea):
         self._fill_label.setText(t("field.fill"))
         self._actual_fill_caption.setText(t("field.actual_fill"))
         self._waste_type_label.setText(t("field.waste_type"))
-        self._organic_label.setText(t("field.organic_fraction"))
+        self._age_label.setText(t("field.age_hours"))
         self._moisture_label.setText(t("field.moisture_fraction"))
         self._wind_speed_label.setText(t("field.wind_speed"))
         self._wind_direction_label.setText(t("field.wind_direction"))
@@ -370,11 +385,8 @@ class SetupPanel(QScrollArea):
         if self._loading_waste:
             return
         spec = WASTE_SPECS[self._waste_type.currentData()]
-        self._organic.blockSignals(True)
         self._moisture.blockSignals(True)
-        self._organic.setValue(spec.organic_fraction)
         self._moisture.setValue(spec.moisture_fraction)
-        self._organic.blockSignals(False)
         self._moisture.blockSignals(False)
         for gas, box in self._gas_boxes.items():
             selected = gas in spec.default_gases
@@ -401,6 +413,28 @@ class SetupPanel(QScrollArea):
             self._actual_fill.setToolTip("")
         self._shape_help.setText(self._t.t(f"help.shape.{self._shape.currentData()}"))
         self._waste_type_help.setText(self._t.t(f"help.waste.{self._waste_type.currentData()}"))
+        self._refresh_composition_readout()
+
+    def _refresh_composition_readout(self) -> None:
+        """Show what the composition and age imply, before any run.
+
+        This is the simulation-driven part: the phase and the degradable carbon
+        follow from the inputs, and a load old enough to produce methane says so.
+        """
+        composition = WASTE_SPECS[self._waste_type.currentData()].composition
+        phase = phase_for(self._age_h.value())
+        doc = composition.weighted_doc()
+        gases = PHASE_GASES[phase]
+        methane = "CH4" in gases
+        self._derived_label.setText(
+            self._t.t(
+                "field.derived_readout",
+                phase=phase,
+                doc=f"{doc:.3f}",
+                methane=self._t.t("field.methane_yes" if methane else "field.methane_no"),
+            )
+        )
+        self._derived_label.setToolTip(", ".join(gases))
 
 
 def _spin(

@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, QTimer, Qt
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -150,14 +151,43 @@ class HomeWindow(QMainWindow):
         toolbar.addAction(self._act_start)
         toolbar.addSeparator()
 
+        # The workspace picker lives on the toolbar, not only in the View menu:
+        # it is the control that replaces the old mode buttons, and burying it
+        # two levels deep made the workspaces effectively undiscoverable.
+        self._workspace_combo = QComboBox()
+        self._workspace_combo.setObjectName("workspacePicker")
+        self._workspace_combo.setToolTip("Workspace layout")
+        for name in WORKSPACES:
+            self._workspace_combo.addItem(name, name)
+        self._workspace_combo.currentIndexChanged.connect(self._on_workspace_picked)
+        toolbar.addWidget(self._workspace_combo)
+        toolbar.addSeparator()
+
+        # A one-click way back to the default arrangement, next to the picker.
+        self._act_save_layout = QAction(self)
+        self._act_save_layout.triggered.connect(self._save_layout_clicked)
+        toolbar.addAction(self._act_save_layout)
+
         self._project_label = QLabel()
         self._project_label.setObjectName("toolbarProject")
         toolbar.addWidget(self._project_label)
         self._retranslate_toolbar()
         self._t.changed.connect(self._retranslate_toolbar)
 
+    def _on_workspace_picked(self, index: int) -> None:
+        name = self._workspace_combo.itemData(index)
+        if name:
+            self._set_workspace(str(name))
+
+    def _save_layout_clicked(self) -> None:
+        self._editor.save_workspace()
+        self._act_save_layout.setText(self._t.t("menu.view.saved"))
+
     def _retranslate_toolbar(self) -> None:
-        self._act_start.setText(self._t.t("nav.start"))
+        t = self._t.t
+        self._act_start.setText(t("nav.start"))
+        self._workspace_combo.setToolTip(t("menu.view.workspace"))
+        self._act_save_layout.setText(t("menu.view.save_layout"))
         self._refresh_project_label()
 
     def _refresh_project_label(self) -> None:
@@ -237,6 +267,11 @@ class HomeWindow(QMainWindow):
         self._editor.set_workspace(name)
         for key, action in self._workspace_actions.items():
             action.setChecked(key == name)
+        index = self._workspace_combo.findData(name)
+        if index >= 0 and self._workspace_combo.currentIndex() != index:
+            self._workspace_combo.blockSignals(True)
+            self._workspace_combo.setCurrentIndex(index)
+            self._workspace_combo.blockSignals(False)
 
     def _set_locale(self, locale: str) -> None:
         self._t.set_locale(locale)
@@ -251,6 +286,7 @@ class HomeWindow(QMainWindow):
 
     def show_workspace(self) -> None:
         self._stack.setCurrentWidget(self._editor)
+        self._editor.apply_initial_layout()
         self._refresh_project_label()
 
     # -- recents -------------------------------------------------------------

@@ -32,7 +32,10 @@
   "field.mound_shape": "Waste mound",
   "field.fill": "Fill fraction",
   "field.waste_type": "Waste type",
-  "field.organic_fraction": "Organic fraction",
+  "field.age_hours": "Holding time",
+  "field.derived_readout": "Phase {phase} · DOC {doc} · CH4 {methane}",
+  "field.methane_yes": "produced",
+  "field.methane_no": "not yet produced",
   "field.moisture_fraction": "Moisture fraction",
   "field.wind_speed": "Wind speed",
   "field.wind_direction": "Wind direction",
@@ -201,5 +204,6 @@
   "menu.view.panels": "Panels",
   "menu.view.save_layout": "Save Layout",
   "menu.view.reset_layout": "Reset Layout",
-  "panel.sensor_lab": "Sensor lab"
+  "panel.sensor_lab": "Sensor lab",
+  "menu.view.saved": "Workspace saved"
 }

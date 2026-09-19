@@ -196,18 +196,23 @@ class DockedWorkspace(QMainWindow):
             Qt.Orientation.Horizontal,
         )
 
-    def showEvent(self, event) -> None:  # noqa: ANN001
-        """Apply the workspace layout once the window has a real size.
+    def apply_initial_layout(self) -> None:
+        """Apply the workspace layout once the host has given this window a size.
 
-        ``resizeDocks`` only takes effect after the dock layout has been
-        computed, which happens when the window is first shown. Calling it
-        during construction leaves every panel at its minimum.
+        A window embedded as a widget never receives ``showEvent`` as a
+        top-level window does, so the host calls this after it has shown the
+        editor. Calling it during construction leaves every dock at its minimum,
+        because ``resizeDocks`` only takes effect once the layout is computed.
         """
+        if not self._needs_layout_pass:
+            return
+        self._needs_layout_pass = False
+        if not self._apply_saved_layout(self._workspace):
+            self.apply_default_layout(self._workspace)
+
+    def showEvent(self, event) -> None:  # noqa: ANN001
         super().showEvent(event)
-        if self._needs_layout_pass:
-            self._needs_layout_pass = False
-            if not self._apply_saved_layout(self._workspace):
-                self.apply_default_layout(self._workspace)
+        self.apply_initial_layout()
 
     def _default_areas(self, name: str) -> dict[str, Qt.DockWidgetArea]:
         """Home area for each panel; the arrangement is the ordering."""

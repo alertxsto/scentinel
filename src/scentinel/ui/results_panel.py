@@ -427,12 +427,34 @@ class ResultsPanel(QWidget):
         self._export_button.setEnabled(bool(readings))
 
     def set_running(self, running: bool) -> None:
-        self._run_button.setEnabled(not running)
         self._cancel_button.setVisible(running)
         self._cancel_button.setEnabled(running)
         if running:
+            self._run_button.setEnabled(False)
+            self._run_button.setToolTip("")
             self._stack.setCurrentWidget(self._placeholder)
             self._placeholder.setText(self._t.t("results.busy"))
+
+    def set_run_enabled(self, enabled: bool, blocker_key: str | None = None) -> None:
+        """Enable Run and explain, on the button itself, what is missing.
+
+        The status bar is easy to miss, so the reason is repeated here and the
+        placeholder says the same thing while no results exist.
+        """
+        if self._cancel_button.isVisible():
+            return  # a run is in flight; its own state governs the button
+        self._run_button.setEnabled(enabled)
+        if blocker_key is not None:
+            reason = self._t.t(blocker_key)
+            self._run_button.setToolTip(reason)
+            if not self._readings:
+                self._placeholder.setText(reason)
+                self._stack.setCurrentWidget(self._placeholder)
+        else:
+            self._run_button.setToolTip("")
+            if not self._readings:
+                self._placeholder.setText(self._t.t("results.empty"))
+                self._stack.setCurrentWidget(self._placeholder)
 
     def clear(self) -> None:
         self._readings = []

@@ -91,7 +91,11 @@ def test_placing_a_sensor_flows_into_the_project(window):
 
 def test_save_then_open_round_trips_through_the_window(window, tmp_path):
     window.setup_panel()._length.setValue(7.0)
+    # Select a gas explicitly and switch it off auto, so the round trip has to
+    # carry an explicit value. The panel no longer preselects gases on load, so
+    # the test states its own precondition instead of relying on a default.
     window.setup_panel()._gas_boxes["CO"].setChecked(True)
+    window.setup_panel()._gas_auto["CO"].setChecked(False)
     window.setup_panel()._gas_spins["CO"].setValue(105.0)
     window.viewport().add_sensor(3.0, 2.0)
 
@@ -105,7 +109,9 @@ def test_save_then_open_round_trips_through_the_window(window, tmp_path):
 
     window.open_project(path)
     assert window.project().geometry.length_m == pytest.approx(7.0)
-    assert window.project().scenario.gas_sources == {"CO": 105.0}
+    assert window.project().scenario.gas_sources == {
+        "CO": 105.0, "CH4": "auto", "VOC": "auto", "H2S": "auto",
+    }
     assert [sensor.sensor_id for sensor in window.project().sensors] == ["S1"]
     assert not window.is_dirty()
 

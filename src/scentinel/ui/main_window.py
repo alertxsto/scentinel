@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from scentinel import __version__
 from scentinel.core import container, history
 from scentinel.core.casegen import PPM_SCALE
+from scentinel.core.gas_data import DEFAULT_SOURCE_GASES
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError, RunRecord
 from scentinel.core.project import FILE_FILTER, SUFFIX, Project, load_project, save_project
@@ -561,7 +562,7 @@ class MainWindow(DockedWorkspace):
         return self._container_setup_active
 
     def _refresh_run_action(self, *, solving: bool | None = None) -> None:
-        """Run is available only when the solver is probed ready and idle.
+        """Run is available only when the solver is ready, idle, and has input.
 
         ``solving`` is passed explicitly where the caller already knows the
         solve state: a QThread is neither running yet when a run starts nor
@@ -569,12 +570,36 @@ class MainWindow(DockedWorkspace):
         two edges would enable Run at the wrong moment. A container setup also
         blocks Run — the image it enables Run for may not exist yet, and the
         storage it writes must not race a solve.
+
+        The action is disabled while the project lacks sensors or gases, and its
+        tooltip names the missing piece. A button that looks ready but refuses
+        the click, with the reason only in the status bar, is how a run gets
+        reported as "broken" when it is merely unconfigured.
         """
         if solving is None:
             solving = self.is_running()
         busy = solving or self.is_setting_up_container()
-        self._action_run.setEnabled(self._solver_available and not busy)
+        ready = self._solver_available and not busy
+        blocker = self._run_blocker()
+        self._action_run.setEnabled(ready and blocker is None)
         self._action_setup_container.setEnabled(not busy)
+        if blocker is not None:
+            self._action_run.setToolTip(self._t.t(blocker))
+        elif not self._solver_available:
+            self._action_run.setToolTip(self._t.t("run.blocked"))
+        else:
+            self._action_run.setToolTip("")
+        self._results_panel.set_run_enabled(ready and blocker is None, blocker)
+
+    def _run_blocker(self) -> str | None:
+        """Translation key for what stops a run, or None when nothing does."""
+        if not self._solver_available:
+            return "run.blocked"
+        if not self._project.sensors:
+            return "run.needs_sensor"
+        if not self._project.scenario.gas_sources:
+            return "run.needs_gas"
+        return None
 
     def setup_container(self) -> bool:
         """Pull and verify the OpenFOAM image, off the GUI thread.
@@ -624,6 +649,9 @@ class MainWindow(DockedWorkspace):
         self._project.scenario = scenario
         self._viewport.set_geometry(geom)
         self._mark_dirty()
+        # Selecting a gas or placing a sensor can unblock Run, so the action's
+        # enabled state has to follow the inputs, not just the solver probe.
+        self._refresh_run_action()
 
     def _on_sensors_changed(self) -> None:
         if self._loading:
@@ -632,6 +660,7 @@ class MainWindow(DockedWorkspace):
         self._sensor_lab.set_context(self._project.sensors, self._results_panel.readings())
         self._mark_dirty()
         self._refresh_counters()
+        self._refresh_run_action()
 
     def _on_lab_config_changed(self, config) -> None:
         """Persist a device model edited in the lab panel."""
@@ -763,7 +792,17 @@ class MainWindow(DockedWorkspace):
 
 
 def _default_project() -> Project:
-    return Project(name="Untitled", geometry=BinGeometry(), scenario=Scenario())
+    """A new project with the headline gases already selected.
+
+    An empty source list used to be the default, which made Run fail until the
+    user found the checkboxes. The four AP-42 headline gases are the ones a
+    screening run wants, and they resolve through the cited ``auto`` path.
+    """
+    return Project(
+        name="Untitled",
+        geometry=BinGeometry(),
+        scenario=Scenario(gas_sources={gas: "auto" for gas in DEFAULT_SOURCE_GASES[:4]}),
+    )
 
 
 def _ppmv_readings(readings: list) -> list[SensorReading]:
