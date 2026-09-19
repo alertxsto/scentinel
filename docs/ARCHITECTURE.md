@@ -40,9 +40,12 @@ data provenance.
 
 The UI never calls gmsh, podman, or pyvista directly. `SolverWorker` runs the
 whole pipeline off the GUI thread and reports back with signals. `MainWindow`
-reserves the run directory through `core.history` before the worker is
-constructed and finalizes the same record afterwards, so the run identity never
-depends on process-local state.
+snapshots the project, reserves the run directory through `core.history` before
+the worker is constructed, and finalizes the same record afterwards, so the run
+identity never depends on process-local state and the sensors a record claims
+are the sensors the pipeline sampled. `core.casegen` owns the applied numerical
+constants and the case-input digest; `core.history` persists what `casegen`
+reports rather than restating it.
 
 ## 2. Module map
 
@@ -56,16 +59,16 @@ depends on process-local state.
 | `gas_data.py` | 84 | AP-42 loader: `GasSpec`, `source_concentration`, `default_sources`, `citation` |
 | `gas_defaults.py` | 338 | Generated data — do not edit by hand (see `scripts/build_gas_data.py`) |
 | `mesh.py` | 234 | gmsh: air-region outline, 1-cell extrusion, physical groups → `MeshResult` |
-| `casegen.py` | 488 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile |
+| `casegen.py` | 728 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, applied-physics constants, case-input digest |
 | `runner.py` | 194 | Podman invocation, log streaming, cancellation, per-stage logs |
 | `post.py` | 170 | VTK reading, sensor sampling, concentration fields, mass-balance helper |
-| `history.py` | 1144 | Run allocation, `run.json` schema/validation, atomic writes, `load_run`/`list_runs`/`get_run` |
+| `history.py` | 1677 | Run allocation, `run.json` schema/validation, atomic writes, `load_run`/`list_runs`/`get_run` |
 
 ### UI (`src/scentinel/ui/`)
 
 | Module | Lines | Owns |
 |---|---|---|
-| `main_window.py` | 620 | Menus, project lifecycle, dirty tracking, run orchestration |
+| `main_window.py` | 654 | Menus, project lifecycle, dirty tracking, run orchestration |
 | `setup_panel.py` | 285 | Geometry/scenario/gas forms; emits `changed(geom, scenario)` |
 | `viewport.py` | 268 | `QGraphicsView`: bin + mound drawing, sensor placement |
 | `results_panel.py` | 201 | Probe table, log pane, Run/Cancel/Export buttons |
@@ -74,7 +77,7 @@ depends on process-local state.
 
 ### Tests (`tests/`)
 
-164 collected: 156 unit + UI, 7 integration (6 in the e2e scenario plus the
+204 collected: 196 unit + UI, 7 integration (6 in the e2e scenario plus the
 podman-availability check in `test_runner.py`), 1 verification.
 
 ## 3. Data flow
@@ -87,10 +90,15 @@ MainWindow.Project  ──save──►  <name>.scentinel  (JSON, format_version
         │
         │  Run Simulation (F5)
         ▼
-MainWindow.start_run ──► core.history.begin_run
-        │                    → runs/run-NNN/run.json  (status: incomplete)
+MainWindow.start_run
+        │  1. history.snapshot_project(project)  →  one frozen deep copy
+        │     the copy, not the live model, is what the run may sample
         ▼
-SolverWorker._run_pipeline
+   core.history.begin_run(frozen)
+        │                    → runs/run-NNN/run.json  (execution_status: incomplete)
+        │                      requested inputs + applied_physics (no digest yet)
+        ▼
+SolverWorker._run_pipeline(frozen)
         │
         ├─ 1. mesh.generate_mesh        → runs/run-NNN/mesh/case.msh
         │      (child process; see §5)
@@ -107,10 +115,11 @@ SolverWorker._run_pipeline
         ▼
 MainWindow._on_run_finished
         │
-        ├─ ppmv conversion (×1e6), once
+        ├─ ppmv conversion (÷ casegen.PPM_SCALE), once
         │     ├─► ResultsPanel.set_results   →  table (ppmv)  →  CSV export
-        │     └─► core.history.finish_run    →  run.json (terminal status)
-        │            atomic replace of the incomplete manifest
+        │     └─► core.history.finish_run    →  run.json (terminal execution_status)
+        │            validates readings against the frozen sensors,
+        │            digests the generated case inputs, atomic replace
 ```
 
 ## 4. Physics setup
@@ -120,7 +129,7 @@ MainWindow._on_run_finished
 | Dimensionality | 2D as 3D one cell thick | OpenFOAM has no 2D solver; front/back are `empty` |
 | Solver | `simpleFoam` | Steady SIMPLE, incompressible, isothermal |
 | Turbulence | k-epsilon RAS | `k`, `epsilon`, `nut` written per case |
-| Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D 2e-05` |
+| Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D = casegen.SCALAR_DIFFUSIVITY_M2_S` (2e-05 m²/s for every gas) |
 | Waste mound | Not meshed | Solid, no flow; contributes only the `source` patch |
 | Source term | `fixedValue` concentration | 105 ppmv CO etc., as volume fraction |
 
@@ -222,9 +231,51 @@ silently or with a misleading error.
 22. **Only the path relative to the run directory is stored.** `case_dir` is
     validated as a relative child, so a manifest never carries a workstation
     path and stays portable with its case.
-23. **`end_iteration` is a control index, not elapsed time.** The steady
-    `simpleFoam` run has no physical duration, so the manifest names the field
-    for what it is even though the worker argument is still `end_time`.
+23. **`requested_end_iteration` is a control index, not elapsed time, and not
+    evidence of convergence.** The steady `simpleFoam` run has no physical
+    duration, so the manifest names the field for what it is. Reaching
+    `endTime` counts iterations; it does not prove the `residualControl`
+    targets were met, and nothing parses the achieved residuals, so
+    `solver_termination` and `quality.convergence` both stay `not_evaluated`.
+    Inferring convergence from exit code 0 would fabricate a scientific claim.
+24. **The run samples a frozen snapshot, not the live model.** `start_run()`
+    takes one `history.snapshot_project()` copy and gives it to both
+    `begin_run()` and `SolverWorker`. Disabling the editing surfaces while a
+    run is in flight is UX defence; correctness comes from the copy, so a
+    viewport click mid-run cannot change what a record claims to have measured.
+25. **`finish_run()` re-checks readings against the frozen sensors.** Ids,
+    coordinates, order, and gas keys must match exactly. Supplied readings that
+    do not match are a hard `HistoryError` — persisting foreign numbers under
+    this run's inputs would break the manifest's central promise. *Absent*
+    readings after a clean exit are recorded as `failed` with
+    `NO_READINGS_ERROR`, so an exit-0 failure is auditable rather than opaque.
+    `load_run()` applies the same check, so a hand-edited manifest cannot
+    smuggle in foreign readings.
+26. **`applied_physics` and the case digest separate request from experiment.**
+    The reported wind speed becomes a different inlet velocity after the
+    power-law scaling, and the case applies one hard-coded scalar diffusivity
+    rather than the per-gas table in `gas_data`. `casegen` owns those constants
+    and renders both the case files and the persisted block from them, so a
+    manifest cannot claim a setting the case does not use. The SHA-256 digest
+    over the declared case inputs (`casegen.case_input_paths`) is the
+    authoritative guard: it covers only what `write_case` generated, never the
+    solver's own output into the same tree, so the digest stays valid after a
+    solve and a changed applied constant changes it at identical UI inputs.
+27. **Scientific gates are stated, never inferred.** `quality` carries
+    `convergence`, `mesh_independence`, `mass_balance`, and
+    `experimental_validation`, each from a closed set, all non-passing for an
+    ordinary run. `execution_status: "succeeded"` is only a process outcome.
+    Consumers that filter on it alone would render an unverified run as
+    verified; the gate fields exist so they cannot.
+28. **Ventilation is recorded as a request, not as physics.**
+    `casegen.write_case()` ignores the flag, so the manifest stores
+    `{"requested_on": …, "modelled": false}` and `load_run()` rejects
+    `modelled: true`. No comparison consumer may group or difference by an
+    unmodelled factor, or it would conclude ventilation has no effect.
+29. **`core.history` imports without the `cfd` extra.** `history` imports
+    `casegen`, which imports `mesh` (and therefore `gmsh`) only under
+    `TYPE_CHECKING`. The documented read API (`list_runs()` / `get_run()`)
+    performs no meshing, so a machine without gmsh can still read a manifest.
 
 ## 6. Container contract
 
@@ -274,7 +325,13 @@ see [ROADMAP.md](ROADMAP.md).
 - Line length 100 (ruff config in `pyproject.toml`).
 - Core modules import no Qt. UI modules import no gmsh, podman, or pyvista at
   module scope (pyvista is imported inside `post` functions to keep startup
-  cheap).
+  cheap). Optional-dependency imports anywhere in core that only serve type
+  annotations belong behind `TYPE_CHECKING`.
 - Every user-visible string goes through `Translator.t`, with keys in both
   `resources/locales/en.json` and `id.json`.
 - Gas defaults cite their source in the generated data and in `gas_data.citation`.
+- A field that carries a physical quantity names its unit (`_m`, `_m_s`,
+  `_ppmv`, `_m2_s`), and the schema rejects unknown keys so a rename cannot be
+  silently ignored.
+- Persisted scientific evidence is never inferred from a process outcome:
+  convergence, verification, and validation are separate, closed-enum gates.

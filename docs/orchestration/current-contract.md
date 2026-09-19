@@ -37,9 +37,11 @@ The fix is an append-only run-directory protocol with one versioned JSON manifes
 - Coordinates and bin dimensions are metres. Wind speed is metres per second. `mound_fill_fraction` is dimensionless.
 - Scenario gas inputs entered in the UI are ppmv. OpenFOAM scalar fields and `post.SensorReading.values` are dimensionless volume fractions. Persisted human-facing source and probe values are ppmv and must be converted exactly once using the existing factor `1e6`.
 - An `"auto"` source is resolved with the existing `casegen.resolve_sources()`/`gas_data` path at run start. The manifest stores both the requested mode and the resolved ppmv value so later changes to defaults cannot rewrite history.
-- Manual source values are user inputs. Their provenance is `user`; no citation may be fabricated.
-- `end_time=500` in the steady `simpleFoam` case is an iteration/control index, not elapsed physical seconds. The manifest field is therefore named `end_iteration`, with unit `iteration`, even if the existing worker argument remains named `end_time` internally.
+- Manual source values are user inputs. Their provenance is the single literal `"user input"`; no citation may be fabricated.
+- `end_time=500` in the steady `simpleFoam` case is an iteration/control index, not elapsed physical seconds, and not evidence that `residualControl` was satisfied. The manifest field is therefore named `requested_end_iteration`, with unit `iteration`, even though the existing worker argument remains named `end_time` internally. Nothing parses the achieved residuals, so `solver_termination` and `quality.convergence` record `not_evaluated`; exit code 0 is never convergence.
 - A normal production run does not calculate a mesh-independence, mass-balance, analytical benchmark, or empirical validation metric. Its `verification_metrics` and `validation_metrics` are separate arrays and are empty unless a real metric was produced for that run.
+- The reported wind speed is not the applied inlet speed: `casegen.wind_speed_at()` scales it to the bin rim by a power law before writing the inlet boundary. The manifest records both, plus the profile type, exponent, and reference height.
+- The case applies one hard-coded scalar diffusivity to every gas (`casegen.SCALAR_DIFFUSIVITY_M2_S`). `gas_data`'s per-gas diffusivities are not used by the solver and must not be persisted as if they were.
 - Every manifest carries the known qualitative uncertainty: `screening_estimate`; absolute concentrations are not mesh-converged and must not be represented as calibrated predictions.
 - No new emission rate, molecular weight conversion, mass-transfer coefficient, uncertainty percentage, or other scientific constant is introduced by this feature.
 
@@ -50,21 +52,24 @@ The fix is an append-only run-directory protocol with one versioned JSON manifes
 - `runs_root: Path`, from the existing `_runs_root(project_path)` policy;
 - a snapshot of `Project` containing project name, `BinGeometry`, `Scenario`, and ordered sensors;
 - `mesh_size_m: float`, currently `0.25`;
-- `end_iteration: int`, currently `500`;
+- `end_iteration: int`, currently `500` (persisted as `requested_end_iteration`);
 - application version from `scentinel.__version__`;
 - solver name and fully qualified container image from `casegen.SOLVER` and `casegen.IMAGE`.
 
 `finish_run()` receives primitive/core values only, not a Qt or UI type:
 
 - reserved run id and run directory;
-- one terminal status: `succeeded`, `failed`, or `cancelled`;
+- one terminal execution status: `succeeded`, `failed`, or `cancelled`;
+- `solver_termination`, from a closed set, defaulting to `not_evaluated`;
 - `case_dir`, if created;
 - mesh cell count and element-type counts;
 - exit code, failed stage, and error text;
-- ordered sensor readings converted to ppmv before persistence; and
+- ordered sensor readings converted to ppmv before persistence, which must match the frozen sensor snapshot in ids, coordinates, order, and gas keys; and
 - completion time from an injectable/default UTC clock.
 
-The history module must not import `PySide6`, `MainWindow`, `SolverWorker`, or `RunOutcome`.
+The history module must not import `PySide6`, `MainWindow`, `SolverWorker`, or `RunOutcome`. It also must not require the optional `cfd` extra: `history` imports `casegen`, which imports `mesh` (and therefore `gmsh`) only under `TYPE_CHECKING`, because the documented read API performs no meshing.
+
+`history.snapshot_project(project)` returns a deep, independent copy of a `Project`. The UI takes exactly one such copy per run and gives it to both `begin_run()` and `SolverWorker`, so the sensors the record freezes are the sensors the pipeline samples.
 
 # OUTPUTS
 
@@ -84,28 +89,40 @@ No new visible history screen is produced. Existing results-table and CSV behavi
 
 Add `src/scentinel/core/history.py` with these public constants and types:
 
-- `RUN_FORMAT_VERSION = 1`
+- `RUN_FORMAT_VERSION = 2` (version 1 manifests are rejected, not migrated)
 - `MANIFEST_NAME = "run.json"`
 - `RUN_DIR_PATTERN`, matching only `run-` plus three or more decimal digits
-- `RunStatus = Literal["incomplete", "succeeded", "failed", "cancelled"]`
+- `ExecutionStatus = Literal["incomplete", "succeeded", "failed", "cancelled"]`
+- closed-enum gate state tuples: `CONVERGENCE_STATES`, `MESH_INDEPENDENCE_STATES`, `MASS_BALANCE_STATES`, `VALIDATION_STATES`, `SOLVER_TERMINATION_STATES`
+- `NO_READINGS_ERROR`, the audit reason for a clean exit with missing readings
 - frozen `RunRecord`, containing the validated manifest fields below plus `run_dir: Path` as a non-serialized convenience
 - `HistoryError(ValueError)` for invalid schema/version/status/id/unit-bearing fields
 
 Public functions:
 
 - `begin_run(runs_root, project, *, mesh_size_m, end_iteration, started_at=None) -> RunRecord`
-- `finish_run(record, *, status, case_dir, mesh_cells, element_types, exit_code, failed_stage, error, readings_ppmv, finished_at=None) -> RunRecord`
+- `finish_run(record, *, status, case_dir, mesh_cells, element_types, exit_code, failed_stage, error, readings_ppmv, finished_at=None, solver_termination="not_evaluated") -> RunRecord`
 - `load_run(run_dir: Path) -> RunRecord`
 - `list_runs(runs_root: Path) -> list[RunRecord]`
 - `get_run(runs_root: Path, run_id: str) -> RunRecord | None`
+- `snapshot_project(project: Project) -> Project`
 
-The serialized top-level schema is exact; names carrying physical quantities include their units:
+The serialized top-level schema is exact; names carrying physical quantities include their units.
+
+**Amendment (integration, post-final-review):** the schema below is now version
+2. The review accepted four merge blockers against version 1, and the accepted
+fixes are folded in here: `applied_physics` (MB-1), the qualified `ventilation`
+structure (MB-2), the renamed `execution_status` plus closed-enum gate states
+(MB-4), and `requested_end_iteration`/`solver_termination`. Version 1 manifests
+are rejected rather than misread, because they cannot describe what they
+applied. Reading validation against the frozen sensor snapshot (MB-3) is a rule
+below rather than a new field.
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "run_id": "run-001",
-  "status": "succeeded",
+  "execution_status": "succeeded",
   "started_at_utc": "2026-09-19T12:34:56Z",
   "finished_at_utc": "2026-09-19T12:36:12Z",
   "application": {
@@ -123,7 +140,7 @@ The serialized top-level schema is exact; names carrying physical quantities inc
     "scenario": {
       "wind_speed_m_s": 2.0,
       "wind_direction": "left-to-right",
-      "ventilation_on": false,
+      "ventilation": {"requested_on": false, "modelled": false},
       "gas_sources": {
         "CO": {
           "mode": "auto",
@@ -137,9 +154,26 @@ The serialized top-level schema is exact; names carrying physical quantities inc
       {"sensor_id": "S1", "x_m": 1.2, "y_m": 2.1}
     ]
   },
+  "applied_physics": {
+    "wind_speed_reported_m_s": 2.0,
+    "inlet_speed_at_rim_m_s": 1.640670712015276,
+    "wind_profile": "power-law",
+    "wind_profile_exponent": 0.14285714285714285,
+    "wind_reference_height_m": 10.0,
+    "nu_m2_s": 1.5e-05,
+    "scalar_diffusivity_m2_s": {"CO": 2e-05},
+    "linear_solver_settings": [
+      {"fields": "p", "solver": "GAMG", "tolerance": 1e-06, "relTol": 0.1, "smoother": "GaussSeidel"},
+      {"fields": "\"(CO)\"", "solver": "PBiCGStab", "preconditioner": "DILU", "tolerance": 1e-08, "relTol": 0.1}
+    ],
+    "residual_targets": {"p": 0.001, "U": 0.0001, "\"(k|epsilon)\"": 0.0001, "\"(CO)\"": 1e-05},
+    "relaxation_factors": {"U": 0.9, "\".*\"": 0.9},
+    "non_orthogonal_correctors": 0,
+    "case_input_digest": "sha256:<64 lowercase hex digits>"
+  },
   "execution": {
     "mesh_size_m": 0.25,
-    "end_iteration": 500,
+    "requested_end_iteration": 500,
     "solver": "simpleFoam",
     "container_image": "docker.io/opencfd/openfoam-default:2512",
     "case_dir": "case",
@@ -147,7 +181,8 @@ The serialized top-level schema is exact; names carrying physical quantities inc
     "element_types": {"Hexahedron 8": 7248},
     "exit_code": 0,
     "failed_stage": null,
-    "error": null
+    "error": null,
+    "solver_termination": "not_evaluated"
   },
   "results": {
     "concentration_unit": "ppmv",
@@ -158,6 +193,10 @@ The serialized top-level schema is exact; names carrying physical quantities inc
   "quality": {
     "classification": "screening_estimate",
     "uncertainty": "Absolute concentrations are not mesh-converged; use results for relative screening only.",
+    "convergence": "not_evaluated",
+    "mesh_independence": "not_run",
+    "mass_balance": "not_run",
+    "experimental_validation": "not_run",
     "verification_metrics": [],
     "validation_metrics": []
   }
@@ -166,13 +205,18 @@ The serialized top-level schema is exact; names carrying physical quantities inc
 
 Schema rules:
 
-- `finished_at_utc` is `null`, execution outcome fields are `null`/empty, and results are empty while status is `incomplete`.
+- `finished_at_utc` is `null`, execution outcome fields are `null`/empty, results are empty, and `applied_physics.case_input_digest` is `null` while `execution_status` is `incomplete`.
 - UTC timestamps use ISO 8601 with `Z`; naive datetimes are rejected.
 - `case_dir` is `"case"` relative to the run directory, never an absolute workstation path. It is `null` if case generation never completed.
 - Gas and sensor order follows the captured project/readings order. JSON output uses stable indentation and key ordering for reviewability.
-- Manual gas input uses `mode: "manual"`, the entered number in both `requested_ppmv` and `resolved_ppmv`, and `provenance: "user input"`.
-- Automatic input uses `mode: "auto"`, `requested_ppmv: null`, resolved existing-data value in `resolved_ppmv`, and the exact existing citation string.
-- The current dead `ventilation_on` field is recorded because it is part of the reproducible input snapshot; this feature neither gives it physical effect nor removes it.
+- Manual gas input uses `mode: "manual"`, the entered number in both `requested_ppmv` and `resolved_ppmv`, and `provenance: "user input"`. (The review's m1 finding: the literal is `"user input"`, not `user`.)
+- Automatic input uses `mode: "auto"`, `requested_ppmv: null`, resolved existing-data value in `resolved_ppmv`, and the exact existing citation string. Auto ppmv comes from `gas_data.source_concentration(gas)` directly and equals `casegen.resolve_sources()[gas] / casegen.PPM_SCALE`.
+- `ventilation` is a request-plus-effect pair (MB-2). `modelled` is `false` and `load_run()` rejects `true`: `casegen.write_case()` does not read the flag. No consumer may group or difference by an unmodelled factor. T-030 does not model ventilation.
+- `applied_physics` records the experiment, not the request (MB-1). Every value is read from the same `casegen` constant that renders the case files, so the block cannot claim a setting the case does not use. `scalar_diffusivity_m2_s` is the applied constant (`casegen.SCALAR_DIFFUSIVITY_M2_S`, one value for every gas), never `gas_data`'s unused per-gas table.
+- `case_input_digest` is SHA-256 over the *declared* generated case inputs (`casegen.case_input_paths`), sorted by relative POSIX path, feeding path + `NUL` + decimal byte size + `NUL` + bytes per file. It covers only what `write_case()` generated, never the solver's own output into the same tree, so it stays valid after a solve. It is the authoritative guard for "same applied experiment": a changed applied constant changes it at identical UI inputs.
+- `requested_end_iteration` is the requested `controlDict.endTime` — an iteration index, not elapsed seconds and not evidence the targets were met. `solver_termination` and `quality.convergence` stay `not_evaluated` because nothing parses the achieved residuals; exit code 0 must never be recorded as convergence.
+- `execution_status: "succeeded"` is a process outcome only: the container pipeline exited 0 and every frozen sensor was sampled. Convergence, mesh independence, mass balance, and experimental validation are separate closed-enum gate states in `quality`, all non-passing for an ordinary run.
+- Supplied readings must match the frozen sensor snapshot in ids, coordinates, order, and gas keys. A mismatch is a `HistoryError` — nothing is persisted. *Absent* readings after a clean exit are recorded as `failed` with `NO_READINGS_ERROR` as `execution.error`, so an exit-0 failure is auditable. `load_run()` re-applies the same check.
 - Failed/cancelled records preserve available mesh/case/output metadata but never fabricate absent readings.
 - Verification metric entries, when future workflows add them, use `{name, value, unit, target, status, provenance}`. Validation metric entries use the same shape but remain in the separate `validation_metrics` array.
 
@@ -186,19 +230,24 @@ Run allocation uses the filesystem as the concurrency authority:
 2. Scan directory names matching `RUN_DIR_PATTERN` and choose one greater than the current maximum, starting at `run-001`.
 3. Reserve with `mkdir(exist_ok=False)`.
 4. If another process wins that id, increment and retry; never delete, clear, or reuse a directory.
-5. Build a deep input snapshot, resolve gas sources, write `run.json` atomically, and return the incomplete `RunRecord`.
+5. Build a deep input snapshot, resolve gas sources, capture the applied-physics block (digest still `null`), write `run.json` atomically, and return the incomplete `RunRecord`.
+
+The digest cannot be computed at reservation time because the case does not exist yet. `finish_run()` fills it in from `casegen.case_input_digest()` when the case is complete, and leaves it `null` when it is not.
 
 Atomic manifest writes use a temporary sibling file followed by `os.replace()`. Cleanup of a leftover temporary file is best-effort; the previous valid manifest must survive a failed replacement.
 
 `MainWindow` owns orchestration only:
 
 - remove `_run_counter`;
-- call `begin_run()` after existing sensor/gas/solver preconditions and before creating `SolverWorker`;
+- take exactly one `history.snapshot_project()` copy after the existing sensor/gas/solver preconditions, and pass that same copy to `begin_run()` and to `SolverWorker` — never the live editor model, so a mid-run edit cannot change what the record claims to have measured;
+- disable the viewport as well as the setup panel and run action while a run is in flight, as UX defence only, not as the correctness mechanism;
 - pass the reserved directory and the same explicit mesh size/end iteration to the worker;
 - retain the active `RunRecord` until `_on_run_finished()`;
 - map `RunOutcome` to `finish_run()` primitives and convert raw reading volume fractions to ppmv exactly once;
 - finalize cancelled and failed attempts as well as successful attempts; and
 - continue displaying successful readings through the current `ResultsPanel` path.
+
+The conversion factor comes from `casegen.PPM_SCALE` rather than a literal `1e6`, so the case writer's ppm-to-fraction convention and the persisted ppmv conversion cannot drift apart.
 
 If `begin_run()` fails, no worker starts and the UI reports a localized history-write error. If finalization fails, the solver outcome and table remain available, but the UI must report that the run was not durably recorded; it must not claim normal completion. Add equivalent English and Indonesian locale keys.
 
@@ -211,6 +260,7 @@ Planned implementation files:
 - `src/scentinel/core/history.py` — new run schema, allocation, atomic persistence, load/list/lookup.
 - `src/scentinel/ui/main_window.py` — replace process-local numbering; begin and finalize records around the existing worker.
 - `src/scentinel/ui/solver_worker.py` — expose named default mesh/end-iteration constants if needed so UI and persisted execution settings cannot diverge; no history import.
+- `src/scentinel/core/casegen.py` — own the applied-physics constants and the case-input digest; `write_case()` takes a required `geom` so the inlet speed and the persisted reference height cannot diverge; keep the `mesh` import behind `TYPE_CHECKING`.
 - `src/scentinel/resources/locales/en.json` — history persistence status/error text.
 - `src/scentinel/resources/locales/id.json` — equivalent Indonesian keys.
 - `tests/unit/test_history.py` — new core behavioural tests.
@@ -243,8 +293,11 @@ This architecture task itself modifies only `docs/orchestration/current-contract
 - **Case path portability:** only a validated relative child path is stored; absolute paths and paths containing `..` are rejected.
 - **Unknown gas key or unresolved `auto` value:** abort before solver start through the existing gas-data error; do not write a misleading resolved source.
 - **NaN or infinity:** reject before JSON serialization; JSON must use standard finite numbers only (`allow_nan=False`).
-- **No probe readings after a successful solve:** preserve `succeeded` with an empty readings array only if the project snapshot contains no sensors; current UI preconditions normally make this impossible. A project with sensors and missing readings is `failed`, not a successful empty result.
-- **Scientific-quality misuse:** manifest classification remains `screening_estimate`; empty verification/validation arrays never imply a passed gate.
+- **No probe readings after a successful solve:** a clean exit with no readings for a project whose snapshot has sensors is recorded as `failed` with `NO_READINGS_ERROR` as `execution.error`, never as a successful empty result and never as an opaque exit-0 failure. A project snapshot with no sensors legitimately records `succeeded` with an empty array.
+- **Readings that do not match the frozen sensors:** ids, coordinates, order, or gas keys differing from the snapshot is a `HistoryError`; nothing is persisted, and `load_run()` raises on such a manifest too.
+- **Scientific-quality misuse:** manifest classification remains `screening_estimate`; every gate state is drawn from a closed set; empty verification/validation arrays never imply a passed gate. `execution_status` is a process outcome and must never be read as convergence or validation.
+- **Unmodelled factor presented as physics:** `ventilation.modelled` may only be `false` while `casegen.write_case()` ignores the flag; `load_run()` rejects `true`, and no consumer may group or difference by `ventilation.requested_on` while it is `false`.
+- **Optional dependency leak:** importing `scentinel.core.history` without `gmsh` or `PySide6` installed must succeed, and the documented read API must work there.
 
 # TEST PLAN
 
@@ -260,6 +313,13 @@ Core tests in `tests/unit/test_history.py`:
 8. Unsupported version, malformed JSON, invalid status/id, non-finite numbers, absolute/escaping case paths, and missing unit-bearing fields raise `HistoryError`.
 9. A forced replacement failure leaves the prior valid incomplete manifest readable.
 10. Verification and validation arrays remain distinct through serialization; an empty array is not rewritten as a pass.
+11. Applied physics: each persisted applied value is compared against the generated case source; a changed applied constant changes the recorded digest at identical UI inputs; the requested wind speed and the applied inlet speed differ; the applied per-gas diffusivity is the written constant, not `gas_data`'s unused table.
+12. The digest covers only declared case inputs: solver output written into the same tree (`constant/polyMesh`, `VTK/`, `log.*`) does not change it, and a missing declared input raises.
+13. Ventilation: `requested_on` is preserved, `modelled` is `false`, and a manifest claiming `modelled: true` is rejected.
+14. Readings identity: a reading for a different sensor, at moved coordinates, for an unselected gas, or in the wrong order/count is rejected at finalization and on load; a reading-less clean exit is `failed` with `NO_READINGS_ERROR`.
+15. Gates: a clean exit leaves `convergence`, `mesh_independence`, `mass_balance`, and `experimental_validation` non-passing; a state outside its closed set is rejected; the documented `76.5%` mesh-independence failure does not appear on an ordinary run.
+16. ppmv recipes: CO auto `105.0`, CH₄ auto `500000.0`, manual VOC `12.5`, and a probe volume fraction converted exactly once; `Scenario` is not mutated.
+17. The module imports, and the documented read API runs, with `gmsh` and `PySide6` both unavailable.
 
 UI tests in `tests/ui/test_main_window.py`:
 
@@ -268,6 +328,9 @@ UI tests in `tests/ui/test_main_window.py`:
 3. Failed and cancelled outcomes finalize with their respective statuses.
 4. Start-persistence failure does not launch a worker and shows the localized error state.
 5. Finalization failure preserves the result table but shows/logs the history-recording failure.
+6. The worker receives a frozen snapshot, not the live project: mutating the project mid-run does not change what the worker samples or what the record stores.
+7. The editing surfaces (viewport, setup panel) are disabled while a run is in flight and restored afterwards.
+8. A successful run still reports every scientific gate as non-passing.
 
 Verification commands:
 
@@ -280,11 +343,15 @@ Verification commands:
 
 - Every simulation attempt that passes existing UI preconditions reserves a unique, never-reused `run-NNN` directory before work starts.
 - Existing run data survives application restart and subsequent runs; no in-memory counter determines identity.
-- Every reserved run has a versioned `run.json` containing its immutable input snapshot, automatic/manual source provenance, explicit units, exact numerical settings, solver/container identity, terminal status, available output metadata, results in ppmv, and screening uncertainty.
+- Every reserved run has a versioned `run.json` containing its immutable input snapshot, automatic/manual source provenance, explicit units, the applied numerical experiment with a case-input digest, the requested iteration count, solver/container identity, terminal execution status, available output metadata, results in ppmv, and screening uncertainty.
+- Requested inputs and applied physics are recorded separately: the manifest states the inlet speed actually applied and the constants actually written, not just the controls the user chose.
+- Execution success is separate from convergence, mesh independence, mass balance, and experimental validation; each has its own closed-enum state, non-passing for an ordinary run.
+- A run's readings provably describe the sensors the record froze; a mismatch is rejected rather than persisted.
 - Successful, failed, cancelled, and crash-interrupted attempts are distinguishable without inspecting logs.
 - `list_runs()` and `get_run()` can discover and retrieve records after a fresh process starts.
 - Manifest updates are atomic; a failed final write does not destroy the valid incomplete record.
 - Verification metrics and validation metrics are represented separately. No ordinary run is marked verified or validated merely because the solver exited successfully.
+- The history read API works without the optional `cfd` extra or a GUI toolkit.
 - Existing results-table and CSV values remain unchanged and equal the persisted ppmv values.
 - Both locale files contain any new user-visible status/error strings.
 - The focused core/UI tests and the existing non-integration, non-verification suite pass.
@@ -295,7 +362,10 @@ Verification commands:
 - Scenario comparison UI, plots, difference columns, ranking, or recommendation logic.
 - PDF or additional CSV report formats.
 - Field visualisation, cut planes, or streamlines.
-- Changes to the mass-flux source, mesh refinement, mass balance, analytical benchmarks, solver settings, or any scientific constant.
+- Changes to the mass-flux source, mesh refinement, mass balance, analytical benchmarks, solver settings, or any scientific constant. (The integration fixes *record* the applied constants; they change none of them, and they do not add a molecular weight, mass-transfer coefficient, emission rate, or uncertainty percentage.)
+- Modelling ventilation (T-025). T-030 records it as requested-but-unmodelled; implementing it is separate work.
+- Parsing solver residuals or a termination reason beyond recording `not_evaluated`. Residual/termination parsing is deferred until it is actually implemented.
+- Reproducible Scrapling acquisition manifests, first-cell-height verification records, and probe containment diagnostics. Each is valid future architecture, not T-030 scope.
 - Claiming mesh independence, calibration, empirical validation, or suitability for hardware-placement decisions.
 - Editing the project-file format or embedding history inside `.scentinel`.
 - Importing old unmanifested run directories as if their inputs were known.
@@ -315,3 +385,37 @@ Verification commands:
 8. Add bilingual persistence failure/status messages and UI orchestration tests.
 9. Run the focused tests, then the full non-integration/non-verification suite.
 10. Update README/roadmap/task status without claiming comparison or scientific validation, and manually inspect a generated manifest from a stubbed/real run for portability and readable provenance.
+
+## POST-REVIEW INTEGRATION FIXES (applied)
+
+The final review accepted four merge blockers and several required fixes. The
+integration pass applied them in this order, each with its own tests:
+
+1. **MB-1 applied physics.** `casegen` gained named constants for the wind
+   profile, viscosity, scalar diffusivity, linear-solver tolerances, residual
+   targets, and relaxation factors, and renders both the case files and the
+   persisted `applied_physics` block from them. Added
+   `casegen.case_input_paths()` / `casegen.case_input_digest()` and the
+   `applied_physics.case_input_digest` field. `write_case()` now requires
+   `geom`, so the inlet speed and the persisted reference height cannot diverge.
+2. **MB-2 ventilation.** `ScenarioRecord.ventilation_on` became
+   `VentilationRecord(requested_on, modelled)`; `load_run()` rejects
+   `modelled: true`.
+3. **MB-3 frozen sensors.** Added `history.snapshot_project()`; `MainWindow`
+   passes one snapshot to both `begin_run()` and the worker; the viewport is
+   disabled while running; `finish_run()` and `load_run()` both validate
+   readings against the frozen snapshot.
+4. **MB-4 execution versus evidence.** The top-level field is
+   `execution_status`; `quality` gained `convergence`, `mesh_independence`,
+   `mass_balance`, and `experimental_validation` as closed-enum states;
+   `requested_end_iteration` and `solver_termination` replaced the unqualified
+   `end_iteration`.
+5. **Required fixes.** `"user input"` is the single documented manual
+   provenance literal; a reading-less clean exit persists `NO_READINGS_ERROR`;
+   the `mesh`/`gmsh` import moved behind `TYPE_CHECKING` so the read API works
+   without the `cfd` extra; and one manifest generated without module stubs was
+   inspected (see the integration record).
+
+Deferred, deliberately not implemented: ventilation physics (T-025), residual
+and termination parsing, Scrapling acquisition manifests, first-cell-height
+verification records, and probe containment diagnostics.

@@ -22,15 +22,26 @@ F4  3D and transient                     ░░░░░░░░░░░░░
 clicking → press Run → the app reserves a persistent run id, meshes, writes an
 OpenFOAM case, solves it in the container, and fills the results table with
 per-sensor ppmv for every selected gas. Each attempt leaves a never-reused
-`runs/run-NNN/run.json` manifest recording its exact inputs, resolved source
-provenance, execution settings, terminal status, and results, so runs survive a
-restart and can be listed or looked up. Projects save and load; the UI switches
-language at runtime; results export to CSV.
+`runs/run-NNN/run.json` manifest recording its requested inputs, resolved source
+provenance, the applied numerical settings with a digest of the generated case,
+the requested iteration count, the terminal execution status, and its results,
+so runs survive a restart and can be listed or looked up. Projects save and
+load; the UI switches language at runtime; results export to CSV.
 
 **What does not work:** absolute concentrations are not mesh-converged (see
 below); nothing reads the run history back into the UI, so there is still no
 scenario comparison view and no PDF reporting; and the ventilation flag is
-stored but has no effect on the case.
+stored — recorded as requested but unmodelled — but has no effect on the case.
+
+A recorded run separates four things that are easy to conflate. The *requested*
+inputs are the project snapshot; the *applied* experiment is the block of
+numerical settings the generated case actually used, plus a SHA-256 digest of
+that case; the *execution* status says only whether the container pipeline
+exited 0 and sampled every captured sensor; and *quality* carries the screening
+classification plus explicit per-run gate states (`convergence`,
+`mesh_independence`, `mass_balance`, `experimental_validation`), all
+non-passing for an ordinary run. Solver exit 0 is never recorded as
+convergence, verification, or validation.
 
 ---
 
@@ -81,9 +92,14 @@ the comparison view and PDF export are not, so the criterion is not met yet.
 Every recorded run is classified `screening_estimate` — persisting a run does
 not make its absolute concentrations calibrated or validated.
 
+A future comparison view must consume the strict `load_run()` contract rather
+than hiding corrupt records, must refuse to compare runs whose case-input
+digests differ unless the mismatch is explicit, and must never group or
+difference by `ventilation.requested_on` while `ventilation.modelled` is false.
+
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests, `list_runs()` / `get_run()` |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 2), `list_runs()` / `get_run()` |
 | 3.2 Comparison view | Not started — nothing reads the history back into the UI yet |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |

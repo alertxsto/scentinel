@@ -26,11 +26,22 @@ writes a case, solves it in the container, and fills the results table with
 per-sensor concentrations.
 
 Every attempt is recorded: each run gets a never-reused `runs/run-NNN/`
-directory holding an immutable `run.json` manifest with the exact project
-snapshot, resolved gas sources and their provenance, numerical settings, solver
-identity, terminal status, and per-sensor ppmv results. Records survive
-application restarts and are readable through `scentinel.core.history`
-(`list_runs()` / `get_run()`); failed and cancelled attempts are recorded too.
+directory holding an immutable `run.json` manifest. The manifest records the
+requested inputs (project snapshot, per-gas mode and provenance), the applied
+numerical experiment (inlet speed at the bin rim after the wind profile,
+viscosity, scalar diffusivity, solver tolerances, residual targets, relaxation
+factors, and a SHA-256 digest of the generated case inputs), the requested
+iteration count, solver and container identity, the terminal execution status,
+and per-sensor ppmv results. Records survive application restarts and are
+readable through `scentinel.core.history` (`list_runs()` / `get_run()`); failed
+and cancelled attempts are recorded too.
+
+`execution_status: "succeeded"` means the container pipeline exited 0 and every
+captured sensor was sampled. It does **not** mean the run converged, or that
+mesh independence, mass balance, or experimental validation passed: each of
+those is a separate gate in `quality`, recorded as `not_evaluated` or `not_run`
+for an ordinary run. The `ventilation` input is recorded as
+`{"requested_on": …, "modelled": false}` because the case generator ignores it.
 
 Step 6 (scenario comparison) is not built: nothing yet reads the history back
 into the UI, so there is no comparison view, and PDF reporting is missing. CSV
@@ -79,7 +90,9 @@ In the window: set the geometry and wind, tick the gases you want (leave
 place sensors, then press **Run Simulation** (F5). Runs are written to
 `runs/run-NNN/` beside the project file, each with its `run.json` manifest;
 cancel with Shift+F5. The next run always takes an id greater than every
-existing `run-NNN` directory, so a restart never overwrites an earlier run.
+existing `run-NNN` directory, so a restart never overwrites an earlier run. The
+run samples a frozen copy of the project, so editing during a run cannot change
+what a record claims to have measured.
 
 ## Tests
 

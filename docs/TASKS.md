@@ -92,22 +92,59 @@ Note: meshing is delegated to a child process because gmsh installs a `SIGINT` h
 
 #### T-030 Run history manager · DONE
 Files: `src/scentinel/core/history.py` (new), `tests/unit/test_history.py` (new),
-`src/scentinel/ui/main_window.py`, `src/scentinel/ui/solver_worker.py`,
-`resources/locales/{en,id}.json`, `tests/ui/test_main_window.py`
+`src/scentinel/core/casegen.py`, `src/scentinel/ui/main_window.py`,
+`src/scentinel/ui/solver_worker.py`, `resources/locales/{en,id}.json`,
+`tests/ui/test_main_window.py`, `tests/unit/test_casegen.py`
 Acceptance: every attempt reserves a never-reused `run-NNN` directory and writes
 one versioned `run.json` before the solver starts; `finish_run()` replaces it
 atomically for succeeded, failed, and cancelled attempts, and a crash leaves an
 honest `incomplete` record. Records survive a restart and can be looked up by id
 through `list_runs()` / `get_run()`.
-Note: the manifest holds the project snapshot, per-gas mode/resolved
-ppmv/provenance, explicit units, solver and container identity, terminal status,
-output metadata, ppmv readings, and quality. Allocation uses
-`mkdir(exist_ok=False)` as the concurrency authority and scans the highest
-existing `run-NNN`, so a restart cannot reuse an id. No comparison view reads
-the history yet (T-031). Every manifest is classified `screening_estimate` and
-keeps `verification_metrics` and `validation_metrics` as separate arrays that
-stay empty for an ordinary run — an empty array never means "passed".
-Tests: 49 unit (core) + 8 UI orchestration.
+Note: manifest format version 2 holds four separated things — the requested
+inputs, the applied numerical experiment, the execution outcome, and the
+evidence quality.
+- *Requested:* project snapshot, per-gas mode/resolved ppmv/provenance, and the
+  ventilation request qualified as `{"requested_on": …, "modelled": false}`,
+  because the case generator ignores the flag.
+- *Applied:* `inlet_speed_at_rim_m_s` after the wind profile, the profile type,
+  exponent and reference height, `nu_m2_s`, per-gas `scalar_diffusivity_m2_s`
+  as actually written, the linear-solver tolerances, residual targets,
+  relaxation factors, and a SHA-256 digest of the declared case inputs. The
+  values come from `casegen` constants that also render the case files, so a
+  manifest cannot claim a setting the case does not use.
+- *Execution:* `execution_status`, requested end iteration, solver/image,
+  output metadata, and `solver_termination` (never inferred from exit code 0).
+- *Quality:* `screening_estimate` plus closed-enum `convergence`,
+  `mesh_independence`, `mass_balance`, and `experimental_validation` states,
+  all non-passing for an ordinary run, and separate verification/validation
+  metric arrays that stay empty — an empty array never means "passed".
+
+Readings are validated against the frozen sensor snapshot (ids, coordinates,
+order, gas keys) at finalization *and* on load; the worker samples a frozen
+project copy rather than the live model. Allocation uses `mkdir(exist_ok=False)`
+as the concurrency authority and scans the highest existing `run-NNN`, so a
+restart cannot reuse an id. `core.history` imports without the optional `cfd`
+extra, so the read API works on a machine without gmsh. No comparison view
+reads the history yet (T-031).
+Tests: 80 unit (core) + 21 UI orchestration.
+
+#### T-030a Applied-physics evidence and gate states · DONE
+Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/history.py`,
+`tests/unit/test_casegen.py`, `tests/unit/test_history.py`
+Why: the first T-030 manifest recorded the *requested* controls, not the
+applied experiment, and left `succeeded` as the only per-run gate state. Two
+records with identical manifests could describe different boundary conditions
+or transport coefficients, and a successful process could be rendered as
+converged or verified.
+Change: added the `applied_physics` block with the case-input digest, renamed
+the top-level status to `execution_status`, qualified ventilation, added the
+closed-enum gate states, and required `geom` in `write_case()` so the inlet
+speed and the persisted reference height cannot diverge.
+Acceptance: each persisted applied value is asserted against the generated case
+files; a changed applied constant changes the digest at identical UI inputs;
+exit code 0 leaves every scientific gate non-passing; a reading-less clean exit
+is `failed` with an explicit reason; readings that do not match the frozen
+sensors are rejected.
 
 ---
 
@@ -148,9 +185,9 @@ Change: add `cutPlaneSurface` and `streamlinesLine` function objects to the case
 Acceptance: after a run, the selected gas renders as a colour field with streamlines overlaid, and switching gas updates the view.
 
 #### T-025 Ventilation flag · TODO
-Files: `src/scentinel/core/casegen.py`, `src/scentinel/ui/setup_panel.py`
-Why: `Scenario.ventilation_on` is stored, round-trips through the project file, and never reaches the case.
-Change: either model it (an inlet at the bin rim) or remove it from the UI and the data model. Deciding is the task; carrying a dead flag is not acceptable.
+Files: `src/scentinel/core/casegen.py`, `src/scentinel/ui/setup_panel.py`, `src/scentinel/core/history.py`
+Why: `Scenario.ventilation_on` is stored, round-trips through the project file, and never reaches the case. The manifest now records it as `{"requested_on": …, "modelled": false}` and `load_run()` rejects `modelled: true`, so the flag cannot be mistaken for applied physics in the meantime.
+Change: either model it (an inlet at the bin rim) or remove it from the UI and the data model. Deciding is the task; carrying a dead flag is not acceptable. Modelling it must also flip the `modelled` invariant and the `VentilationRecord` docstring deliberately.
 Acceptance: toggling the flag changes the generated case, or the flag no longer exists.
 
 ### F3 — Comparison and reporting
@@ -158,7 +195,8 @@ Acceptance: toggling the flag changes the generated case, or the flag no longer 
 #### T-031 Comparison view · TODO
 Files: `src/scentinel/ui/comparison_view.py` (new), `tests/ui/test_comparison_view.py`
 Change: pick two or more recorded runs, show probe values side by side with a difference column.
-Acceptance: a difference column appears and matches the underlying readings.
+Constraints from T-030: consume the strict `load_run()` contract and report corrupt records individually rather than hiding valid ones; refuse to compare runs whose `case_input_digest` differs unless the mismatch is explicit; never group or difference by `ventilation.requested_on` while `ventilation.modelled` is false; display `screening_estimate` and every gate state beside each compared result.
+Acceptance: a difference column appears and matches the underlying readings, and a digest mismatch blocks the comparison.
 
 #### T-032 PDF report · TODO
 Files: `src/scentinel/core/report.py` (new), `tests/unit/test_report.py`
@@ -191,3 +229,8 @@ Acceptance: matches a synthetic first-order response.
 | Remove the leaked header rows in `gas_defaults.py` | `AP42_TRACE_COMPOUNDS["Compound"]` and `AP42_TABLE_2_4_2[0]` are column headers, not data; harmless but sloppy |
 | Type the string `conc_ppmv` values | `'110e'`, `'4.0x10-3'` etc. break `float()`; they are footnote-marked AP-42 entries |
 | Wayland + VTK smoke test | The spec flags it as a risk; pyvista is not used in the UI yet, so it is untested |
+| Unsaved-project run namespace | Unsaved projects share `<cwd>/runs`; allocation is collision-safe and each run keeps its own snapshot, so there is no pairing corruption. Decide save-before-run versus per-session namespacing when history UI semantics are designed |
+| First-cell height in the verification record | Needed for credible mesh-convergence/GCI evidence, not for ordinary run persistence. Add it to a future verification-record schema once it is measured |
+| Probe containment diagnostics | `find_closest_cell` can hide invalid probe positions. Address with containment/distance diagnostics in post-processing verification, then persist the diagnostic; do not fake it in T-030 |
+| Reproducible Scrapling acquisition manifest | `scripts/scrape_references.py` saves raw pages but no acquisition record (canonical URL, retrieval UTC, HTTP status/headers, content SHA-256, raw artifact path, tool/parser versions, repository revision, extraction-rule version, structured-output hash, failure history). Deferred to the next provenance architecture; keep raw responses immutable and make `build_gas_data.py` reproducible offline from checksummed artifacts |
+| Residual/termination parsing | Required before `solver_termination` or `quality.convergence` can ever report anything but `not_evaluated`. Parse the `residuals` function object output and record the reason; never infer it from exit code 0 |
