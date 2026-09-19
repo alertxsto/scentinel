@@ -46,7 +46,9 @@ from scentinel.core.composition import (
     METHANE_CORRECTION_FACTOR,
     METHANE_DENSITY_KG_PER_M3,
     METHANE_MOLAR_MASS,
+    PhaseInterpretation,
     WasteComposition,
+    interpret_phase,
     phase_for,
 )
 
@@ -99,6 +101,7 @@ class Generation:
     methane_fraction: float
     gases: tuple[str, ...]
     notes: tuple[str, ...]
+    phase_interpretation: PhaseInterpretation
 
 
 def ultimate_methane_yield(composition: WasteComposition) -> tuple[float, float]:
@@ -198,6 +201,7 @@ def generate(
         raise ValueError("age_h must not be negative")
 
     phase = phase_for(age_h)
+    interpretation = interpret_phase(age_h)
     doc = composition.weighted_doc()
     k = composition.weighted_decay(moisture)
     fraction = decay_fraction(k, age_h)
@@ -260,6 +264,7 @@ def generate(
         methane_fraction=methane_fraction,
         gases=allowed,
         notes=tuple(notes),
+        phase_interpretation=interpretation,
     )
 
 

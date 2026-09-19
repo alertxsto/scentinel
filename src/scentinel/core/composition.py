@@ -40,9 +40,40 @@ PHASES = ("I", "II", "III", "IV")
 #: phase IV is steady state. AP-42 states the durations "vary with landfill
 #: conditions" and gives no exact cut-offs, so these are the documented
 #: qualitative boundaries expressed as a decision rule, not measured constants.
-PHASE_I_MAX_HOURS = 48.0
-PHASE_II_MAX_HOURS = 24.0 * 90.0
-PHASE_III_MAX_HOURS = 24.0 * 365.0
+#: They are carried by :data:`DEFAULT_PHASE_MODEL` with that provenance.
+
+
+@dataclass(frozen=True)
+class PhaseModel:
+    """The decision rule that turns a holding time into a phase label.
+
+    The boundaries are an explicit **model assumption**, not a physical
+    constant: AP-42 §2.4.4 describes the phases qualitatively and states the
+    durations vary. Carrying them as a value object keeps that visible — a
+    reader can see the provenance, the basis text, and the uncertainty instead
+    of finding three bare numbers in the source.
+    """
+
+    boundaries_h: tuple[float, float, float]
+    provenance: str
+    basis: str
+    uncertainty: str
+
+
+DEFAULT_PHASE_MODEL = PhaseModel(
+    boundaries_h=(48.0, 24.0 * 90.0, 24.0 * 365.0),
+    provenance="model assumption",
+    basis=(
+        "AP-42 Ch.2.4 §2.4.4 describes four decomposition phases (aerobic, "
+        "transition, methanogenic onset, steady state) but gives no exact "
+        "cut-offs; the boundaries here express that narrative as a decision rule."
+    ),
+    uncertainty=(
+        "The true transition depends on oxygen availability, waste depth, and "
+        "moisture, not on elapsed time alone. Treat the boundary as a soft "
+        "region, not an edge; generation itself is continuous across it."
+    ),
+)
 
 #: Gases each phase can produce. Phase I is aerobic: CO2 dominates and methane
 #: is negligible, which is the whole reason a fresh truck bin is not a landfill.
@@ -52,6 +83,39 @@ PHASE_GASES: dict[str, tuple[str, ...]] = {
     "III": ("CH4", "CO2", "H2S", "VOC", "CO"),
     "IV": ("CH4", "CO2", "H2S", "VOC", "CO"),
 }
+
+#: Applicability of the HH-1 first-order decay model per phase. HH-1 is an
+#: *anaerobic landfill* model; phase I is aerobic, so applying it there is an
+#: extrapolation the output must state rather than hide.
+_PHASE_APPLICABILITY: dict[str, str] = {
+    "I": (
+        "aerobic phase: the HH-1 anaerobic-decay model does not strictly apply; "
+        "the rate is an extrapolation and the gas set is dominated by CO2 and "
+        "trace odour species, not landfill gas"
+    ),
+    "II": (
+        "transition phase: oxygen is depleting; the HH-1 anaerobic model applies "
+        "only approximately"
+    ),
+    "III": (
+        "methanogenic onset: the HH-1 anaerobic first-order model applies"
+    ),
+    "IV": (
+        "steady-state anaerobic landfill: the HH-1 model applies as intended"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class PhaseInterpretation:
+    """What a phase label means, and how far its model reaches."""
+
+    phase: str
+    age_h: float
+    source: str
+    provenance: str
+    applicability: str
+    uncertainty: str
 
 
 @dataclass(frozen=True)
@@ -81,17 +145,39 @@ MATERIAL_KEYS = tuple(MATERIALS)
 _FRACTION_TOLERANCE = 1e-6
 
 
-def phase_for(age_h: float) -> str:
-    """The AP-42 decomposition phase for a holding time in hours."""
+def phase_for(age_h: float, model: PhaseModel = DEFAULT_PHASE_MODEL) -> str:
+    """The decomposition phase for a holding time, by ``model``'s boundaries."""
     if age_h < 0.0:
         raise ValueError("age_h must not be negative")
-    if age_h <= PHASE_I_MAX_HOURS:
+    first, second, third = model.boundaries_h
+    if age_h <= first:
         return "I"
-    if age_h <= PHASE_II_MAX_HOURS:
+    if age_h <= second:
         return "II"
-    if age_h <= PHASE_III_MAX_HOURS:
+    if age_h <= third:
         return "III"
     return "IV"
+
+
+def interpret_phase(
+    age_h: float, model: PhaseModel = DEFAULT_PHASE_MODEL
+) -> PhaseInterpretation:
+    """Label the holding time and state how far the phase's model reaches.
+
+    The interpretation carries its provenance and applicability so a consumer
+    can see, for example, that a fresh load's numbers come from extrapolating an
+    anaerobic model into the aerobic phase — rather than reading a phase letter
+    and assuming the physics is exact.
+    """
+    phase = phase_for(age_h, model=model)
+    return PhaseInterpretation(
+        phase=phase,
+        age_h=age_h,
+        source=model.basis,
+        provenance=model.provenance,
+        applicability=_PHASE_APPLICABILITY[phase],
+        uncertainty=model.uncertainty,
+    )
 
 
 def decay_rate(material: WasteMaterial, moisture: float) -> float:

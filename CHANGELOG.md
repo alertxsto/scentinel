@@ -54,6 +54,19 @@ Two things are worth knowing before reading:
   a real ~500 000 ppmv CO2 share at every age. The carbon closure between CH4
   and CO2 is asserted to 0.2%.
 
+### Phase 3 — phase model
+
+- The 48 h / 90 d / 365 d decomposition boundaries are now an explicit
+  `PhaseModel` value object with provenance `model assumption`, its AP-42
+  narrative basis, and an uncertainty note — not three bare numbers.
+- `interpret_phase()` separates the phase *stage* (an interpretation of age)
+  from the continuous decay math, and states each phase's applicability: phase I
+  records that the anaerobic HH-1 model is extrapolated into the aerobic phase,
+  so the output no longer presents the extrapolation as exact.
+- **Manifest format 6** records `phase_provenance`, `phase_applicability`, and
+  `phase_uncertainty`; version 5 manifests are rejected naming both versions.
+  The batch panel's phase readout states the applicability.
+
 ## [0.2.2] — 2026-09-19
 
 Audit fixes: each item below was reproduced before it was fixed, and each fix

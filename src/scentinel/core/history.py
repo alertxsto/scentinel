@@ -85,7 +85,10 @@ from scentinel.core.scenario import (
 #:     the ultimate potential, the cumulative gas produced by the recorded age,
 #:     and the instantaneous generation rate. A version 4 record has one
 #:     ``ch4_kg`` and cannot say whether it was cumulative or a rate.
-RUN_FORMAT_VERSION = 5
+#: 6 — records the phase interpretation: the phase label is a model assumption
+#:     whose applicability (e.g. the anaerobic HH-1 model extrapolated into the
+#:     aerobic phase I) and uncertainty travel with the record.
+RUN_FORMAT_VERSION = 6
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -229,6 +232,9 @@ _GENERATION_KEYS = (
     "co2_cumulative_kg",
     "ch4_rate_kg_per_h",
     "co2_rate_kg_per_h",
+    "phase_provenance",
+    "phase_applicability",
+    "phase_uncertainty",
 )
 _VENTILATION_KEYS = ("requested_on", "modelled")
 _GAS_SOURCE_KEYS = ("mode", "requested_ppmv", "resolved_ppmv", "provenance")
@@ -354,6 +360,9 @@ class GenerationRecord:
     co2_cumulative_kg: float
     ch4_rate_kg_per_h: float
     co2_rate_kg_per_h: float
+    phase_provenance: str
+    phase_applicability: str
+    phase_uncertainty: str
 
 
 @dataclass(frozen=True)
@@ -903,6 +912,9 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 co2_cumulative_kg=generation.co2_cumulative_kg,
                 ch4_rate_kg_per_h=generation.ch4_rate_kg_per_h,
                 co2_rate_kg_per_h=generation.co2_rate_kg_per_h,
+                phase_provenance=generation.phase_interpretation.provenance,
+                phase_applicability=generation.phase_interpretation.applicability,
+                phase_uncertainty=generation.phase_interpretation.uncertainty,
             ),
         ),
         sensors=tuple(
@@ -1211,6 +1223,9 @@ def _payload(record: RunRecord) -> dict[str, object]:
                     "co2_cumulative_kg": scenario.generation.co2_cumulative_kg,
                     "ch4_rate_kg_per_h": scenario.generation.ch4_rate_kg_per_h,
                     "co2_rate_kg_per_h": scenario.generation.co2_rate_kg_per_h,
+                    "phase_provenance": scenario.generation.phase_provenance,
+                    "phase_applicability": scenario.generation.phase_applicability,
+                    "phase_uncertainty": scenario.generation.phase_uncertainty,
                 },
             },
             "sensors": [
@@ -1565,6 +1580,15 @@ def _decode_generation(payload: object, where: str) -> GenerationRecord:
             f"{field}.co2_rate_kg_per_h",
             where,
             minimum=0.0,
+        ),
+        phase_provenance=_text(
+            mapping["phase_provenance"], f"{field}.phase_provenance", where
+        ),
+        phase_applicability=_text(
+            mapping["phase_applicability"], f"{field}.phase_applicability", where
+        ),
+        phase_uncertainty=_text(
+            mapping["phase_uncertainty"], f"{field}.phase_uncertainty", where
         ),
     )
 

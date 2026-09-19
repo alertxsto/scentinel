@@ -73,6 +73,33 @@ Note: the master program expected Phase 1 to land manifest v5 first. Gas work
 ran first, so this is v5 and Phase 1's material composition will be v6. The
 numbering is by repository sequence, not by program label.
 
+### Phase 3 — Phase model
+
+#### T-230 Cutoffs as assumptions · DONE — 2026-09-19
+Files: `src/scentinel/core/composition.py`, `tests/unit/test_composition.py`
+Acceptance met: `PhaseModel(boundaries_h, provenance, basis, uncertainty)` and
+`DEFAULT_PHASE_MODEL` carry the 48 h / 90 d / 365 d boundaries with provenance
+`model assumption`; `phase_for()` takes the model as a parameter, so a custom
+model moves the boundaries and no code path treats them as measured.
+
+#### T-231 Stage separated from decay · DONE — 2026-09-19
+Files: `src/scentinel/core/composition.py`, `src/scentinel/core/generation.py`,
+`tests/unit/test_generation.py`
+Acceptance met: `interpret_phase()` returns a `PhaseInterpretation` with
+source, provenance, applicability, and uncertainty; `Generation` carries it;
+monkeypatching `phase_for` changes no generation number (Phase 2 test,
+re-asserted). Phase I's applicability states that HH-1 is an anaerobic model
+extrapolated into the aerobic phase.
+
+#### T-232 Phase provenance in output · DONE — 2026-09-19
+Files: `src/scentinel/core/history.py`, `src/scentinel/ui/batch_panel.py`,
+`resources/locales/{en,id}.json`, `tests/unit/test_history.py`,
+`tests/ui/test_batch_panel.py`
+Acceptance met: `RUN_FORMAT_VERSION` is 6; the generation block records
+`phase_provenance`, `phase_applicability`, `phase_uncertainty`; a version 5
+manifest is rejected naming both; the batch panel's phase readout states the
+applicability.
+
 ---
 
 ## Done

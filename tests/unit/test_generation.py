@@ -329,6 +329,32 @@ def test_the_phase_label_changes_no_generation_number(monkeypatch):
         assert getattr(patched, field) == getattr(baseline, field), field
 
 
+def test_interpretation_carries_source_applicability_and_uncertainty():
+    interp = comp.interpret_phase(8.0)
+    assert interp.phase == "I"
+    assert interp.source
+    assert interp.provenance == "model assumption"
+    assert interp.applicability
+    assert interp.uncertainty
+
+
+def test_phase_one_states_the_landfill_model_does_not_strictly_apply():
+    """HH-1 is an anaerobic landfill model; phase I is aerobic.
+
+    The output must say so rather than presenting the extrapolation as exact.
+    """
+    interp = comp.interpret_phase(8.0)
+    assert "aerobic phase" in interp.applicability.lower()
+    mature = comp.interpret_phase(24.0 * 365 * 5)
+    assert "aerobic phase" not in mature.applicability.lower()
+
+
+def test_generation_carries_its_phase_interpretation():
+    g = gen.generate(comp.PRESETS["mixed-msw"], tonnage_t=10.0, age_h=8.0, moisture=0.4)
+    assert g.phase_interpretation.phase == g.phase
+    assert g.phase_interpretation.applicability
+
+
 def test_legacy_waste_types_all_resolve_to_a_preset():
     """Old projects must keep loading; the mapping is total."""
     for name in comp.LEGACY_WASTE_TYPES:

@@ -27,15 +27,21 @@ def _text(panel: BatchPanel, key: str) -> str:
 def test_the_panel_produces_an_assessment_on_construction(panel):
     """No button, no solve: the readout is populated immediately."""
     assert panel.assessment() is not None
-    assert _text(panel, "phase") in ("I", "II", "III", "IV")
+    assert _text(panel, "phase").startswith("I")
     assert _text(panel, "recommendation") != "—"
 
 
 def test_changing_holding_time_updates_the_phase_live(panel):
     panel._age_h.setValue(8.0)
-    assert _text(panel, "phase") == "I"
+    assert _text(panel, "phase").startswith("I")
     panel._age_h.setValue(24.0 * 365 * 5)
-    assert _text(panel, "phase") == "IV"
+    assert _text(panel, "phase").startswith("IV")
+
+
+def test_the_phase_readout_states_the_model_basis(panel):
+    """A phase letter alone hides that phase I extrapolates an anaerobic model."""
+    panel._age_h.setValue(8.0)
+    assert "aerobic" in _text(panel, "phase").lower()
 
 
 def test_the_gas_readout_separates_cumulative_mass_from_rate(panel):

@@ -57,8 +57,11 @@ These apply to every phase; each per-phase plan repeats them in its own
 5. **Manifest/project versioning.** Any change to a persisted schema bumps
    `RUN_FORMAT_VERSION` (`core/history.py`) or `FORMAT_VERSION`
    (`core/project.py`) and either migrates old records or rejects them naming
-   both versions. Known bumps: project v2 + manifest v5 (T-213/T-214),
-   manifest v6 (T-224), manifest v7 (T-020).
+   both versions. Actual repository sequence (gas work ran first): v5 = Phase 2
+   generation quantities, v6 = Phase 3 phase interpretation, v7 = Phase 1
+   material composition (project format v2 alongside), v8 = Phase 5 mass-flux
+   source. Program labels ("manifest v5/v6/v7") are nominal; the repository
+   number is what ships.
 6. **i18n:** every user-visible string goes through `Translator.t` with keys in
    both `resources/locales/en.json` and `id.json` — until Phase 18 replaces the
    shell, after which the same rule applies to the new UI's message catalogue.

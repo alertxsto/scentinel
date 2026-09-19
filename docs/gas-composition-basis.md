@@ -319,13 +319,17 @@ Fasa ditentukan dari umur, mengikuti AP-42 §2.4.4:
 - **Fasa IV (bulan–tahun):** steady state 55% CH₄
 
 **Penting — fasa adalah interpretasi, bukan saklar.** Batas 48 jam / 90 hari /
-365 hari adalah narasi AP-42 yang dinyatakan sebagai aturan keputusan; AP-42
-sendiri menyatakan durasinya "bervariasi" dan tidak memberi angka pasti. Karena
-itu fasa **tidak boleh** mematikan atau menyalakan gas: jumlah gas dihitung oleh
-kurva peluruhan orde-satu yang kontinu pada setiap umur, dan fasa hanya
-menafsirkan umur itu. Model yang lama memakai fasa sebagai saklar, sehingga
-CH₄ meloncat dari 0 menjadi campuran landfill tepat di batas 90 hari — itu
-artefak, bukan fisika. Lihat §6.6.
+365 hari adalah **model assumption**: narasi AP-42 §2.4.4 dinyatakan sebagai
+aturan keputusan, dan AP-42 sendiri menyatakan durasinya "bervariasi" serta
+tidak memberi angka pasti. Karena itu fasa **tidak boleh** mematikan atau
+menyalakan gas: jumlah gas dihitung oleh kurva peluruhan orde-satu yang kontinu
+pada setiap umur, dan fasa hanya menafsirkan umur itu. Model yang lama memakai
+fasa sebagai saklar, sehingga CH₄ meloncat dari 0 menjadi campuran landfill
+tepat di batas 90 hari — itu artefak, bukan fisika. Lihat §6.6.
+
+Selain itu, **HH-1 adalah model anaerobik**; fasa I bersifat aerobik. Jadi
+menerapkan HH-1 pada sampah segar adalah **ekstrapolasi**, dan outputnya
+menyatakan itu (`PhaseInterpretation.applicability`) alih-alih menyembunyikannya.
 
 ### 6.2b Campuran gas yang dihasilkan (F = 0.5)
 
@@ -444,6 +448,7 @@ data dari literatur.
 |---|---|---|
 | Komposisi steady-state LFG (55/40/5) | **Terkutip** (plafon/pembanding, bukan input) | AP-42 Ch.2.4 hlm 2.4-3 |
 | Empat fasa dekomposisi | **Terkutip** | AP-42 Ch.2.4 hlm 2.4-2 |
+| Batas fasa 48 h / 90 h / 365 h | **Model assumption** | Narasi AP-42 §2.4.4 sebagai aturan keputusan |
 | Persamaan HH-1 | **Terkutip** | 40 CFR §98.343(a)(1) |
 | DOC & k per material | **Terkutip** | Table HH-1 Subpart HH |
 | DOC_F = 0.5, F = 0.5 | **Terkutip** | 40 CFR §98.343(a)(1) |

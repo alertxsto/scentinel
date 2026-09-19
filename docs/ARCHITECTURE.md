@@ -55,8 +55,8 @@ reports rather than restating it.
 |---|---|---|
 | `geometry.py` | 160 | `BinGeometry`; mound surface, polygon, height, area, fill fraction |
 | `scenario.py` | 255 | `Scenario`: wind, ventilation flag, waste stream, composition/tonnage overrides, per-gas sources (ppmv or `"auto"`) |
-| `composition.py` | 236 | `WasteComposition`, Table HH-1 `DOC`/`k`, AP-42 phases |
-| `generation.py` | 266 | 40 CFR 98.343(a)(1) Equation HH-1: ultimate, cumulative, and rate; F = 0.5 mixture |
+| `composition.py` | 300 | `WasteComposition`, Table HH-1 `DOC`/`k`, `PhaseModel`, `interpret_phase` |
+| `generation.py` | 280 | 40 CFR 98.343(a)(1) Equation HH-1: ultimate, cumulative, and rate; F = 0.5 mixture |
 | `massbalance.py` | 188 | Per-stream tonnage; every split carries its provenance |
 | `suitability.py` | 284 | Route scores, fuel-quality inputs and their missing set |
 | `recommend.py` | 174 | One recommendation with reasons, caveats, and a runner-up margin |

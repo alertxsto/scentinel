@@ -59,7 +59,10 @@ The generated gas is split by the regulation's own default methane fraction,
 `F = 0.5` (40 CFR 98.343 Table HH-1), at every age; the AP-42 55/40/5 mix is
 retained as a measured mature-landfill ceiling, not as the produced mixture.
 Holding time therefore moves the gas **rate and cumulative mass**, not the
-volume share.
+volume share. The phase label (I–IV) is an interpretation of the age, not a
+switch: the 48 h / 90 d / 365 d boundaries are a labelled model assumption, and
+each phase states how far its model reaches — in particular that the anaerobic
+HH-1 model is extrapolated into the aerobic phase I.
 
 `execution_status: "succeeded"` means the container pipeline exited 0 and every
 captured sensor was sampled. It does **not** mean the run converged, or that

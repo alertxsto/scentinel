@@ -143,6 +143,26 @@ def test_every_phase_has_a_gas_set_and_they_are_all_known_phases():
     assert set(comp.PHASE_GASES) == set(comp.PHASES)
 
 
+def test_the_phase_model_is_a_labelled_assumption():
+    """The cutoffs are a documented choice, not a measured constant."""
+    m = comp.DEFAULT_PHASE_MODEL
+    assert m.boundaries_h == (48.0, 24.0 * 90.0, 24.0 * 365.0)
+    assert m.provenance == "model assumption"
+    assert "AP-42" in m.basis
+    assert m.uncertainty
+
+
+def test_a_custom_phase_model_moves_the_boundaries():
+    fast = comp.PhaseModel(
+        boundaries_h=(1.0, 2.0, 3.0),
+        provenance="user input",
+        basis="test",
+        uncertainty="test",
+    )
+    assert comp.phase_for(1.5, model=fast) == "II"
+    assert comp.phase_for(1.5) == "I"
+
+
 def test_preset_lookup_rejects_an_unknown_name():
     with pytest.raises(ValueError, match="unknown waste preset"):
         comp.preset("unicorn")

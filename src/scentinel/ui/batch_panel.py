@@ -306,7 +306,9 @@ class BatchPanel(QScrollArea):
             self._sum_label.setText(self._t.t("batch.sum_ok"))
             self._sum_label.setStyleSheet("")
 
-        self._fields["phase"].setText(assessment.phase)
+        self._fields["phase"].setText(
+            f"{assessment.phase} · {assessment.generation.phase_interpretation.applicability}"
+        )
         self._fields["gas_cumulative"].setText(
             f"CH4 {gen.ch4_cumulative_kg:.3f} kg · CO2 {gen.co2_cumulative_kg:.3f} kg"
         )
