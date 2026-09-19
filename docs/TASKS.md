@@ -88,6 +88,27 @@ Files: `src/scentinel/ui/solver_worker.py`
 Acceptance: pipeline runs off the GUI thread; log streams to the panel; cancel stops a running solve and the app can run again afterwards.
 Note: meshing is delegated to a child process because gmsh installs a `SIGINT` handler, which Python forbids outside the main thread.
 
+### F3 — Comparison and reporting
+
+#### T-030 Run history manager · DONE
+Files: `src/scentinel/core/history.py` (new), `tests/unit/test_history.py` (new),
+`src/scentinel/ui/main_window.py`, `src/scentinel/ui/solver_worker.py`,
+`resources/locales/{en,id}.json`, `tests/ui/test_main_window.py`
+Acceptance: every attempt reserves a never-reused `run-NNN` directory and writes
+one versioned `run.json` before the solver starts; `finish_run()` replaces it
+atomically for succeeded, failed, and cancelled attempts, and a crash leaves an
+honest `incomplete` record. Records survive a restart and can be looked up by id
+through `list_runs()` / `get_run()`.
+Note: the manifest holds the project snapshot, per-gas mode/resolved
+ppmv/provenance, explicit units, solver and container identity, terminal status,
+output metadata, ppmv readings, and quality. Allocation uses
+`mkdir(exist_ok=False)` as the concurrency authority and scans the highest
+existing `run-NNN`, so a restart cannot reuse an id. No comparison view reads
+the history yet (T-031). Every manifest is classified `screening_estimate` and
+keeps `verification_metrics` and `validation_metrics` as separate arrays that
+stay empty for an ordinary run — an empty array never means "passed".
+Tests: 49 unit (core) + 8 UI orchestration.
+
 ---
 
 ## TODO
@@ -133,11 +154,6 @@ Change: either model it (an inlet at the bin rim) or remove it from the UI and t
 Acceptance: toggling the flag changes the generated case, or the flag no longer exists.
 
 ### F3 — Comparison and reporting
-
-#### T-030 Run history manager · TODO
-Files: `src/scentinel/core/history.py` (new), `tests/unit/test_history.py`
-Change: persist a record per run (id, project name, timestamp, case directory, probe summary) next to the project.
-Acceptance: records survive a reload; a run can be looked up by id.
 
 #### T-031 Comparison view · TODO
 Files: `src/scentinel/ui/comparison_view.py` (new), `tests/ui/test_comparison_view.py`

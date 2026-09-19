@@ -21,11 +21,20 @@ vehicles. Built with PySide6, gmsh, and OpenFOAM running in a Podman container.
 
 Steps 1–5 run end to end: the desktop UI, the gmsh mesh, the OpenFOAM case
 generator, the Podman solver runner, and the probe post-processing. Pressing
-**Run Simulation** meshes the bin cross-section, writes a case, solves it in
-the container, and fills the results table with per-sensor concentrations.
+**Run Simulation** reserves a persistent run id, meshes the bin cross-section,
+writes a case, solves it in the container, and fills the results table with
+per-sensor concentrations.
 
-Step 6 (scenario comparison) is not built: runs are not yet collected into a
-history, and PDF reporting is missing. CSV export of the sensor table works.
+Every attempt is recorded: each run gets a never-reused `runs/run-NNN/`
+directory holding an immutable `run.json` manifest with the exact project
+snapshot, resolved gas sources and their provenance, numerical settings, solver
+identity, terminal status, and per-sensor ppmv results. Records survive
+application restarts and are readable through `scentinel.core.history`
+(`list_runs()` / `get_run()`); failed and cancelled attempts are recorded too.
+
+Step 6 (scenario comparison) is not built: nothing yet reads the history back
+into the UI, so there is no comparison view, and PDF reporting is missing. CSV
+export of the sensor table works.
 
 **Known gap — mesh independence.** Probe values are not converged with respect
 to mesh refinement (76.5% deviation under a 2× refinement, and the sequence does
@@ -68,7 +77,9 @@ Extras: `.[cfd]` (gmsh, pyvista, VTK) is required to run simulations;
 In the window: set the geometry and wind, tick the gases you want (leave
 **auto** checked to use the cited AP-42 defaults), click in the viewport to
 place sensors, then press **Run Simulation** (F5). Runs are written to
-`runs/run-NNN/` beside the project file; cancel with Shift+F5.
+`runs/run-NNN/` beside the project file, each with its `run.json` manifest;
+cancel with Shift+F5. The next run always takes an id greater than every
+existing `run-NNN` directory, so a restart never overwrites an earlier run.
 
 ## Tests
 

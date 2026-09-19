@@ -14,19 +14,23 @@ detail lives in [TASKS.md](TASKS.md); design rationale in
 F0  Foundation & OpenFOAM integration    ████████████████████░░  done (cavity superseded)
 F1  2D geometry, mesh, sensor placement  ████████████████████░░  done
 F2  Multi-gas, visualisation, probes     ██████████████████░░░░  probes done, verification failing
-F3  Comparison and reporting             ████░░░░░░░░░░░░░░░░░░  CSV only
+F3  Comparison and reporting             ████████░░░░░░░░░░░░░░  history done, no comparison UI
 F4  3D and transient                     ░░░░░░░░░░░░░░░░░░░░░░  not started
 ```
 
 **What works today:** set geometry and scenario in the UI → place sensors by
-clicking → press Run → the app meshes, writes an OpenFOAM case, solves it in the
-container, and fills the results table with per-sensor ppmv for every selected
-gas. Projects save and load; the UI switches language at runtime; results export
-to CSV.
+clicking → press Run → the app reserves a persistent run id, meshes, writes an
+OpenFOAM case, solves it in the container, and fills the results table with
+per-sensor ppmv for every selected gas. Each attempt leaves a never-reused
+`runs/run-NNN/run.json` manifest recording its exact inputs, resolved source
+provenance, execution settings, terminal status, and results, so runs survive a
+restart and can be listed or looked up. Projects save and load; the UI switches
+language at runtime; results export to CSV.
 
 **What does not work:** absolute concentrations are not mesh-converged (see
-below), scenario comparison and PDF reporting do not exist, and the ventilation
-flag is stored but has no effect on the case.
+below); nothing reads the run history back into the UI, so there is still no
+scenario comparison view and no PDF reporting; and the ventilation flag is
+stored but has no effect on the case.
 
 ---
 
@@ -72,12 +76,15 @@ flag is stored but has no effect on the case.
 
 ### F3 — Comparison and reporting
 
-**Exit criterion:** compare ≥2 runs, export CSV/PDF.
+**Exit criterion:** compare ≥2 runs, export CSV/PDF. Persistence is in place;
+the comparison view and PDF export are not, so the criterion is not met yet.
+Every recorded run is classified `screening_estimate` — persisting a run does
+not make its absolute concentrations calibrated or validated.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Not started |
-| 3.2 Comparison view | Not started |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests, `list_runs()` / `get_run()` |
+| 3.2 Comparison view | Not started — nothing reads the history back into the UI yet |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
 
@@ -142,8 +149,8 @@ with `h_m` a mass-transfer coefficient, or the flux directly.
         └──────────────────┬───────────────────────┘
                            │
         ┌──────────────────▼───────────────────────┐
-        │ 3. F3: history, comparison, PDF          │
-        │    the phase exit criterion              │
+        │ 3. F3: comparison UI, PDF                │
+        │    run history (3.1) already landed      │
         └──────────────────┬───────────────────────┘
                            │
         ┌──────────────────▼───────────────────────┐
@@ -162,7 +169,7 @@ Step 3 depends on step 1 only for credibility, not technically.
 |---|---|
 | **M1 — Trustworthy numbers** | Mesh independence <10%; mass balance automated and <5% |
 | **M2 — Inspectable results** | Concentration field and streamlines render in the app for a solved run |
-| **M3 — Comparison** | Two runs side by side with a difference column; PDF report with cited defaults |
+| **M3 — Comparison** | Two runs side by side with a difference column; PDF report with cited defaults (run history landed; the view does not exist yet) |
 | **M4 — Supervisor review** | Results reviewed and signed off before any hardware decision |
 | **M5 — 3D** | 3D mesh runs; response delay measured |
 

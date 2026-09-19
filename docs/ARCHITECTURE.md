@@ -32,13 +32,17 @@ data provenance.
 └───────────────────────────────────────────────────────────────┼──┘
                                                                 │
    runs/run-NNN/                                                │
+     run.json             ◄── core.history  (reserved, then atomically
      mesh/  case.msh      ◄── core.mesh    (gmsh, child process) ─┘
      case/  0/ constant/ system/  ◄── core.casegen
      case/VTK/…           ◄── core.runner  (podman) + core.post
 ```
 
 The UI never calls gmsh, podman, or pyvista directly. `SolverWorker` runs the
-whole pipeline off the GUI thread and reports back with signals.
+whole pipeline off the GUI thread and reports back with signals. `MainWindow`
+reserves the run directory through `core.history` before the worker is
+constructed and finalizes the same record afterwards, so the run identity never
+depends on process-local state.
 
 ## 2. Module map
 
@@ -55,21 +59,22 @@ whole pipeline off the GUI thread and reports back with signals.
 | `casegen.py` | 488 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile |
 | `runner.py` | 194 | Podman invocation, log streaming, cancellation, per-stage logs |
 | `post.py` | 170 | VTK reading, sensor sampling, concentration fields, mass-balance helper |
+| `history.py` | 1144 | Run allocation, `run.json` schema/validation, atomic writes, `load_run`/`list_runs`/`get_run` |
 
 ### UI (`src/scentinel/ui/`)
 
 | Module | Lines | Owns |
 |---|---|---|
-| `main_window.py` | 532 | Menus, project lifecycle, dirty tracking, run orchestration |
+| `main_window.py` | 620 | Menus, project lifecycle, dirty tracking, run orchestration |
 | `setup_panel.py` | 285 | Geometry/scenario/gas forms; emits `changed(geom, scenario)` |
 | `viewport.py` | 268 | `QGraphicsView`: bin + mound drawing, sensor placement |
 | `results_panel.py` | 201 | Probe table, log pane, Run/Cancel/Export buttons |
-| `solver_worker.py` | 274 | Background pipeline: mesh → case → solve → sample |
+| `solver_worker.py` | 283 | Background pipeline: mesh → case → solve → sample |
 | `i18n.py` | 53 | `Translator`, runtime language switch |
 
 ### Tests (`tests/`)
 
-108 collected: 100 unit + UI, 7 integration (6 in the e2e scenario plus the
+164 collected: 156 unit + UI, 7 integration (6 in the e2e scenario plus the
 podman-availability check in `test_runner.py`), 1 verification.
 
 ## 3. Data flow
@@ -81,6 +86,9 @@ user edits form / clicks viewport
 MainWindow.Project  ──save──►  <name>.scentinel  (JSON, format_version 1)
         │
         │  Run Simulation (F5)
+        ▼
+MainWindow.start_run ──► core.history.begin_run
+        │                    → runs/run-NNN/run.json  (status: incomplete)
         ▼
 SolverWorker._run_pipeline
         │
@@ -97,7 +105,12 @@ SolverWorker._run_pipeline
                reads VTK/<case>_<time>/internal.vtu
         │
         ▼
-ResultsPanel.set_results  →  table (ppmv)  →  CSV export
+MainWindow._on_run_finished
+        │
+        ├─ ppmv conversion (×1e6), once
+        │     ├─► ResultsPanel.set_results   →  table (ppmv)  →  CSV export
+        │     └─► core.history.finish_run    →  run.json (terminal status)
+        │            atomic replace of the incomplete manifest
 ```
 
 ## 4. Physics setup
@@ -193,6 +206,25 @@ silently or with a misleading error.
     inflates the fitted area by the zoom factor.
 18. **Loading a project must not mark it dirty.** `_loading` suppresses the
     panel signals that `_apply_project` triggers.
+19. **Run identity comes from the filesystem, not memory.** `history.begin_run()`
+    scans the highest existing `run-NNN` name and claims the next id with
+    `mkdir(exist_ok=False)`; a lost race retries the following id. A matching
+    directory participates even when its manifest is missing or corrupt, so an
+    id is never handed out twice and a restart cannot reuse one.
+20. **The manifest is written twice, atomically.** `run.json` is written in
+    `incomplete` state before the solver starts, then replaced through a
+    temporary sibling and `os.replace()`. A crash leaves the honest incomplete
+    record; a failed replacement leaves the previous valid manifest intact and
+    the UI reports completion-with-history-error rather than success.
+21. **`finish_run()` takes ppmv, already converted.** The UI performs the single
+    volume-fraction-to-ppmv conversion and feeds the same values to the results
+    table and the manifest, so displayed and persisted readings cannot drift.
+22. **Only the path relative to the run directory is stored.** `case_dir` is
+    validated as a relative child, so a manifest never carries a workstation
+    path and stays portable with its case.
+23. **`end_iteration` is a control index, not elapsed time.** The steady
+    `simpleFoam` run has no physical duration, so the manifest names the field
+    for what it is even though the worker argument is still `end_time`.
 
 ## 6. Container contract
 
