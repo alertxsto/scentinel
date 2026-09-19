@@ -377,23 +377,32 @@ class MainWindow(QMainWindow):
         if readings_ppmv:
             self._results_panel.set_results(readings_ppmv)
 
-        persisted = self._finalize_run(record, outcome, readings_ppmv)
+        status = _terminal_status(outcome, record)
+        persisted = self._finalize_run(record, outcome, readings_ppmv, status)
 
-        if outcome.ok:
-            self._status_flash("status.done" if persisted else "status.done_history_failed")
-            return
-        if outcome.exit_code == -2:
-            self._status_flash("status.cancelled")
-            return
-        self._status_flash("status.error")
         if outcome.error:
             self._results_panel.append_log(f"ERROR: {outcome.error}")
+        if persisted:
+            if status == "succeeded":
+                self._status_flash("status.done")
+            elif status == "cancelled":
+                self._status_flash("status.cancelled")
+            else:
+                self._status_flash("status.error")
+            return
+        if outcome.ok:
+            self._status_flash("status.done_history_failed")
+        elif outcome.exit_code == -2:
+            self._status_flash("status.cancelled")
+        else:
+            self._status_flash("status.error")
 
     def _finalize_run(
         self,
         record: RunRecord | None,
         outcome: RunOutcome,
         readings_ppmv: list[SensorReading],
+        status: str,
     ) -> bool:
         """Write the terminal manifest. Returns False when it was not recorded.
 
@@ -406,7 +415,7 @@ class MainWindow(QMainWindow):
         try:
             history.finish_run(
                 record,
-                status=_terminal_status(outcome),
+                status=status,
                 case_dir=outcome.case_dir,
                 mesh_cells=outcome.mesh_cells,
                 element_types=outcome.element_types,
@@ -587,15 +596,22 @@ def _ppmv_readings(readings: list) -> list[SensorReading]:
     ]
 
 
-def _terminal_status(outcome: RunOutcome) -> str:
+def _terminal_status(outcome: RunOutcome, record: RunRecord | None = None) -> str:
     """Map a worker outcome onto a manifest status.
 
     ``-2`` is the runner's cancellation sentinel and is checked first: a
-    cancelled solve exits non-zero but is not a failure.
+    cancelled solve exits non-zero but is not a failure. A solve that exited
+    cleanly but produced no readings for a project that has sensors did not
+    succeed — an empty table must never be recorded as a successful empty
+    result, so it is finalized as ``failed``.
     """
     if outcome.exit_code == -2:
         return "cancelled"
-    return "succeeded" if outcome.ok else "failed"
+    if not outcome.ok:
+        return "failed"
+    if record is not None and record.project.sensors and not outcome.readings:
+        return "failed"
+    return "succeeded"
 
 
 def _runs_root(project_path: Path | None) -> Path:

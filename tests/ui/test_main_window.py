@@ -307,6 +307,24 @@ def test_a_persistence_failure_at_start_launches_no_worker(
     assert not (tmp_path / "runs" / "run-001").exists()
 
 
+def test_a_solve_without_readings_is_recorded_as_failed_not_a_success(
+    run_window, tmp_path, monkeypatch
+):
+    """A clean exit with an empty table is not a successful empty result."""
+
+    def pipeline(self):
+        return RunOutcome(case_dir=self._run_dir / "case", mesh_cells=7248, exit_code=0)
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.status == "failed"
+    assert record.results.sensor_readings == ()
+    assert run_window._status_label.text() == run_window._t.t("status.error")
+
+
 def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
     run_window, tmp_path, monkeypatch
 ):
