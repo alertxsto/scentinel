@@ -377,7 +377,7 @@ class MainWindow(QMainWindow):
         if readings_ppmv:
             self._results_panel.set_results(readings_ppmv)
 
-        status = _terminal_status(outcome, record)
+        status = _terminal_status(outcome, record) if record is not None else None
         persisted = self._finalize_run(record, outcome, readings_ppmv, status)
 
         if outcome.error:
@@ -402,7 +402,7 @@ class MainWindow(QMainWindow):
         record: RunRecord | None,
         outcome: RunOutcome,
         readings_ppmv: list[SensorReading],
-        status: str,
+        status: str | None,
     ) -> bool:
         """Write the terminal manifest. Returns False when it was not recorded.
 
@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
         as they are, and the UI reports that the run was not durably recorded
         instead of claiming normal completion.
         """
-        if record is None:
+        if record is None or status is None:
             return False
         try:
             history.finish_run(
@@ -596,7 +596,7 @@ def _ppmv_readings(readings: list) -> list[SensorReading]:
     ]
 
 
-def _terminal_status(outcome: RunOutcome, record: RunRecord | None = None) -> str:
+def _terminal_status(outcome: RunOutcome, record: RunRecord) -> str:
     """Map a worker outcome onto a manifest status.
 
     ``-2`` is the runner's cancellation sentinel and is checked first: a
@@ -609,7 +609,7 @@ def _terminal_status(outcome: RunOutcome, record: RunRecord | None = None) -> st
         return "cancelled"
     if not outcome.ok:
         return "failed"
-    if record is not None and record.project.sensors and not outcome.readings:
+    if record.project.sensors and not outcome.readings:
         return "failed"
     return "succeeded"
 
