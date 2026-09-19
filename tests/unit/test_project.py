@@ -52,3 +52,52 @@ def test_sensor_list_survives_reload_with_order(tmp_path):
     save_project(_sample(), path)
     ids = [sensor.sensor_id for sensor in load_project(path).sensors]
     assert ids == ["S1", "S2"]
+
+def test_waste_stream_and_sensor_lab_round_trip(tmp_path):
+    from scentinel.core.virtual_sensor import VirtualSensorConfig
+
+    path = tmp_path / "waste.scentinel"
+    original = Project(
+        name="waste",
+        geometry=BinGeometry(),
+        scenario=Scenario(
+            waste_type="organic-rich",
+            organic_fraction=0.8,
+            moisture_fraction=0.6,
+            gas_sources={"VOC": "auto"},
+        ),
+        sensor_lab=VirtualSensorConfig(family="MOX", response_time_s=4.0),
+    )
+    save_project(original, path)
+    loaded = load_project(path)
+    assert loaded == original
+
+
+def test_legacy_project_without_waste_or_lab_still_loads(tmp_path):
+    path = tmp_path / "legacy.scentinel"
+    path.write_text(
+        """
+{
+  "format_version": 1,
+  "name": "old",
+  "geometry": {
+    "length_m": 6.0,
+    "height_m": 2.5,
+    "mound_shape": "flat",
+    "mound_fill_fraction": 0.5
+  },
+  "scenario": {
+    "wind_speed_m_s": 1.0,
+    "wind_direction": "left-to-right",
+    "ventilation_on": false,
+    "gas_sources": {"CO": "auto"}
+  },
+  "sensors": []
+}
+""",
+        encoding="utf-8",
+    )
+    loaded = load_project(path)
+    assert loaded.scenario.waste_type == "mixed-msw"
+    assert loaded.scenario.organic_fraction == pytest.approx(0.50)
+    assert loaded.sensor_lab.family == "PID"

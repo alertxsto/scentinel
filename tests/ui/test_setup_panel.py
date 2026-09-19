@@ -121,3 +121,29 @@ def test_switching_language_relabels_the_group_boxes(qapp):
     assert panel._geometry_group.title() != english
     assert panel._length_label.text() != "Bin length"
     panel.deleteLater()
+
+def test_selecting_a_waste_type_applies_default_gases_and_fractions(panel):
+    panel._waste_type.setCurrentIndex(panel._waste_type.findData("organic-rich"))
+    scenario = panel.scenario()
+    assert scenario.waste_type == "organic-rich"
+    assert scenario.organic_fraction == pytest.approx(0.80)
+    assert scenario.moisture_fraction == pytest.approx(0.60)
+    assert scenario.gas_sources == {"CH4": "auto", "VOC": "auto", "H2S": "auto"}
+
+
+def test_set_values_restores_waste_without_resetting_gases(panel):
+    from scentinel.core.scenario import Scenario
+
+    panel.set_values(
+        BinGeometry(),
+        Scenario(
+            waste_type="rdf-feedstock",
+            organic_fraction=0.30,
+            moisture_fraction=0.12,
+            gas_sources={"VOC": 100.0},
+        ),
+    )
+    scenario = panel.scenario()
+    assert scenario.waste_type == "rdf-feedstock"
+    assert scenario.organic_fraction == pytest.approx(0.30)
+    assert scenario.gas_sources == {"VOC": 100.0}

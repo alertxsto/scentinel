@@ -24,12 +24,14 @@ def main(argv: list[str] | None = None) -> int:
 
     translator = Translator(DEFAULT_LOCALE)
     project = None
+    path = None
     if len(args) > 1 and Path(args[1]).suffix == ".scentinel":
         candidate = Path(args[1])
         if candidate.exists():
             project = load_project(candidate)
+            path = candidate
 
-    window = HomeWindow(translator, project=project)
+    window = HomeWindow(translator, project=project, path=path)
     window.show()
     return app.exec()
 

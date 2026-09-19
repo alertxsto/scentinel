@@ -52,7 +52,7 @@ from scentinel import __version__
 from scentinel.core import casegen, gas_data
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry
 from scentinel.core.project import Project, Sensor
-from scentinel.core.scenario import WIND_DIRECTIONS, Scenario
+from scentinel.core.scenario import WIND_DIRECTIONS, Scenario, auto_concentration_ppmv
 
 #: Version of the manifest schema. Any change to the serialized shape or its
 #: meaning bumps this and is rejected by older readers.
@@ -461,12 +461,16 @@ def snapshot_project(project: Project) -> Project:
             wind_speed_m_s=project.scenario.wind_speed_m_s,
             wind_direction=project.scenario.wind_direction,
             ventilation_on=project.scenario.ventilation_on,
+            waste_type=project.scenario.waste_type,
+            organic_fraction=project.scenario.organic_fraction,
+            moisture_fraction=project.scenario.moisture_fraction,
             gas_sources=dict(project.scenario.gas_sources),
         ),
         sensors=[
             Sensor(sensor_id=sensor.sensor_id, x=sensor.x, y=sensor.y)
             for sensor in project.sensors
         ],
+        sensor_lab=replace(project.sensor_lab),
     )
 
 
@@ -746,7 +750,7 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 key=gas,
                 mode=AUTO_MODE,
                 requested_ppmv=None,
-                resolved_ppmv=gas_data.source_concentration(gas),
+                resolved_ppmv=auto_concentration_ppmv(scenario, gas),
                 provenance=gas_data.citation(gas),
             )
         else:

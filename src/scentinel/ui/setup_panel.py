@@ -1,4 +1,4 @@
-"""Left-hand setup panel: geometry, scenario, and gas sources.
+"""Left-hand setup panel: geometry, waste stream, scenario, and gas sources.
 
 The panel owns no application state — it emits :attr:`SetupPanel.changed` with a
 fresh ``(BinGeometry, Scenario)`` pair whenever the user edits a field, and
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
-from scentinel.core.scenario import WIND_DIRECTIONS, Scenario
+from scentinel.core.scenario import WASTE_SPECS, WASTE_TYPES, WIND_DIRECTIONS, Scenario
 from scentinel.ui.i18n import Translator
 
 SHAPE_KEYS = {
@@ -39,10 +39,11 @@ DIRECTION_KEYS = {
     "left-to-right": "dir.left_to_right",
     "right-to-left": "dir.right_to_left",
 }
+WASTE_KEYS = {key: f"waste.{key}" for key in WASTE_TYPES}
 
 
 class SetupPanel(QScrollArea):
-    """Form for bin geometry, wind scenario, and per-gas source strengths."""
+    """Form for bin geometry, waste stream, wind scenario, and per-gas sources."""
 
     changed = Signal(object, object)  # (BinGeometry, Scenario)
 
@@ -60,11 +61,13 @@ class SetupPanel(QScrollArea):
         self._default_end_iteration = default_end_iteration
         self._gas_boxes: dict[str, QCheckBox] = {}
         self._gas_spins: dict[str, QDoubleSpinBox] = {}
+        self._loading_waste = False
         body = QWidget(self)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
         layout.addWidget(self._build_geometry_group())
+        layout.addWidget(self._build_waste_group())
         layout.addWidget(self._build_scenario_group())
         layout.addWidget(self._build_sources_group())
         layout.addWidget(self._build_simulation_group())
@@ -111,6 +114,32 @@ class SetupPanel(QScrollArea):
             widget.valueChanged.connect(self._emit)
         self._shape.currentIndexChanged.connect(self._emit)
         return self._geometry_group
+
+    def _build_waste_group(self) -> QGroupBox:
+        self._waste_group = QGroupBox(self)
+        form = QFormLayout(self._waste_group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._waste_help = _help_label()
+        form.addRow(self._waste_help)
+
+        self._waste_type = QComboBox()
+        for key in WASTE_TYPES:
+            self._waste_type.addItem("", key)
+        self._organic = _spin(0.05, 1.0, 0.50, 0.05, "", 2, decimals=2)
+        self._moisture = _spin(0.0, 1.0, 0.40, 0.05, "", 2, decimals=2)
+        self._waste_type_label = QLabel()
+        self._organic_label = QLabel()
+        self._moisture_label = QLabel()
+        self._waste_type_help = _help_label()
+        form.addRow(self._waste_type_label, self._waste_type)
+        form.addRow(self._organic_label, self._organic)
+        form.addRow(self._moisture_label, self._moisture)
+        form.addRow(self._waste_type_help)
+
+        self._waste_type.currentIndexChanged.connect(self._on_waste_type_changed)
+        self._organic.valueChanged.connect(self._emit)
+        self._moisture.valueChanged.connect(self._emit)
+        return self._waste_group
 
     def _build_scenario_group(self) -> QGroupBox:
         self._scenario_group = QGroupBox(self)
@@ -161,8 +190,6 @@ class SetupPanel(QScrollArea):
             auto.setToolTip(citation(gas))
             auto.setChecked(True)
 
-            # ``box`` and ``auto`` are rebound on each iteration, so they are
-            # captured as defaults rather than closed over.
             box.toggled.connect(
                 lambda checked, widget=spin, auto=auto: widget.setEnabled(
                     checked and not auto.isChecked()
@@ -220,6 +247,9 @@ class SetupPanel(QScrollArea):
             wind_speed_m_s=self._wind_speed.value(),
             wind_direction=self._wind_direction.currentData(),
             ventilation_on=self._ventilation.isChecked(),
+            waste_type=self._waste_type.currentData(),
+            organic_fraction=self._organic.value(),
+            moisture_fraction=self._moisture.value(),
             gas_sources=self.gas_sources(),
         )
 
@@ -245,6 +275,9 @@ class SetupPanel(QScrollArea):
             self._height,
             self._shape,
             self._fill,
+            self._waste_type,
+            self._organic,
+            self._moisture,
             self._wind_speed,
             self._wind_direction,
             self._ventilation,
@@ -252,6 +285,7 @@ class SetupPanel(QScrollArea):
             *self._gas_spins.values(),
             *self._gas_auto.values(),
         )
+        self._loading_waste = True
         for widget in widgets:
             widget.blockSignals(True)
         try:
@@ -259,6 +293,9 @@ class SetupPanel(QScrollArea):
             self._height.setValue(geom.height_m)
             self._shape.setCurrentIndex(self._shape.findData(geom.mound_shape))
             self._fill.setValue(geom.mound_fill_fraction)
+            self._waste_type.setCurrentIndex(self._waste_type.findData(scenario.waste_type))
+            self._organic.setValue(scenario.organic_fraction)
+            self._moisture.setValue(scenario.moisture_fraction)
             self._wind_speed.setValue(scenario.wind_speed_m_s)
             self._wind_direction.setCurrentIndex(
                 self._wind_direction.findData(scenario.wind_direction)
@@ -275,15 +312,18 @@ class SetupPanel(QScrollArea):
         finally:
             for widget in widgets:
                 widget.blockSignals(False)
+            self._loading_waste = False
         self._refresh_derived()
 
     def retranslate(self) -> None:
         t = self._t.t
         self._geometry_group.setTitle(t("group.geometry"))
+        self._waste_group.setTitle(t("group.waste"))
         self._scenario_group.setTitle(t("group.scenario"))
         self._sources_group.setTitle(t("group.gas_sources"))
         self._simulation_group.setTitle(t("group.simulation"))
         self._geometry_help.setText(t("help.geometry"))
+        self._waste_help.setText(t("help.waste"))
         self._scenario_help.setText(t("help.scenario"))
         self._sources_help.setText(t("help.gas_sources"))
         self._simulation_help.setText(t("help.simulation"))
@@ -293,6 +333,9 @@ class SetupPanel(QScrollArea):
         self._shape_label.setText(t("field.mound_shape"))
         self._fill_label.setText(t("field.fill"))
         self._actual_fill_caption.setText(t("field.actual_fill"))
+        self._waste_type_label.setText(t("field.waste_type"))
+        self._organic_label.setText(t("field.organic_fraction"))
+        self._moisture_label.setText(t("field.moisture_fraction"))
         self._wind_speed_label.setText(t("field.wind_speed"))
         self._wind_direction_label.setText(t("field.wind_direction"))
         self._ventilation_label.setText(t("field.ventilation"))
@@ -301,13 +344,37 @@ class SetupPanel(QScrollArea):
 
         for index, shape in enumerate(MOUND_SHAPES):
             self._shape.setItemText(index, t(SHAPE_KEYS[shape]))
+        for index, key in enumerate(WASTE_TYPES):
+            self._waste_type.setItemText(index, t(WASTE_KEYS[key]))
         for index, direction in enumerate(WIND_DIRECTIONS):
             self._wind_direction.setItemText(index, t(DIRECTION_KEYS[direction]))
         self._shape_help.setText(t(f"help.shape.{self._shape.currentData()}"))
+        self._waste_type_help.setText(t(f"help.waste.{self._waste_type.currentData()}"))
 
         self._refresh_derived()
 
     # -- internals -----------------------------------------------------------
+
+    def _on_waste_type_changed(self) -> None:
+        if self._loading_waste:
+            return
+        spec = WASTE_SPECS[self._waste_type.currentData()]
+        self._organic.blockSignals(True)
+        self._moisture.blockSignals(True)
+        self._organic.setValue(spec.organic_fraction)
+        self._moisture.setValue(spec.moisture_fraction)
+        self._organic.blockSignals(False)
+        self._moisture.blockSignals(False)
+        for gas, box in self._gas_boxes.items():
+            selected = gas in spec.default_gases
+            box.blockSignals(True)
+            self._gas_auto[gas].blockSignals(True)
+            box.setChecked(selected)
+            self._gas_auto[gas].setChecked(True)
+            self._gas_spins[gas].setEnabled(False)
+            box.blockSignals(False)
+            self._gas_auto[gas].blockSignals(False)
+        self._emit()
 
     def _emit(self, *_args: object) -> None:
         self._refresh_derived()
@@ -322,6 +389,7 @@ class SetupPanel(QScrollArea):
         else:
             self._actual_fill.setToolTip("")
         self._shape_help.setText(self._t.t(f"help.shape.{self._shape.currentData()}"))
+        self._waste_type_help.setText(self._t.t(f"help.waste.{self._waste_type.currentData()}"))
 
 
 def _spin(

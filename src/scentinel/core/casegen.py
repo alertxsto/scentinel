@@ -30,9 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scentinel.core.gas_data import source_concentration
 from scentinel.core.geometry import BinGeometry
-from scentinel.core.scenario import Scenario
+from scentinel.core.scenario import Scenario, auto_concentration_ppmv
 
 if TYPE_CHECKING:
     # Imported for annotations only. ``core.mesh`` imports ``gmsh``, which is
@@ -244,13 +243,15 @@ def resolve_sources(scenario: Scenario) -> dict[str, float]:
     """Resolve ``"auto"`` gas entries against the cited AP-42 defaults.
 
     Returns volume fractions, which is the basis the scalar transport solves in.
+    ``auto`` uses the selected waste stream: MSW-only vs co-disposal regime,
+    with an organic-fraction scale on CH₄/VOC/H₂S for MSW-only streams.
     """
     resolved: dict[str, float] = {}
     for gas, value in scenario.gas_sources.items():
         if isinstance(value, str):
             if value != "auto":
                 raise ValueError(f"gas source for {gas} must be a number or 'auto', got {value!r}")
-            ppmv = source_concentration(gas)
+            ppmv = auto_concentration_ppmv(scenario, gas)
         else:
             ppmv = float(value)
         resolved[gas] = ppmv * PPM_SCALE

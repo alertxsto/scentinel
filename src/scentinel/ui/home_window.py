@@ -1,100 +1,237 @@
-"""Persistent application shell for dashboard, simulation, and sensor sandbox."""
+"""Application shell: dashboard, one project editor, studio and sandbox modes."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer, Qt
+from pathlib import Path
+
+from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
-    QVBoxLayout, QWidget,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QPushButton,
+    QStackedWidget,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
-from scentinel.core.project import Project
+from scentinel.core.project import FILE_FILTER, Project, load_project
 from scentinel.ui.i18n import Translator
-from scentinel.ui.main_window import MainWindow
 from scentinel.ui.sensor_sandbox import SensorSandbox
+
+_RECENT_KEY = "recentProjects"
+_RECENT_LIMIT = 8
 
 
 class HomeWindow(QMainWindow):
-    def __init__(self, translator: Translator, project: Project | None = None) -> None:
+    def __init__(
+        self,
+        translator: Translator,
+        project: Project | None = None,
+        path: Path | None = None,
+        settings: QSettings | None = None,
+    ) -> None:
         super().__init__()
-        self._translator = translator
-        self.setWindowTitle("Scentinel — Digital Twin Studio")
+        self._t = translator
+        self._settings = settings or QSettings("Scentinel", "Scentinel")
+        self.setWindowTitle("Scentinel")
         self.resize(1520, 940)
-        shell = QWidget(); shell.setObjectName("appShell")
-        outer = QHBoxLayout(shell); outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
-        outer.addWidget(self._build_navigation())
-        main = QWidget(); main_layout = QVBoxLayout(main); main_layout.setContentsMargins(0,0,0,0); main_layout.setSpacing(0)
-        main_layout.addWidget(self._build_context_bar())
+
+        self._editor = SensorSandbox(translator, project=project, path=path)
+        self._prepare_embedded(self._editor)
+        self._editor.home_requested.connect(self.show_home)
+        self._editor.back_requested.connect(self.show_home)
+        self._editor.project_path_changed.connect(self._remember_project)
+
         self._stack = QStackedWidget()
         self._home = self._build_home()
-        self._studio = MainWindow(translator, project=project); self._prepare_embedded(self._studio)
-        self._sandbox = SensorSandbox(translator, project=project); self._prepare_embedded(self._sandbox)
-        self._studio.home_requested.connect(self.show_home)
-        self._sandbox.back_requested.connect(self.show_home)
-        self._stack.addWidget(self._home); self._stack.addWidget(self._studio); self._stack.addWidget(self._sandbox)
-        main_layout.addWidget(self._stack, 1); outer.addWidget(main, 1)
-        self.setCentralWidget(shell)
-        QTimer.singleShot(0, self.show_home)
+        self._stack.addWidget(self._home)
+        self._stack.addWidget(self._editor)
+        self.setCentralWidget(self._stack)
+
+        self._build_toolbar()
+        self._refresh_recents()
+        if path is not None:
+            self._remember_project(path)
+            QTimer.singleShot(0, self.show_studio)
+        else:
+            QTimer.singleShot(0, self.show_home)
 
     def _prepare_embedded(self, window: QMainWindow) -> None:
         window.setWindowFlags(Qt.WindowType.Widget)
-        window.statusBar().hide()
 
-    def _build_navigation(self) -> QWidget:
-        rail = QFrame(); rail.setObjectName("navigationRail"); rail.setFixedWidth(218)
-        layout = QVBoxLayout(rail); layout.setContentsMargins(0,20,0,16); layout.setSpacing(4)
-        brand = QLabel("SCENTINEL"); brand.setObjectName("brandLabel")
-        layout.addWidget(brand)
-        self._nav_home = self._nav_button("⌂  Dashboard", self.show_home)
-        self._nav_studio = self._nav_button("◫  Simulation Studio", self.show_studio)
-        self._nav_sandbox = self._nav_button("⌁  Sensor Sandbox", self.show_sandbox)
-        for button in (self._nav_home,self._nav_studio,self._nav_sandbox): layout.addWidget(button)
-        layout.addStretch(1)
-        fidelity = QLabel("FIDELITY\n2D SCREENING"); fidelity.setObjectName("railCaption")
-        layout.addWidget(fidelity)
-        return rail
+    def _build_toolbar(self) -> None:
+        toolbar = QToolBar("Main")
+        toolbar.setObjectName("mainToolbar")
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
-    @staticmethod
-    def _nav_button(text: str, callback) -> QPushButton:
-        button=QPushButton(text); button.setObjectName("navigationButton"); button.setCheckable(True); button.clicked.connect(callback); return button
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        self._act_home = QAction(self)
+        self._act_studio = QAction(self)
+        self._act_sandbox = QAction(self)
+        for action, slot in (
+            (self._act_home, self.show_home),
+            (self._act_studio, self.show_studio),
+            (self._act_sandbox, self.show_sandbox),
+        ):
+            action.setCheckable(True)
+            action.triggered.connect(slot)
+            group.addAction(action)
+            toolbar.addAction(action)
+        toolbar.addSeparator()
+        self._project_label = QLabel()
+        self._project_label.setObjectName("toolbarProject")
+        toolbar.addWidget(self._project_label)
+        self._retranslate_toolbar()
+        self._t.changed.connect(self._retranslate_toolbar)
 
-    def _build_context_bar(self) -> QWidget:
-        bar=QFrame(); bar.setObjectName("contextBar"); bar.setFixedHeight(64)
-        layout=QHBoxLayout(bar); layout.setContentsMargins(22,0,22,0)
-        self._page_title=QLabel(); self._page_title.setObjectName("pageTitle")
-        self._page_context=QLabel(); self._page_context.setObjectName("pageContext")
-        layout.addWidget(self._page_title); layout.addSpacing(14); layout.addWidget(self._page_context); layout.addStretch(1)
-        badge=QLabel("OpenFOAM 2512"); badge.setObjectName("solverBadge")
-        layout.addWidget(badge); return bar
+    def _retranslate_toolbar(self) -> None:
+        t = self._t.t
+        self._act_home.setText(t("nav.home"))
+        self._act_studio.setText(t("nav.studio"))
+        self._act_sandbox.setText(t("nav.sandbox"))
+        self._refresh_project_label()
+
+    def _refresh_project_label(self) -> None:
+        path = self._editor.project_path()
+        if path is not None:
+            text = path.name
+        else:
+            text = self._t.t("home.untitled")
+        if self._editor.is_dirty():
+            text += " •"
+        self._project_label.setText(text)
 
     def _build_home(self) -> QWidget:
-        page=QWidget(); page.setObjectName("homePage"); root=QVBoxLayout(page); root.setContentsMargins(38,32,38,32); root.setSpacing(20)
-        title=QLabel("Design, simulate, validate."); title.setObjectName("dashboardTitle")
-        subtitle=QLabel("Satu workflow untuk CFD screening, spatial sensor placement, virtual-device evaluation, dan kesiapan validasi lapangan.")
-        subtitle.setWordWrap(True); subtitle.setObjectName("secondaryText")
-        root.addWidget(title); root.addWidget(subtitle)
-        cards=QHBoxLayout(); cards.setSpacing(18)
-        cards.addWidget(self._card("Simulation Studio","Bangun geometri, sumber gas, mesh, placement, dan run OpenFOAM. Semua hasil diberi quality gates.","Open 2D Screening",self.show_studio,"PHYSICS"))
-        cards.addWidget(self._card("Universal Sensor Sandbox","Studio yang sama ditambah device models, telemetry, response error, detection time, dan evaluation.","Open Sensor Sandbox",self.show_sandbox,"DIGITAL TWIN"))
-        root.addLayout(cards,1)
-        notice=QFrame(); notice.setObjectName("noticeBox"); notice_layout=QVBoxLayout(notice)
-        warning=QLabel("3D engineering, live hardware, coverage, dan blind-zone analysis hanya akan ditandai tersedia setelah engine dan bukti validasinya benar-benar ada.")
-        warning.setObjectName("noticeText"); warning.setWordWrap(True); notice_layout.addWidget(warning)
-        root.addWidget(notice); return page
+        page = QWidget()
+        page.setObjectName("homePage")
+        root = QVBoxLayout(page)
+        root.setContentsMargins(38, 32, 38, 32)
+        root.setSpacing(16)
 
-    def _card(self,title:str,text:str,action:str,callback,badge:str)->QFrame:
-        card=QFrame(); card.setObjectName("modeCard")
-        layout=QVBoxLayout(card); layout.setContentsMargins(24,22,24,22); layout.setSpacing(12)
-        tag=QLabel(badge); tag.setObjectName("cardTag")
-        heading=QLabel(title); heading.setObjectName("cardHeading")
-        body=QLabel(text); body.setObjectName("secondaryText"); body.setWordWrap(True)
-        button=QPushButton(action); button.setObjectName("modeButton"); button.clicked.connect(callback)
-        layout.addWidget(tag); layout.addWidget(heading); layout.addWidget(body); layout.addStretch(1); layout.addWidget(button); return card
+        self._home_title = QLabel()
+        self._home_title.setObjectName("dashboardTitle")
+        self._home_subtitle = QLabel()
+        self._home_subtitle.setWordWrap(True)
+        self._home_subtitle.setObjectName("secondaryText")
+        root.addWidget(self._home_title)
+        root.addWidget(self._home_subtitle)
 
-    def _select(self, page: QWidget, title: str, context: str, active: QPushButton) -> None:
-        self._stack.setCurrentWidget(page); self._page_title.setText(title); self._page_context.setText(context)
-        for button in (self._nav_home,self._nav_studio,self._nav_sandbox): button.setChecked(button is active)
+        actions = QHBoxLayout()
+        self._new_button = QPushButton()
+        self._new_button.setObjectName("primaryAction")
+        self._new_button.clicked.connect(self._new_project)
+        self._open_button = QPushButton()
+        self._open_button.clicked.connect(self._open_project)
+        actions.addWidget(self._new_button)
+        actions.addWidget(self._open_button)
+        actions.addStretch(1)
+        root.addLayout(actions)
 
-    def show_home(self) -> None: self._select(self._home,"Dashboard","Digital twin workspace",self._nav_home)
-    def show_studio(self) -> None: self._select(self._studio,"Simulation Studio","2D screening · CFD ground truth",self._nav_studio)
-    def show_sandbox(self) -> None: self._select(self._sandbox,"Sensor Sandbox","CFD studio + virtual measurement chain",self._nav_sandbox)
+        self._recent_caption = QLabel()
+        self._recent_caption.setObjectName("cardHeading")
+        root.addWidget(self._recent_caption)
+        self._recents = QListWidget()
+        self._recents.setObjectName("recentList")
+        self._recents.itemActivated.connect(self._open_recent_item)
+        self._recents.itemClicked.connect(self._open_recent_item)
+        root.addWidget(self._recents, 1)
+
+        self._empty_recents = QLabel()
+        self._empty_recents.setObjectName("secondaryText")
+        root.addWidget(self._empty_recents)
+
+        self._t.changed.connect(self._retranslate_home)
+        self._retranslate_home()
+        return page
+
+    def _retranslate_home(self) -> None:
+        t = self._t.t
+        self._home_title.setText(t("home.title"))
+        self._home_subtitle.setText(t("home.subtitle"))
+        self._new_button.setText(t("home.new"))
+        self._open_button.setText(t("home.open"))
+        self._recent_caption.setText(t("home.recent"))
+        self._empty_recents.setText(t("home.recent.empty"))
+
+    def _recent_paths(self) -> list[Path]:
+        raw = self._settings.value(_RECENT_KEY, [])
+        if isinstance(raw, str):
+            raw = [raw]
+        paths: list[Path] = []
+        seen: set[str] = set()
+        for item in raw or []:
+            path = Path(str(item))
+            key = str(path)
+            if key in seen or not path.is_file():
+                continue
+            seen.add(key)
+            paths.append(path)
+        return paths[:_RECENT_LIMIT]
+
+    def _save_recents(self, paths: list[Path]) -> None:
+        self._settings.setValue(_RECENT_KEY, [str(path) for path in paths[:_RECENT_LIMIT]])
+
+    def _remember_project(self, path: object) -> None:
+        if not isinstance(path, Path):
+            self._refresh_project_label()
+            return
+        recents = [path, *[item for item in self._recent_paths() if item != path]]
+        self._save_recents(recents)
+        self._refresh_recents()
+        self._refresh_project_label()
+
+    def _refresh_recents(self) -> None:
+        self._recents.clear()
+        paths = self._recent_paths()
+        self._empty_recents.setVisible(not paths)
+        self._recents.setVisible(bool(paths))
+        for path in paths:
+            item = QListWidgetItem(f"{path.stem}  —  {path}")
+            item.setData(Qt.ItemDataRole.UserRole, str(path))
+            self._recents.addItem(item)
+
+    def _open_recent_item(self, item: QListWidgetItem) -> None:
+        path = Path(str(item.data(Qt.ItemDataRole.UserRole)))
+        self._editor.open_project(path)
+        self.show_studio()
+
+    def _new_project(self) -> None:
+        self._editor.new_project()
+        self.show_studio()
+        self._refresh_project_label()
+
+    def _open_project(self) -> None:
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, self._t.t("menu.file.open"), str(Path.cwd()), FILE_FILTER
+        )
+        if not chosen:
+            return
+        self._editor.open_project(Path(chosen))
+        self.show_studio()
+
+    def _select(self, page: QWidget, active: QAction) -> None:
+        self._stack.setCurrentWidget(page)
+        for action in (self._act_home, self._act_studio, self._act_sandbox):
+            action.setChecked(action is active)
+        self._refresh_project_label()
+
+    def show_home(self) -> None:
+        self._refresh_recents()
+        self._select(self._home, self._act_home)
+
+    def show_studio(self) -> None:
+        self._editor.set_lab_visible(False)
+        self._select(self._editor, self._act_studio)
+
+    def show_sandbox(self) -> None:
+        self._editor.set_lab_visible(True)
+        self._select(self._editor, self._act_sandbox)

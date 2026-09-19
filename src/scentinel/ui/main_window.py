@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
     """Scentinel main window."""
 
     home_requested = Signal()
+    project_path_changed = Signal(object)  # Path | None
     run_requested = Signal(object)  # Project
     cancel_requested = Signal()
     locale_changed = Signal(str)
@@ -83,6 +84,8 @@ class MainWindow(QMainWindow):
         self._t.changed.connect(self.retranslate)
         self._viewport.sensor_added.connect(lambda _sensor: self._status_flash("status.sensors"))
         self._apply_project(self._project)
+        if self._path is not None:
+            self._restore_latest_run()
         self._status_flash("status.ready")
         self.retranslate()
 
@@ -229,9 +232,10 @@ class MainWindow(QMainWindow):
             )
             return
         self._apply_project(project, path=path)
-        self._results_panel.clear()
+        self._restore_latest_run()
         self._dirty = False
         self._status_flash("log.opened", path=path.name)
+        self.project_path_changed.emit(path)
 
     def save_project(self) -> bool:
         if self._path is None:
@@ -283,6 +287,7 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._refresh_title()
         self._status_flash("log.saved", path=path.name)
+        self.project_path_changed.emit(path)
         return True
 
     def _apply_project(self, project: Project, path: Path | None = None) -> None:
@@ -298,6 +303,33 @@ class MainWindow(QMainWindow):
             self._loading = False
         self._refresh_title()
         self._refresh_counters()
+    def _restore_latest_run(self) -> None:
+        """Reload the newest succeeded run so a project can continue mid-work."""
+        self._results_panel.clear()
+        if self._path is None:
+            return
+        try:
+            runs = history.list_runs(_runs_root(self._path))
+        except OSError:
+            return
+        for record in reversed(runs):
+            if record.execution_status != "succeeded":
+                continue
+            if not record.results.sensor_readings:
+                continue
+            self._results_panel.set_run_record(record)
+            self._results_panel.set_results(
+                [
+                    SensorReading(
+                        sensor_id=item.sensor_id,
+                        x=item.x_m,
+                        y=item.y_m,
+                        values=dict(item.values_ppmv),
+                    )
+                    for item in record.results.sensor_readings
+                ]
+            )
+            return
 
     # -- solver --------------------------------------------------------------
 
