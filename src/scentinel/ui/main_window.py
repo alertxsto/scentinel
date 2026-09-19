@@ -48,17 +48,40 @@ from scentinel.ui.viewport import ViewportWidget
 IMAGE = "opencfd/openfoam-default:2512"
 
 STYLE_SHEET = """
-QMainWindow { background: #ffffff; }
+QMainWindow { background: #f6f8f7; }
 QGroupBox {
-    border: 1px solid #d6dbd8;
-    border-radius: 6px;
-    margin-top: 14px;
-    padding-top: 10px;
+    background: #ffffff;
+    border: 1px solid #d9e1dd;
+    border-radius: 8px;
+    margin-top: 16px;
+    padding: 12px 8px 8px 8px;
     font-weight: 600;
 }
-QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #1b4332; }
-QLabel#resultsTitle, QLabel#viewportTitle { font-weight: 600; color: #1b4332; }
-QLabel#actualFillLabel { color: #1b4332; }
+QGroupBox QLabel, QGroupBox QCheckBox { color: #1f2937; }
+QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #174c36; }
+QLabel#resultsTitle, QLabel#viewportTitle { font-size: 16px; font-weight: 700; color: #153f30; }
+QLabel#actualFillLabel { color: #1b6b4a; }
+QLabel#runStatus {
+    border-radius: 10px; padding: 3px 10px; font-weight: 700;
+    background: #e5e7eb; color: #374151;
+}
+QLabel#runStatus[state="succeeded"] { background: #dcfce7; color: #166534; }
+QLabel#runStatus[state="failed"] { background: #fee2e2; color: #991b1b; }
+QFrame#summarySection QLabel { color: #374151; }
+QLabel#summarySectionTitle { color: #174c36; font-weight: 700; padding-bottom: 4px; }
+QFrame#summarySection { background: #ffffff; border: 1px solid #dfe7e3; border-radius: 7px; }
+QWidget#summaryContent { background: #f8faf9; }
+QLabel#summaryValue { color: #111827; }
+QLabel#summaryFieldLabel { color: #64748b; font-size: 11px; padding-top: 3px; }
+QLabel#summaryHint { color: #5f6b66; }
+QPushButton#primaryAction {
+    background: #176b46; color: #ffffff; border: 0; border-radius: 6px;
+    padding: 7px 14px; font-weight: 700;
+}
+QPushButton#primaryAction:disabled { background: #9ca3af; }
+QTabWidget::pane { border: 1px solid #d9e1dd; background: #ffffff; }
+QTabBar::tab { padding: 7px 12px; }
+QTabBar::tab:selected { color: #176b46; font-weight: 700; }
 QStatusBar QLabel { color: #4b5563; }
 """
 
@@ -108,13 +131,14 @@ class MainWindow(QMainWindow):
         self._results_panel = ResultsPanel(self._t)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        splitter.setChildrenCollapsible(False)
         splitter.addWidget(self._setup_panel)
         splitter.addWidget(self._viewport)
         splitter.addWidget(self._results_panel)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 0)
-        splitter.setSizes([320, 720, 380])
+        splitter.setStretchFactor(2, 1)
+        splitter.setSizes([300, 650, 520])
         self.setCentralWidget(splitter)
 
         self._setup_panel.changed.connect(self._on_setup_changed)
@@ -344,6 +368,7 @@ class MainWindow(QMainWindow):
                 path=record.run_dir / history.MANIFEST_NAME,
             )
         )
+        self._results_panel.set_run_record(record)
         self._results_panel.set_running(True)
         self._set_running_ui(True)
         self._status_flash("status.running")
@@ -384,10 +409,12 @@ class MainWindow(QMainWindow):
 
         status = _terminal_status(outcome, record) if record is not None else None
         persisted = self._finalize_run(record, outcome, readings_ppmv, status)
+        if persisted is not None:
+            self._results_panel.set_run_record(persisted)
 
         if outcome.error:
             self._results_panel.append_log(f"ERROR: {outcome.error}")
-        if persisted:
+        if persisted is not None:
             if status == "succeeded":
                 self._status_flash("status.done")
             elif status == "cancelled":
@@ -408,17 +435,12 @@ class MainWindow(QMainWindow):
         outcome: RunOutcome,
         readings_ppmv: list[SensorReading],
         status: str | None,
-    ) -> bool:
-        """Write the terminal manifest. Returns False when it was not recorded.
-
-        A failure here never discards the solver outcome: the table and log stay
-        as they are, and the UI reports that the run was not durably recorded
-        instead of claiming normal completion.
-        """
+    ) -> RunRecord | None:
+        """Write and return the terminal manifest, or ``None`` on failure."""
         if record is None or status is None:
-            return False
+            return None
         try:
-            history.finish_run(
+            return history.finish_run(
                 record,
                 status=status,
                 case_dir=outcome.case_dir,
@@ -431,8 +453,7 @@ class MainWindow(QMainWindow):
             )
         except (HistoryError, OSError, ValueError) as error:
             self._results_panel.append_log(f"ERROR: run not recorded: {error}")
-            return False
-        return True
+            return None
 
     def _set_running_ui(self, running: bool) -> None:
         self._action_run.setEnabled(not running)

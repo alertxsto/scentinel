@@ -287,6 +287,15 @@ def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
     assert record.results.sensor_readings[0].values_ppmv == displayed[0].values
     assert record.results.concentration_unit == "ppmv"
 
+    summary = run_window.results_panel()._summary_fields
+    assert summary["sensor_count"].text() == "1"
+    assert summary["gases"].text() == "CO"
+    assert "min 0.465" in summary["concentration_statistics"].text()
+    assert "max 0.465 ppmv" in summary["concentration_statistics"].text()
+    assert summary["peak_sensor"].text() == "CO: S1 (0.465 ppmv)"
+    assert summary["rdf_suitability"].text() == "Requires laboratory characterisation data"
+    assert summary["tvoc_concentration"].text() == "Requires sensor hardware and calibration"
+
 
 def test_a_failed_run_is_finalized_as_failed(run_window, tmp_path, monkeypatch):
     def pipeline(self):

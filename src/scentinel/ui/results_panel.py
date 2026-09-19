@@ -9,25 +9,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPlainTextEdit,
     QPushButton,
-    QSplitter,
+    QScrollArea,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from scentinel.ui.i18n import Translator
+
+if TYPE_CHECKING:
+    from scentinel.core.history import RunRecord
 
 
 @dataclass(frozen=True)
@@ -52,23 +59,31 @@ class ResultsPanel(QWidget):
         super().__init__(parent)
         self._t = translator
         self._readings: list[SensorReading] = []
+        self._record: RunRecord | None = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
+        header = QHBoxLayout()
         self._title = QLabel()
         self._title.setObjectName("resultsTitle")
-        layout.addWidget(self._title)
+        self._status = QLabel()
+        self._status.setObjectName("runStatus")
+        self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.addWidget(self._title)
+        header.addStretch(1)
+        header.addWidget(self._status)
+        layout.addLayout(header)
 
-        splitter = QSplitter(Qt.Orientation.Vertical, self)
+        self._tabs = QTabWidget()
+        self._summary_tab = self._build_summary_tab()
 
         self._stack = QStackedWidget()
         self._placeholder = QLabel()
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setWordWrap(True)
-        self._placeholder.setStyleSheet("color: #6b7280;")
-
+        self._placeholder.setStyleSheet("color: #6b7280; padding: 24px;")
         self._table = QTableWidget(0, 0)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -77,29 +92,26 @@ class ResultsPanel(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents
         )
-
         self._stack.addWidget(self._placeholder)
         self._stack.addWidget(self._table)
-        splitter.addWidget(self._stack)
 
-        log_container = QWidget()
-        log_layout = QVBoxLayout(log_container)
-        log_layout.setContentsMargins(0, 0, 0, 0)
-        log_layout.setSpacing(4)
-        self._log_title = QLabel()
+        log_tab = QWidget()
+        log_layout = QVBoxLayout(log_tab)
+        log_layout.setContentsMargins(8, 8, 8, 8)
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
         self._log.setMaximumBlockCount(5000)
         self._log.setFont(QFont("monospace"))
-        log_layout.addWidget(self._log_title)
         log_layout.addWidget(self._log)
-        splitter.addWidget(log_container)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-        layout.addWidget(splitter, 1)
+
+        self._tabs.addTab(self._summary_tab, "")
+        self._tabs.addTab(self._stack, "")
+        self._tabs.addTab(log_tab, "")
+        layout.addWidget(self._tabs, 1)
 
         buttons = QHBoxLayout()
         self._run_button = QPushButton()
+        self._run_button.setObjectName("primaryAction")
         self._run_button.clicked.connect(self.run_requested.emit)
         self._export_button = QPushButton()
         self._export_button.clicked.connect(self.export_requested.emit)
@@ -115,6 +127,159 @@ class ResultsPanel(QWidget):
 
         self._t.changed.connect(self.retranslate)
         self.retranslate()
+
+    def _build_summary_tab(self) -> QWidget:
+        content = QWidget()
+        content.setObjectName("summaryContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(12)
+
+        self._summary_hint = QLabel()
+        self._summary_hint.setWordWrap(True)
+        self._summary_hint.setObjectName("summaryHint")
+        layout.addWidget(self._summary_hint)
+
+        self._summary_fields: dict[str, QLabel] = {}
+        for section, keys in (
+            ("run", ("run_id", "started", "finished", "execution_status")),
+            ("gas_results", ("sensor_count", "gases", "concentration_statistics", "peak_sensor")),
+            ("safety", ("threshold_assessment", "coverage", "blind_zone")),
+            ("rdf", ("rdf_suitability", "rdf_standard", "offtaker_match", "ncv", "moisture", "ash", "chlorine", "sulfur")),
+            ("tvoc", ("tvoc_concentration", "voc_index", "raw_signal", "temperature", "humidity", "calibration", "detection_limit", "uncertainty")),
+            ("numerics", ("solver", "mesh_size", "iterations", "mesh_cells", "case_digest")),
+            ("physics", ("sources", "wind", "inlet", "viscosity", "diffusivity", "ventilation")),
+            ("quality", ("classification", "convergence", "mesh_independence", "mass_balance", "validation")),
+        ):
+            frame = QFrame()
+            frame.setObjectName("summarySection")
+            form = QFormLayout(frame)
+            form.setContentsMargins(12, 10, 12, 10)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+            heading = QLabel()
+            heading.setObjectName("summarySectionTitle")
+            heading.setProperty("section", section)
+            form.addRow(heading)
+            for key in keys:
+                name = QLabel()
+                name.setObjectName("summaryFieldLabel")
+                name.setProperty("field", key)
+                value = QLabel("—")
+                value.setObjectName("summaryValue")
+                value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                value.setWordWrap(True)
+                form.addRow(name, value)
+                self._summary_fields[key] = value
+            layout.addWidget(frame)
+        layout.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        return scroll
+
+    def set_run_record(self, record: RunRecord) -> None:
+        """Display the persisted run contract, not inferred UI state."""
+        self._record = record
+        execution = record.execution
+        physics = record.applied_physics
+        quality = record.quality
+        scenario = record.project.scenario
+        diffusivity = ", ".join(
+            f"{gas}: {value:.3g} m²/s"
+            for gas, value in sorted(physics.scalar_diffusivity_m2_s.items())
+        )
+        digest = physics.case_input_digest or "—"
+        digest_display = "\u200b".join(
+            digest[index : index + 16] for index in range(0, len(digest), 16)
+        )
+        readings = record.results.sensor_readings
+        gases = sorted({gas for reading in readings for gas in reading.values_ppmv})
+        statistics: list[str] = []
+        peaks: list[str] = []
+        for gas in gases:
+            samples = [
+                (reading.sensor_id, reading.values_ppmv[gas])
+                for reading in readings
+                if gas in reading.values_ppmv
+            ]
+            if not samples:
+                continue
+            values_ppmv = [value for _, value in samples]
+            peak_sensor, peak_value = max(samples, key=lambda item: item[1])
+            statistics.append(
+                f"{gas}: min {min(values_ppmv):.4g}, mean "
+                f"{sum(values_ppmv) / len(values_ppmv):.4g}, max {peak_value:.4g} ppmv"
+            )
+            peaks.append(f"{gas}: {peak_sensor} ({peak_value:.4g} ppmv)")
+        sources = ", ".join(
+            f"{gas}: {source.resolved_ppmv:g} ppmv ({source.mode})"
+            for gas, source in sorted(scenario.gas_sources.items())
+        )
+        unavailable = self._t.t("results.value.not_available")
+        needs_lab = self._t.t("results.value.needs_lab")
+        needs_sensor = self._t.t("results.value.needs_sensor")
+        not_assessed = self._t.t("results.value.not_assessed")
+        values = {
+            "run_id": record.run_id,
+            "started": record.started_at_utc,
+            "finished": record.finished_at_utc or "—",
+            "execution_status": record.execution_status,
+            "sensor_count": str(len(readings)),
+            "gases": ", ".join(gases) or "—",
+            "concentration_statistics": "\n".join(statistics) or unavailable,
+            "peak_sensor": "\n".join(peaks) or unavailable,
+            "threshold_assessment": not_assessed,
+            "coverage": unavailable,
+            "blind_zone": unavailable,
+            "rdf_suitability": needs_lab,
+            "rdf_standard": not_assessed,
+            "offtaker_match": not_assessed,
+            "ncv": needs_lab,
+            "moisture": needs_lab,
+            "ash": needs_lab,
+            "chlorine": needs_lab,
+            "sulfur": needs_lab,
+            "tvoc_concentration": needs_sensor,
+            "voc_index": needs_sensor,
+            "raw_signal": needs_sensor,
+            "temperature": needs_sensor,
+            "humidity": needs_sensor,
+            "calibration": needs_sensor,
+            "detection_limit": needs_sensor,
+            "uncertainty": needs_sensor,
+            "solver": f"{execution.solver} · {execution.container_image}",
+            "mesh_size": f"{execution.mesh_size_m:g} m",
+            "iterations": str(execution.requested_end_iteration),
+            "mesh_cells": str(execution.mesh_cells) if execution.mesh_cells is not None else "—",
+            "case_digest": digest_display,
+            "sources": sources or "—",
+            "wind": f"{physics.wind_speed_reported_m_s:g} m/s · {physics.wind_profile}",
+            "inlet": f"{physics.inlet_speed_at_rim_m_s:.4g} m/s",
+            "viscosity": f"{physics.nu_m2_s:.3g} m²/s",
+            "diffusivity": diffusivity or "—",
+            "ventilation": (
+                f"requested={str(scenario.ventilation.requested_on).lower()}, "
+                f"modelled={str(scenario.ventilation.modelled).lower()}"
+            ),
+            "classification": quality.classification,
+            "convergence": quality.convergence,
+            "mesh_independence": quality.mesh_independence,
+            "mass_balance": quality.mass_balance,
+            "validation": quality.experimental_validation,
+        }
+        for key, value in values.items():
+            self._summary_fields[key].setText(value)
+        self._update_status(record.execution_status)
+        self._tabs.setCurrentWidget(self._summary_tab)
+
+    def _update_status(self, status: str) -> None:
+        self._status.setText(self._t.t(f"results.status.{status}"))
+        self._status.setProperty("state", status)
+        self._status.style().unpolish(self._status)
+        self._status.style().polish(self._status)
 
     # -- state ---------------------------------------------------------------
 
@@ -155,6 +320,7 @@ class ResultsPanel(QWidget):
 
     def clear(self) -> None:
         self._readings = []
+        self._record = None
         self._table.clear()
         self._table.setRowCount(0)
         self._table.setColumnCount(0)
@@ -162,6 +328,9 @@ class ResultsPanel(QWidget):
         self._placeholder.setText(self._t.t("results.empty"))
         self._export_button.setEnabled(False)
         self._log.clear()
+        for value in self._summary_fields.values():
+            value.setText("—")
+        self._update_status("pending")
 
     def append_log(self, text: str) -> None:
         self._log.appendPlainText(text.rstrip("\n"))
@@ -191,7 +360,17 @@ class ResultsPanel(QWidget):
     def retranslate(self) -> None:
         t = self._t.t
         self._title.setText(t("panel.results"))
-        self._log_title.setText(t("panel.log"))
+        self._tabs.setTabText(0, t("results.tab.summary"))
+        self._tabs.setTabText(1, t("results.tab.sensors"))
+        self._tabs.setTabText(2, t("results.tab.log"))
+        self._summary_hint.setText(t("results.summary.hint"))
+        for label in self.findChildren(QLabel):
+            section = label.property("section")
+            field = label.property("field")
+            if section:
+                label.setText(t(f"results.section.{section}"))
+            elif field:
+                label.setText(t(f"results.field.{field}"))
         self._export_button.setText(t("action.export_csv"))
         self._run_button.setText(t("action.run"))
         self._cancel_button.setText(t("action.cancel"))
@@ -199,3 +378,4 @@ class ResultsPanel(QWidget):
         self._placeholder.setText(
             t("results.busy") if self._cancel_button.isVisible() else t("results.empty")
         )
+        self._update_status(self._record.execution_status if self._record else "pending")
