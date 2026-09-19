@@ -5,8 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout,
-    QLabel, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
-    QWidget,
+    QLabel, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QToolBar,
+    QVBoxLayout, QWidget,
 )
 
 from scentinel.core.project import Project
@@ -33,6 +33,7 @@ class SensorSandbox(MainWindow):
         self._values: dict[str, float] = {}
         self._detected_at: dict[str, float] = {}
         self.home_requested.connect(self.back_requested.emit)
+        self.results_panel().set_sandbox_mode(True)
         self._build_sensor_lab()
         self.viewport().sensors_changed.connect(self._sync_sensors)
         self._timer = QTimer(self)
@@ -42,14 +43,21 @@ class SensorSandbox(MainWindow):
 
     def _build_sensor_lab(self) -> None:
         dock = QDockWidget("Virtual Sensor Lab", self)
-        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.BottomDockWidgetArea)
+        dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
         tabs = QTabWidget()
         tabs.addTab(self._build_model_tab(), "Sensor models")
         tabs.addTab(self._build_telemetry_tab(), "Telemetry")
         tabs.addTab(self._build_evaluation_tab(), "Evaluation")
         dock.setWidget(tabs)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        dock.setMinimumWidth(430)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        dock.setMinimumHeight(280)
+        toolbar = QToolBar("Sandbox tools", self)
+        toolbar.setMovable(False)
+        toolbar.addAction(dock.toggleViewAction())
+        dock.toggleViewAction().setText("Sensor Lab")
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+        dock.hide()
+        self.resizeDocks([dock], [320], Qt.Orientation.Vertical)
         self._sensor_dock = dock
 
     def _build_model_tab(self) -> QWidget:
@@ -181,6 +189,18 @@ class SensorSandbox(MainWindow):
                 f"{self._detected_at[sensor.sensor_id]:.2f} s" if sensor.sensor_id in self._detected_at else "—",
             )
             for column, text in enumerate(values): self._telemetry.item(row, column).setText(text)
+        if self._values:
+            mean_error = sum(abs(value - truth) for value in self._values.values()) / len(
+                self._values
+            )
+            self.results_panel().set_virtual_sensor_summary(
+                technology=config.family,
+                indicated_ppm=sum(self._values.values()) / len(self._values),
+                detection_limit_ppm=config.detection_limit_ppm,
+                temperature_c=self.temperature.value(),
+                humidity_rh=self.humidity.value(),
+                mean_error_ppm=mean_error,
+            )
         self._sample += 1
         self._refresh_evaluation()
 

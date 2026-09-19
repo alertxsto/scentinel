@@ -11,6 +11,7 @@ from scentinel import __version__
 from scentinel.core.project import load_project
 from scentinel.ui.i18n import DEFAULT_LOCALE, Translator
 from scentinel.ui.home_window import HomeWindow
+from scentinel.ui.theme import APP_STYLE
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("Scentinel")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("Environmental Engineering, President University")
+    app.setStyleSheet(APP_STYLE)
 
     translator = Translator(DEFAULT_LOCALE)
     project = None

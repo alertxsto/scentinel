@@ -23,4 +23,7 @@ def test_sandbox_generates_virtual_telemetry(qapp, translator):
     sandbox.advance()
     assert sandbox._telemetry.item(0, 3).text().endswith(" ppm")
     assert sandbox._values["S1"] > 0
+    summary = sandbox.results_panel()._summary_fields
+    assert summary["tvoc_concentration"].text().endswith("ppm (virtual)")
+    assert "no hardware required" in summary["calibration"].text()
     window.deleteLater()

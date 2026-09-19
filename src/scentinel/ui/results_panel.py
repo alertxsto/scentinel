@@ -61,6 +61,7 @@ class ResultsPanel(QWidget):
         self._t = translator
         self._readings: list[SensorReading] = []
         self._record: RunRecord | None = None
+        self._sandbox_mode = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -128,6 +129,36 @@ class ResultsPanel(QWidget):
 
         self._t.changed.connect(self.retranslate)
         self.retranslate()
+
+    def set_sandbox_mode(self, enabled: bool) -> None:
+        """Switch TVOC outputs from hardware requirements to virtual telemetry."""
+        self._sandbox_mode = enabled
+
+    def set_virtual_sensor_summary(
+        self,
+        *,
+        technology: str,
+        indicated_ppm: float,
+        detection_limit_ppm: float,
+        temperature_c: float,
+        humidity_rh: float,
+        mean_error_ppm: float,
+    ) -> None:
+        """Publish current software-only sandbox measurements in the output catalogue."""
+        self._summary_fields["tvoc_concentration"].setText(f"{indicated_ppm:.4f} ppm (virtual)")
+        self._summary_fields["voc_index"].setText(
+            self._t.t("results.value.not_applicable_to_model", model=technology)
+        )
+        self._summary_fields["raw_signal"].setText(f"{indicated_ppm:.4f} ppm indicated")
+        self._summary_fields["temperature"].setText(f"{temperature_c:.2f} °C (simulated)")
+        self._summary_fields["humidity"].setText(f"{humidity_rh:.2f} %RH (simulated)")
+        self._summary_fields["calibration"].setText(
+            self._t.t("results.value.virtual_profile", model=technology)
+        )
+        self._summary_fields["detection_limit"].setText(f"{detection_limit_ppm:.4f} ppm")
+        self._summary_fields["uncertainty"].setText(
+            f"mean absolute indication error {mean_error_ppm:.4f} ppm"
+        )
 
     def _build_summary_tab(self) -> QWidget:
         content = QWidget()
@@ -226,7 +257,9 @@ class ResultsPanel(QWidget):
         )
         unavailable = self._t.t("results.value.not_available")
         needs_lab = self._t.t("results.value.needs_lab")
-        needs_sensor = self._t.t("results.value.needs_sensor")
+        needs_sensor = self._t.t(
+            "results.value.virtual_pending" if self._sandbox_mode else "results.value.needs_sensor"
+        )
         not_assessed = self._t.t("results.value.not_assessed")
         values = {
             "run_id": record.run_id,
