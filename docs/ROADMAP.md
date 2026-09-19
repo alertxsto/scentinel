@@ -13,9 +13,11 @@ detail lives in [TASKS.md](TASKS.md); design rationale in
 ```
 F0  Foundation & OpenFOAM integration    ████████████████████░░  done (cavity superseded)
 F1  2D geometry, mesh, sensor placement  ████████████████████░░  done
-F2  Multi-gas, visualisation, probes     ██████████████████░░░░  probes done, verification failing
+F2  Multi-gas, visualisation, probes     ███████████████████░░░  probes + field view done, verification failing
 F3  Comparison and reporting             ████████░░░░░░░░░░░░░░  history done, no comparison UI
 F4  3D and transient                     ░░░░░░░░░░░░░░░░░░░░░░  not started
+W   Waste intelligence (characterization ░░░░░░░░░░░░░░░░░░░░░░  planned — W0 is the critical path
+    → suitability → yield → decision)
 ```
 
 **What works today:** set geometry and scenario in the UI → place sensors by
@@ -26,12 +28,18 @@ per-sensor ppmv for every selected gas. Each attempt leaves a never-reused
 provenance, the applied numerical settings with a digest of the generated case,
 the requested iteration count, the terminal execution status, and its results,
 so runs survive a restart and can be listed or looked up. Projects save and
-load; the UI switches language at runtime; results export to CSV.
+load; the UI switches language at runtime; results export to CSV. Concentration
+fields render from the solved case, ten cited AP-42 gases are selectable with
+per-gas Fuller-Schettler-Giddings diffusivities, the sensor sandbox replays each
+placement through a device model, and the container image is pulled from the GUI
+into an app-private store.
 
 **What does not work:** absolute concentrations are not mesh-converged (see
 below); nothing reads the run history back into the UI, so there is still no
-scenario comparison view and no PDF reporting; and the ventilation flag is
-stored — recorded as requested but unmodelled — but has no effect on the case.
+scenario comparison view and no PDF reporting; the ventilation flag is stored —
+recorded as requested but unmodelled — but has no effect on the case; and the
+waste layer does not exist: the app cannot say what the waste *is*, only what a
+sensor would read next to it.
 
 A recorded run separates four things that are easy to conflate. The *requested*
 inputs are the project snapshot; the *applied* experiment is the block of
@@ -99,8 +107,8 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 2), `list_runs()` / `get_run()` |
-| 3.2 Comparison view | Not started — nothing reads the history back into the UI yet |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 3), `list_runs()` / `get_run()` |
+| 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
 
@@ -109,27 +117,68 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 Not started. 3D geometry and meshing, transient solver settings, and
 response-delay analysis. The 2D pipeline should be trustworthy first.
 
+### W — Waste intelligence layer
+
+**Exit criterion:** a described batch produces a characterization, per-route
+suitability scores, a per-stream yield, a quality statement, and one actionable
+recommendation — each traceable to a cited input, and each refusing to answer
+when its inputs are missing.
+
+**Plan:** [superpowers/plans/2026-09-19-waste-intelligence.md](superpowers/plans/2026-09-19-waste-intelligence.md)
+**Basis:** [gas-composition-basis.md](gas-composition-basis.md)
+
+Not started. Why it is needed, measured rather than asserted:
+
+| Defect | Evidence | Consequence |
+|---|---|---|
+| Wrong generation basis | AP-42 Ch.2.4 (landfill, anaerobic, aged) drives a fresh-bin model | CH₄ ≈ 500 000 ppmv for waste loaded hours ago |
+| Uncited linear scaling | `organic_fraction / 0.50`; zero citations in `docs/` | `green-waste` → 85% CH₄ against a 55% physical ceiling |
+| Dead input | `inspect.getsource(auto_concentration_ppmv)` — `moisture` never referenced | `moisture_fraction` is persisted and displayed but changes nothing |
+| Decorative RDF block | `halogen_load()` takes no `scenario`; three waste types give identical output | The RDF panel does not respond to any input |
+
+| Sub-phase | Content | Status |
+|---|---|---|
+| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v4 | Not started — critical path |
+| W1 | Batch mass balance and per-stream yield | Not started |
+| W2 | RDF quality parameters and route suitability scores | Not started; T-120 is partly blocked on laboratory data |
+| W3 | Interpretation, batch history, forecast, recommendation | Not started |
+| W4 | Characterization and decision panels, comparison view, layout | Not started |
+
+The governing rule for this phase: **a value without a citation does not enter
+the model.** Where no cited value exists, the output states the gap rather than
+filling it.
+
 ---
 
 ## Blocking issue: mesh independence
 
 The design spec requires probe values to change by less than 10% when the mesh
-is refined 2×. Measured on the current pipeline:
+is refined 2×. Measured on the current pipeline, 2026-09-19, on CO with the
+analytical-benchmark harness:
 
-| Mesh size | Cells | S1 (ppmv) | S3 (ppmv) |
-|---|---|---|---|
-| 0.50 m | 3 444 | 0.342 | 4.340 |
-| 0.25 m | 7 248 | 0.465 | 3.363 |
-| 0.125 m | 28 016 | 0.887 | 6.358 |
+| Mesh size | Cells | S1 (ppmv) | S2 (ppmv) | S3 (ppmv) |
+|---|---|---|---|---|
+| 0.50 m | 3 444 | 0.0775 | 0.0939 | 0.3543 |
+| 0.25 m | 7 248 | 0.0338 | 0.1758 | 0.3845 |
+| **Deviation** | | **56.4%** | **87.2%** | 8.5% |
 
-Deviation is 76.5% at the first refinement, and the sequence is not converging —
-refining further moves the values more, not less.
+The sequence is not converging — refining further moves the values more, not
+less. An earlier measurement on a different sensor set read 76.5%; both are far
+outside the gate, and the number depends on where the probes sit, which is
+itself part of the problem.
 
 **Cause.** The source is a `fixedValue` concentration on a diffusive patch. The
 flux entering the domain is `D · ∂C/∂n` at the wall, and the near-wall gradient
 scales as `1/Δy` for a fixed concentration difference. Uniform refinement of the
 mound profile refines the surface *tangentially* but not the first cell height
 *normal* to it, so the computed flux drifts.
+
+**What is trustworthy in the meantime.** The transport itself is verified
+against closed-form solutions: pure advection reproduces the inlet value with
+zero error, and axial diffusion matches the exponential profile within 5.5% at
+Pe = 5 (`tests/verification/test_analytical_benchmarks.py`). The error is in the
+*source boundary*, not the solver — so relative comparisons and placement
+rankings hold, while absolute concentrations do not.
 
 **Fix options, in order of preference:**
 
@@ -153,29 +202,50 @@ with `h_m` a mass-transfer coefficient, or the flux directly.
 ## Sequencing
 
 ```
-        ┌──────────────────────────────────────────┐
-        │ 1. Fix the source term (mass flux)       │
-        │    unblocks the F2 verification gate     │
+   TRACK A (CFD credibility)            TRACK B (waste intelligence)
+   ─────────────────────────            ────────────────────────────
+   1. T-020 mass-flux source            1. T-100 composition model
+        │                                    │
+   2. T-021 mesh-independence gate      2. T-101 phase from age_h
+        │                                    │
+        │                                3. T-102 Eq. HH-1 generation
+        │                                    │
+        │                                4. T-103 replace linear scaling
+        │                                   T-104 moisture → k
+        │                                   T-105 manifest v4
+        │                                    │
+        │                                5. T-106 extract fresh-waste VOC
+        │                                   T-107 phase-I gas set
+        │                                    │
+        └──────────────┬─────────────────────┘
+                       │
+        ┌──────────────▼───────────────────────┐
+        │ W1  mass balance → per-stream yield  │
+        └──────────────────┬───────────────────┘
+                           │
+        ┌──────────────────▼───────────────────────┐
+        │ W2  quality parameters, suitability      │
+        │     (T-120 partly needs laboratory data) │
         └──────────────────┬───────────────────────┘
                            │
         ┌──────────────────▼───────────────────────┐
-        │ 2. Field visualisation (2.6)             │
-        │    makes results inspectable, not just a │
-        │    table of numbers                      │
+        │ W3  interpretation, forecast,            │
+        │     recommendation                       │
         └──────────────────┬───────────────────────┘
                            │
         ┌──────────────────▼───────────────────────┐
-        │ 3. F3: comparison UI, PDF                │
-        │    run history (3.1) already landed      │
+        │ W4  characterization + decision UI       │
         └──────────────────┬───────────────────────┘
                            │
         ┌──────────────────▼───────────────────────┐
-        │ 4. Supervisor review, then F4            │
+        │ Supervisor review, then F4               │
         └──────────────────────────────────────────┘
 ```
 
-Steps 1 and 2 are independent of each other and can be done in either order.
-Step 3 depends on step 1 only for credibility, not technically.
+Tracks A and B are independent and run in parallel. Track A gates the
+*credibility* of anything Track B produces from concentrations; Track B gates the
+*usefulness* of the tool. W2 cannot produce a defensible fuel grade until
+T-120's lab-or-cited question is answered, so that research starts early.
 
 ---
 
@@ -184,13 +254,16 @@ Step 3 depends on step 1 only for credibility, not technically.
 | Milestone | Definition of done |
 |---|---|
 | **M1 — Trustworthy numbers** | Mesh independence <10%; mass balance automated and <5% |
-| **M2 — Inspectable results** | Concentration field and streamlines render in the app for a solved run |
-| **M3 — Comparison** | Two runs side by side with a difference column; PDF report with cited defaults (run history landed; the view does not exist yet) |
-| **M4 — Supervisor review** | Results reviewed and signed off before any hardware decision |
-| **M5 — 3D** | 3D mesh runs; response delay measured |
+| **M2 — Inspectable results** | Concentration field renders in the app for a solved run — **met** (`ui/field_view.py`) |
+| **M3 — Comparison** | Two runs side by side with a difference column; PDF report with cited defaults |
+| **M4 — Batch characterization** | A described batch yields composition, phase, and generation with every value cited |
+| **M5 — Decision output** | Yield per stream, route suitability, and one actionable recommendation — each refusing to answer when inputs are missing |
+| **M6 — Supervisor review** | Results reviewed and signed off before any hardware decision |
+| **M7 — 3D** | 3D mesh runs; response delay measured |
 
 M1 is the gate for using the tool to make a placement decision. Until it passes,
-treat output as relative comparison between scenarios only.
+treat output as relative comparison between scenarios only. M5 inherits that
+gate: a recommendation may not present a screening estimate as a measurement.
 
 ---
 
@@ -198,8 +271,24 @@ treat output as relative comparison between scenarios only.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Source term remains unresolved | Absolute values stay unreliable | Planned work above; M1 gates it |
+| Source term remains unresolved | Absolute values stay unreliable | Planned work above; M1 gates it. Transport itself is already verified against closed forms |
+| **Fresh-waste VOC data cannot be extracted** | Phase I (the truck case) cannot be populated honestly | T-106 reports the gap; offer only gases with citations; never estimate |
+| **No cited composition→NCV correlation exists** | RDF grade cannot be computed without lab data | Ship lab-input mode; state the limitation in the UI and README (T-120) |
+| **Routing fractions are process assumptions** | Yield numbers look authoritative but are not | Provenance per fraction; user edits recorded as `user input` (T-111) |
+| **Waste layer scope dwarfs the CFD core** | The core stalls | W0 first; each sub-phase ships independently; T-020/T-021 stay top of queue |
 | 2D idealisation misses 3D effects | Placement advice may not transfer | State the limitation; F4 covers 3D |
 | Solver runtime grows with mesh | Long waits in the UI | Runs are cancellable; mesh size is a parameter |
 | OpenFOAM image tag moves | Pipeline breaks on a fresh machine | Image tag pinned in `casegen.IMAGE`; `setup_container.sh` verifies tools |
-| Scope creep back to the AI/fleet layer | The simulation layer never finishes | F3 exit criterion is explicit; F4 is the only sanctioned extension |
+| Scope creep back to the AI/fleet layer | The simulation layer never finishes | F3 exit criterion is explicit; F4 and W are the only sanctioned extensions |
+
+---
+
+## Documentation map
+
+| Document | Contents |
+|---|---|
+| [gas-composition-basis.md](gas-composition-basis.md) | Cited scientific basis for the waste layer: the basis mismatch, AP-42 phases, 40 CFR 98.343 Equation HH-1, Table HH-1 parameters, and the citation-status table |
+| [superpowers/plans/2026-09-19-waste-intelligence.md](superpowers/plans/2026-09-19-waste-intelligence.md) | Phase W implementation plan with sequencing, verification strategy, and risks |
+| [TASKS.md](TASKS.md) | Every task with status, files, and acceptance test |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Module map, data flow, physics setup, load-bearing implementation details |
+| [references.md](references.md) | Provenance of every value currently in the model |

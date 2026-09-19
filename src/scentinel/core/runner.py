@@ -49,6 +49,29 @@ EXIT_STAGE = {
     14: "foamToVTK",
 }
 
+#: Pipeline for a case whose mesh comes from ``blockMesh`` rather than gmsh.
+#:
+#: The verification benchmarks build minimal ducts by hand so that they do not
+#: depend on the case generator they are meant to validate; feeding those
+#: through the gmsh pipeline would convert a mesh file that does not exist.
+BLOCKMESH_SCRIPT = (
+    f"source {FOAM_BASHRC} || exit 9; "
+    "set -o pipefail; "
+    f"cd {CONTAINER_CASE} || exit 10; "
+    "blockMesh > log.blockMesh 2>&1 || exit 11; "
+    f"{SOLVER} > log.{SOLVER} 2>&1 || exit 13; "
+    "foamToVTK -latestTime > log.foamToVTK 2>&1 || exit 14; "
+    "exit 0"
+)
+
+BLOCKMESH_EXIT_STAGE = {
+    9: "source",
+    10: "cd",
+    11: "blockMesh",
+    13: "solver",
+    14: "foamToVTK",
+}
+
 
 @dataclass
 class RunResult:
@@ -82,8 +105,14 @@ def image_available(image: str = IMAGE) -> bool:
     return container.image_available(image)
 
 
-def build_podman_command(case_dir: Path, image: str = IMAGE) -> list[str]:
-    """Podman invocation that runs the whole pipeline for ``case_dir``."""
+def build_podman_command(
+    case_dir: Path, image: str = IMAGE, *, script: str = SOLVER_SCRIPT
+) -> list[str]:
+    """Podman invocation that runs ``script`` for ``case_dir``.
+
+    ``script`` defaults to the gmsh pipeline; the verification benchmarks pass
+    :data:`BLOCKMESH_SCRIPT` for cases they mesh with ``blockMesh``.
+    """
     return [
         "podman",
         "run",
@@ -96,7 +125,7 @@ def build_podman_command(case_dir: Path, image: str = IMAGE) -> list[str]:
         image,
         "bash",
         "-lc",
-        SOLVER_SCRIPT,
+        script,
     ]
 
 
@@ -108,11 +137,16 @@ def run_case(
     image: str = IMAGE,
     timeout_s: float | None = None,
     command_override: Iterable[str] | None = None,
+    script: str = SOLVER_SCRIPT,
 ) -> RunResult:
     """Run the case, streaming output line by line.
 
     ``command_override`` replaces the podman invocation; the unit tests use it
     to exercise streaming and cancellation without a container.
+
+    ``script`` selects the in-container pipeline. The default is the gmsh
+    pipeline the app uses; ``BLOCKMESH_SCRIPT`` is for benchmark cases that
+    build their own mesh.
 
     Cancellation kills the whole process group: ``podman run`` spawns a
     container whose process tree would otherwise survive a bare
@@ -125,7 +159,7 @@ def run_case(
     command = (
         list(command_override)
         if command_override is not None
-        else build_podman_command(case_dir, image)
+        else build_podman_command(case_dir, image, script=script)
     )
 
     if cancel is not None and cancel.is_set():
