@@ -3,11 +3,65 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QObject, Signal
 
+from scentinel.core import history
 from scentinel.core.geometry import BinGeometry
+from scentinel.core.history import HistoryError
+from scentinel.core.post import SensorReading as RawReading
 from scentinel.core.project import Project, Sensor, load_project, save_project
 from scentinel.core.scenario import Scenario
 from scentinel.ui.main_window import MainWindow
+from scentinel.ui.solver_worker import (
+    DEFAULT_END_ITERATION,
+    DEFAULT_MESH_SIZE_M,
+    RunOutcome,
+)
+
+
+class _SynchronousThread(QObject):
+    """Stand-in for ``SolverThread`` that runs the worker inline.
+
+    Keeps the orchestration tests free of Qt threading and of the CFD pipeline:
+    the point under test is the history boundary, not the event loop.
+    """
+
+    finished = Signal()
+
+    def __init__(self, worker) -> None:
+        super().__init__()
+        self._worker = worker
+
+    def start(self) -> None:
+        self._worker.run()
+        self.finished.emit()
+
+    def isRunning(self) -> bool:  # noqa: N802 - mirrors QThread
+        return False
+
+    def cancel(self) -> None:
+        self._worker.cancel()
+
+
+def _runnable_project() -> Project:
+    """A project that passes every ``start_run()`` precondition."""
+    return Project(
+        name="Example",
+        geometry=BinGeometry(),
+        scenario=Scenario(gas_sources={"CO": 105.0}),
+        sensors=[Sensor(sensor_id="S1", x=1.2, y=2.1)],
+    )
+
+
+def _success_outcome(run_dir: Path) -> RunOutcome:
+    """What a completed pipeline reports: raw volume fractions, not ppmv."""
+    return RunOutcome(
+        case_dir=run_dir / "case",
+        readings=[RawReading(sensor_id="S1", x=1.2, y=2.1, values={"CO": 0.465e-6})],
+        mesh_cells=7248,
+        element_types={"Hexahedron 8": 7248},
+        exit_code=0,
+    )
 
 
 @pytest.fixture
@@ -100,3 +154,174 @@ def test_sensor_eviction_keeps_project_in_sync(window):
     window.viewport().add_sensor(3.0, 1.4)
     window.setup_panel()._fill.setValue(0.9)
     assert window.project().sensors == []
+
+
+# -- run history orchestration ------------------------------------------------
+#
+# The worker/history boundary is exercised here; the CFD pipeline itself is
+# covered by the integration tests and is stubbed out by _run_pipeline.
+
+
+@pytest.fixture
+def solver(monkeypatch):
+    """Make the window believe the solver is available and run it synchronously."""
+    monkeypatch.setattr("scentinel.ui.main_window._probe_solver", lambda: (True, ""))
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.SolverThread", _SynchronousThread, raising=True
+    )
+
+
+@pytest.fixture
+def run_window(qapp, translator, tmp_path, solver):
+    """A window whose project is saved, so runs land in tmp_path/runs."""
+    path = tmp_path / "Example.scentinel"
+    widget = MainWindow(translator, _runnable_project(), path=path)
+    yield widget
+    widget.deleteLater()
+
+
+def test_start_run_reserves_a_record_before_the_worker_is_constructed(
+    run_window, tmp_path, monkeypatch
+):
+    seen: dict[str, object] = {}
+
+    def pipeline(self):
+        # The manifest must already exist: the reservation is the run identity.
+        manifest = self._run_dir / history.MANIFEST_NAME
+        seen["manifest_existed"] = manifest.is_file()
+        seen["run_dir"] = self._run_dir
+        seen["mesh_size_m"] = self._mesh_size_m
+        seen["end_time"] = self._end_time
+        return _success_outcome(self._run_dir)
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    assert seen["manifest_existed"] is True
+    assert seen["run_dir"] == tmp_path / "runs" / "run-001"
+    assert seen["mesh_size_m"] == DEFAULT_MESH_SIZE_M
+    assert seen["end_time"] == DEFAULT_END_ITERATION
+
+    # The manifest records the same explicit execution settings the worker got.
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.execution.mesh_size_m == seen["mesh_size_m"]
+    assert record.execution.end_iteration == seen["end_time"]
+
+
+def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
+    run_window, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.status == "succeeded"
+    assert record.finished_at_utc is not None
+
+    displayed = run_window.results_panel().readings()
+    assert [reading.sensor_id for reading in displayed] == ["S1"]
+    # One conversion from volume fraction to ppmv, shared by table and manifest.
+    assert displayed[0].values["CO"] == pytest.approx(0.465)
+    assert record.results.sensor_readings[0].values_ppmv == displayed[0].values
+    assert record.results.concentration_unit == "ppmv"
+
+
+def test_a_failed_run_is_finalized_as_failed(run_window, tmp_path, monkeypatch):
+    def pipeline(self):
+        return RunOutcome(
+            case_dir=self._run_dir / "case",
+            mesh_cells=7100,
+            element_types={"Hexahedron 8": 7100},
+            exit_code=1,
+            failed_stage="solve",
+            error="FOAM FATAL ERROR",
+        )
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.status == "failed"
+    assert record.execution.failed_stage == "solve"
+    assert record.results.sensor_readings == ()
+
+
+def test_a_cancelled_run_is_finalized_as_cancelled(run_window, tmp_path, monkeypatch):
+    def pipeline(self):
+        return RunOutcome(mesh_cells=3444, exit_code=-2)
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.status == "cancelled"
+    assert record.execution.exit_code == -2
+    assert record.finished_at_utc is not None
+
+
+def test_run_ids_persist_across_a_restart(run_window, translator, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    assert run_window.start_run() is True
+
+    # A fresh window on the same project must not reuse run-001.
+    reopened = MainWindow(translator, _runnable_project(), path=tmp_path / "Example.scentinel")
+    try:
+        assert reopened.start_run() is True
+    finally:
+        reopened.deleteLater()
+
+    assert [record.run_id for record in history.list_runs(tmp_path / "runs")] == [
+        "run-001",
+        "run-002",
+    ]
+
+
+def test_a_persistence_failure_at_start_launches_no_worker(
+    run_window, tmp_path, monkeypatch
+):
+    launched: list[bool] = []
+
+    def boom(*_args, **_kwargs):
+        raise HistoryError("manifest not writable")
+
+    monkeypatch.setattr("scentinel.ui.main_window.history.begin_run", boom)
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: launched.append(True) or _success_outcome(self._run_dir),
+    )
+
+    assert run_window.start_run() is False
+    assert launched == []
+    assert run_window.results_panel().readings() == []
+    assert run_window._status_label.text() == run_window._t.t("run.history_failed")
+    assert not (tmp_path / "runs" / "run-001").exists()
+
+
+def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
+    run_window, tmp_path, monkeypatch
+):
+    def boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr("scentinel.ui.main_window.history.finish_run", boom)
+
+    assert run_window.start_run() is True
+
+    # The solver outcome survives, but the run is not claimed as recorded.
+    assert [reading.sensor_id for reading in run_window.results_panel().readings()] == ["S1"]
+    assert run_window._status_label.text() == run_window._t.t("status.done_history_failed")
+    assert history.load_run(tmp_path / "runs" / "run-001").status == "incomplete"

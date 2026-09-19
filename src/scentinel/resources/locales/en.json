@@ -60,6 +60,7 @@
   "status.cancelled": "Cancelled",
   "status.sensors": "{count} sensor(s)",
   "status.dirty": "Unsaved changes",
+  "status.done_history_failed": "Finished — run not recorded",
 
   "viewport.hint": "Click inside the bin to place a sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
@@ -81,6 +82,7 @@
   "run.needs_gas": "Select at least one gas source before running.",
   "run.needs_sensor": "Place at least one sensor before running.",
   "run.blocked": "Simulation is not available in this build.",
+  "run.history_failed": "Could not record the run — the simulation was not started.",
 
   "error.open_failed": "Could not open project.",
   "error.save_failed": "Could not save project.",
@@ -96,5 +98,6 @@
 
   "log.saved": "Saved {path}",
   "log.opened": "Opened {path}",
-  "log.exported": "Exported {path}"
+  "log.exported": "Exported {path}",
+  "log.run_reserved": "Run {run_id} reserved — manifest {path}"
 }

@@ -60,6 +60,7 @@
   "status.cancelled": "Dibatalkan",
   "status.sensors": "{count} sensor",
   "status.dirty": "Belum disimpan",
+  "status.done_history_failed": "Selesai — riwayat tidak tercatat",
 
   "viewport.hint": "Klik di dalam bak untuk menempatkan sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
@@ -81,6 +82,7 @@
   "run.needs_gas": "Pilih minimal satu sumber gas sebelum menjalankan.",
   "run.needs_sensor": "Tempatkan minimal satu sensor sebelum menjalankan.",
   "run.blocked": "Simulasi belum tersedia pada build ini.",
+  "run.history_failed": "Riwayat run gagal dicatat — simulasi tidak dijalankan.",
 
   "error.open_failed": "Gagal membuka proyek.",
   "error.save_failed": "Gagal menyimpan proyek.",
@@ -96,5 +98,6 @@
 
   "log.saved": "Tersimpan {path}",
   "log.opened": "Terbuka {path}",
-  "log.exported": "Terekspor {path}"
+  "log.exported": "Terekspor {path}",
+  "log.run_reserved": "Run {run_id} dicadangkan — manifes {path}"
 }

@@ -2,9 +2,11 @@
 
 The window owns the current :class:`~scentinel.core.project.Project` and keeps
 it in sync with the two editing surfaces — :class:`SetupPanel` (forms) and
-:class:`ViewportWidget` (sensor clicks). Solver execution is not wired here:
-:attr:`MainWindow.run_requested` carries the fully resolved project so a worker
-can be attached later without touching the UI.
+:class:`ViewportWidget` (sensor clicks). It also owns run orchestration: it
+reserves a persistent run record through :mod:`scentinel.core.history` before
+starting the worker, and finalizes that same record with the worker's outcome.
+The history module is the only writer of run manifests; the window never
+allocates run ids itself.
 """
 
 from __future__ import annotations
@@ -25,13 +27,21 @@ from PySide6.QtWidgets import (
 )
 
 from scentinel import __version__
+from scentinel.core import history
 from scentinel.core.geometry import BinGeometry
+from scentinel.core.history import HistoryError, RunRecord
 from scentinel.core.project import FILE_FILTER, SUFFIX, Project, load_project, save_project
 from scentinel.core.scenario import Scenario
 from scentinel.ui.i18n import LANGUAGES, Translator
 from scentinel.ui.results_panel import ResultsPanel, SensorReading
 from scentinel.ui.setup_panel import SetupPanel
-from scentinel.ui.solver_worker import RunOutcome, SolverThread, SolverWorker
+from scentinel.ui.solver_worker import (
+    DEFAULT_END_ITERATION,
+    DEFAULT_MESH_SIZE_M,
+    RunOutcome,
+    SolverThread,
+    SolverWorker,
+)
 from scentinel.ui.viewport import ViewportWidget
 
 IMAGE = "opencfd/openfoam-default:2512"
@@ -76,7 +86,7 @@ class MainWindow(QMainWindow):
         self._status_args: dict[str, object] = {}
         self._solver_available, self._solver_note = _probe_solver()
         self._solver_thread: SolverThread | None = None
-        self._run_counter = 0
+        self._active_run: RunRecord | None = None
 
         self._build_panels()
         self._build_menus()
@@ -307,14 +317,38 @@ class MainWindow(QMainWindow):
             self._status_flash("run.blocked")
             return False
 
-        self._run_counter += 1
-        run_dir = _runs_root(self._path) / f"run-{self._run_counter:03d}"
         self._results_panel.clear()
+        try:
+            record = history.begin_run(
+                _runs_root(self._path),
+                self._project,
+                mesh_size_m=DEFAULT_MESH_SIZE_M,
+                end_iteration=DEFAULT_END_ITERATION,
+            )
+        except (HistoryError, OSError, KeyError, ValueError) as error:
+            # No durable record, so no run: the reservation is the run identity.
+            self._status_flash("run.history_failed")
+            self._results_panel.append_log(f"ERROR: {error}")
+            return False
+
+        self._active_run = record
+        self._results_panel.append_log(
+            self._t.t(
+                "log.run_reserved",
+                run_id=record.run_id,
+                path=record.run_dir / history.MANIFEST_NAME,
+            )
+        )
         self._results_panel.set_running(True)
         self._set_running_ui(True)
         self._status_flash("status.running")
 
-        worker = SolverWorker(self._project, run_dir)
+        worker = SolverWorker(
+            self._project,
+            record.run_dir,
+            mesh_size_m=DEFAULT_MESH_SIZE_M,
+            end_time=DEFAULT_END_ITERATION,
+        )
         thread = SolverThread(worker)
         worker.log_message.connect(self._results_panel.append_log)
         worker.progress.connect(self._on_run_progress)
@@ -337,21 +371,16 @@ class MainWindow(QMainWindow):
         self._results_panel.set_running(False)
         self._solver_thread = None
 
-        if outcome.readings:
-            self._results_panel.set_results(
-                [
-                    SensorReading(
-                        sensor_id=reading.sensor_id,
-                        x=reading.x,
-                        y=reading.y,
-                        values={gas: value * 1e6 for gas, value in reading.values.items()},
-                    )
-                    for reading in outcome.readings
-                ]
-            )
+        record = self._active_run
+        self._active_run = None
+        readings_ppmv = _ppmv_readings(outcome.readings)
+        if readings_ppmv:
+            self._results_panel.set_results(readings_ppmv)
+
+        persisted = self._finalize_run(record, outcome, readings_ppmv)
 
         if outcome.ok:
-            self._status_flash("status.done")
+            self._status_flash("status.done" if persisted else "status.done_history_failed")
             return
         if outcome.exit_code == -2:
             self._status_flash("status.cancelled")
@@ -359,6 +388,37 @@ class MainWindow(QMainWindow):
         self._status_flash("status.error")
         if outcome.error:
             self._results_panel.append_log(f"ERROR: {outcome.error}")
+
+    def _finalize_run(
+        self,
+        record: RunRecord | None,
+        outcome: RunOutcome,
+        readings_ppmv: list[SensorReading],
+    ) -> bool:
+        """Write the terminal manifest. Returns False when it was not recorded.
+
+        A failure here never discards the solver outcome: the table and log stay
+        as they are, and the UI reports that the run was not durably recorded
+        instead of claiming normal completion.
+        """
+        if record is None:
+            return False
+        try:
+            history.finish_run(
+                record,
+                status=_terminal_status(outcome),
+                case_dir=outcome.case_dir,
+                mesh_cells=outcome.mesh_cells,
+                element_types=outcome.element_types,
+                exit_code=outcome.exit_code,
+                failed_stage=outcome.failed_stage,
+                error=outcome.error or None,
+                readings_ppmv=readings_ppmv,
+            )
+        except (HistoryError, OSError, ValueError) as error:
+            self._results_panel.append_log(f"ERROR: run not recorded: {error}")
+            return False
+        return True
 
     def _set_running_ui(self, running: bool) -> None:
         self._action_run.setEnabled(not running)
@@ -508,6 +568,34 @@ class MainWindow(QMainWindow):
 
 def _default_project() -> Project:
     return Project(name="Untitled", geometry=BinGeometry(), scenario=Scenario())
+
+
+def _ppmv_readings(readings: list) -> list[SensorReading]:
+    """Convert raw volume fractions to ppmv, exactly once.
+
+    The converted list is what the results table shows *and* what the manifest
+    persists, so the displayed and recorded values cannot drift apart.
+    """
+    return [
+        SensorReading(
+            sensor_id=reading.sensor_id,
+            x=reading.x,
+            y=reading.y,
+            values={gas: value * 1e6 for gas, value in reading.values.items()},
+        )
+        for reading in readings
+    ]
+
+
+def _terminal_status(outcome: RunOutcome) -> str:
+    """Map a worker outcome onto a manifest status.
+
+    ``-2`` is the runner's cancellation sentinel and is checked first: a
+    cancelled solve exits non-zero but is not a failure.
+    """
+    if outcome.exit_code == -2:
+        return "cancelled"
+    return "succeeded" if outcome.ok else "failed"
 
 
 def _runs_root(project_path: Path | None) -> Path:

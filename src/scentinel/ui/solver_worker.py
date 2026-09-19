@@ -47,6 +47,13 @@ class RunOutcome:
 #: How long a meshing child may take before it is killed.
 MESH_TIMEOUT_S = 600.0
 
+#: Default mesh size in metres, used when the UI does not pass one explicitly.
+DEFAULT_MESH_SIZE_M = 0.25
+
+#: Default ``simpleFoam`` end iteration. Steady-state control index, not
+#: elapsed physical seconds.
+DEFAULT_END_ITERATION = 500
+
 
 def _start_method() -> str:
     """Pick a multiprocessing start method that can actually re-import __main__.
@@ -100,8 +107,8 @@ class SolverWorker(QObject):
         project: Project,
         run_dir: Path,
         *,
-        mesh_size_m: float = 0.25,
-        end_time: int = 500,
+        mesh_size_m: float = DEFAULT_MESH_SIZE_M,
+        end_time: int = DEFAULT_END_ITERATION,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -170,7 +177,7 @@ class SolverWorker(QObject):
             )
 
         if self._cancelled():
-            return self._cancelled_outcome(result)
+            return self._cancelled_outcome(result, case_dir)
 
         self.progress.emit(35, "solve")
         self.log_message.emit("Solving in the OpenFOAM container ...")
@@ -249,10 +256,12 @@ class SolverWorker(QObject):
     def _cancelled(self) -> bool:
         return self._cancel.is_set()
 
-    def _cancelled_outcome(self, result: mesh.MeshResult) -> RunOutcome:
+    def _cancelled_outcome(
+        self, result: mesh.MeshResult, case_dir: Path | None = None
+    ) -> RunOutcome:
         self.log_message.emit("Cancelled.")
         return RunOutcome(
-            case_dir=None,
+            case_dir=case_dir,
             mesh_cells=result.cell_count,
             element_types=result.element_types,
             exit_code=-2,
