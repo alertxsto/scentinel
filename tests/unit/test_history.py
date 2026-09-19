@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 3
+    assert payload["format_version"] == 4
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -114,6 +114,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     )
     assert scenario["moisture_fraction"] == pytest.approx(0.4)
     assert scenario["age_h"] == pytest.approx(8.0)
+    assert scenario["tonnage_t"] == pytest.approx(10.0)
     assert payload["project"]["sensors"] == [{"sensor_id": "S1", "x_m": 1.2, "y_m": 2.1}]
 
     execution = payload["execution"]
@@ -140,6 +141,57 @@ def test_begin_run_does_not_mutate_the_project_scenario(tmp_path):
     before = dict(project.scenario.gas_sources)
     _begin(tmp_path, project)
     assert project.scenario.gas_sources == before
+
+
+def test_the_manifest_records_the_composition_and_its_derived_chemistry(tmp_path):
+    """Version 4: a record must say which waste produced its concentrations.
+
+    Version 3 stored the stream label and the age but not the fractions, so a
+    user-edited composition could not be reconstructed from the manifest and a
+    recommendation could not be tied to the run that produced it.
+    """
+    from scentinel.core.composition import WasteComposition
+
+    composition = WasteComposition(
+        food=0.5, garden=0.1, paper=0.1, wood=0.1, textile=0.1, diaper=0.05, inert=0.05
+    )
+    project = _project(
+        scenario=Scenario(
+            gas_sources={"CH4": "auto"},
+            age_h=24.0 * 365 * 3,
+            moisture_fraction=0.55,
+            tonnage_t=7.5,
+            composition_fractions=composition.as_dict(),
+        )
+    )
+    record = _begin(tmp_path, project)
+    payload = _manifest(record)
+
+    scenario = payload["project"]["scenario"]
+    assert scenario["tonnage_t"] == pytest.approx(7.5)
+    fractions = scenario["composition"]
+    assert fractions["food"] == pytest.approx(0.5)
+    assert fractions["inert"] == pytest.approx(0.05)
+
+    # The derived chemistry is persisted, so a reader does not have to re-run the
+    # model to learn what the record actually solved.
+    chemistry = scenario["generation"]
+    assert chemistry["phase"] == "IV"
+    assert chemistry["doc"] == pytest.approx(composition.weighted_doc())
+    assert chemistry["k_per_year"] == pytest.approx(composition.weighted_decay(0.55))
+    assert chemistry["methane_fraction"] == pytest.approx(0.55, abs=1e-9)
+
+    # And it round-trips: load_run reconstructs the same typed record.
+    assert history.load_run(record.run_dir).project.scenario.tonnage_t == pytest.approx(7.5)
+
+
+def test_a_version_3_manifest_is_rejected_naming_both_versions(tmp_path):
+    """A version 3 record cannot say which composition produced it."""
+    record = _begin(tmp_path)
+    _rewrite(record, lambda payload: payload.__setitem__("format_version", 3))
+
+    with pytest.raises(HistoryError, match="3"):
+        history.load_run(record.run_dir)
 
 
 # 2 ---------------------------------------------------------------------------
@@ -233,6 +285,33 @@ def test_auto_and_manual_sources_keep_their_mode_and_provenance(tmp_path):
     assert manual.provenance == "user input"
 
     assert _manifest(record)["project"]["scenario"]["gas_sources"]["CO"]["resolved_ppmv"] == 105.0
+
+
+def test_a_generated_source_cites_the_model_that_produced_it(tmp_path):
+    """A decomposition product must not be labelled with a static table value.
+
+    The auto CH4 source is computed by the generation model (550 000 ppmv at
+    steady state), but the manifest attached ``gas_data.citation("CH4")``, whose
+    text still reads "500000 ppmv — EPA LMOP". The record then stated a value
+    and a provenance that disagreed with each other.
+    """
+    project = _project(
+        scenario=Scenario(
+            waste_type="mixed-msw",
+            age_h=24.0 * 365 * 3,
+            moisture_fraction=0.4,
+            gas_sources={"CH4": "auto"},
+        )
+    )
+    record = _begin(tmp_path, project)
+
+    source = record.project.scenario.gas_sources["CH4"]
+    assert source.resolved_ppmv == pytest.approx(550_000.0)
+    # The citation names the model and the resolved value; it cannot contradict
+    # the number persisted beside it.
+    assert "Equation HH-1" in source.provenance
+    assert "550000" in source.provenance
+    assert "500000" not in source.provenance
 
 
 def test_an_unknown_auto_gas_aborts_without_reserving_a_directory(tmp_path):
@@ -335,6 +414,36 @@ def test_finish_run_rejects_an_incomplete_status(tmp_path):
 
     with pytest.raises(HistoryError, match="terminal status"):
         _finish(record, status="incomplete")
+
+
+def test_a_succeeded_status_requires_a_zero_exit_code(tmp_path):
+    """The contract says succeeded means the pipeline exited 0.
+
+    Nothing else in the module enforced that, so an API caller could persist a
+    record that claims success while its own execution block says the solver
+    died with exit 13.
+    """
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match="exit code"):
+        _finish(record, status="succeeded", exit_code=13, failed_stage="solver")
+
+
+def test_a_succeeded_status_rejects_a_recorded_failure(tmp_path):
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match="error"):
+        _finish(record, status="succeeded", exit_code=0, error="podman is not installed")
+
+
+def test_load_run_rejects_a_success_with_a_nonzero_exit_code(tmp_path):
+    """The same consistency rule must hold for a hand-edited manifest."""
+    record = _begin(tmp_path)
+    _finish(record)
+    _rewrite(record, lambda payload: payload["execution"].update({"exit_code": 13}))
+
+    with pytest.raises(HistoryError, match="exit code"):
+        history.load_run(record.run_dir)
 
 
 def test_a_success_with_sensors_but_no_readings_is_recorded_as_failed_with_a_reason(tmp_path):

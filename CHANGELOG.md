@@ -15,6 +15,74 @@ Two things are worth knowing before reading:
 
 ---
 
+## [0.2.2] — 2026-09-19
+
+Audit fixes: each item below was reproduced before it was fixed, and each fix
+has a test that fails on the old behaviour.
+
+### Fixed
+
+- **Cancellation and timeouts ignored silent processes.** `run_case()` checked
+  the cancel flag only between output lines, so a solver that logs to a file —
+  which the pipeline does — ran to completion before a cancel was noticed. A
+  reader thread now pumps output and the wait polls, so cancel and `timeout_s`
+  both take effect immediately. A cancelled process is reported with the `-2`
+  sentinel rather than its raw `-15`, so it is recorded `cancelled`, not `failed`.
+- **`succeeded` was not enforced against its own execution block.** The schema
+  promised "exited 0 and every sensor was sampled" but only checked the second
+  half, so an API caller (or a hand-edited manifest) could persist a success
+  with `exit_code: 13` and `error: "solver failed"`. Both `finish_run()` and
+  `load_run()` now reject a succeeded record with a non-zero exit code, an error,
+  or a failed stage.
+- **The sensor lab never received a finished run's readings.** `_on_run_finished`
+  updated the results table but not the lab, so a replay kept using the fallback
+  or an older run. The results panel now emits `results_changed` and the window
+  forwards it, so the lab always evaluates the readings on screen.
+- **`mesh_cells` was eight times the real cell count.** The mesh counter summed
+  `len(node_tags)` from `getElements` instead of `len(element_tags)`, so a file
+  with 431 cells was reported as 3444 and the inflated number was persisted as
+  the run's mesh-size evidence.
+- **Auto CH₄ cited a value it did not use.** The generated source resolved to
+  550 000 ppmv but carried `gas_data.citation("CH4")` — "500000 ppmv — EPA LMOP".
+  Generated sources now cite the generation model and state the resolved value;
+  trace species keep their table citation.
+- **The batch panel and the run could describe different waste.**
+  `_on_batch_assessed` only stashed the assessment, so editing the fractions and
+  pressing Run solved the setup panel's preset instead. The panel's composition,
+  tonnage, age, moisture, and stream are now mirrored into the scenario — in
+  both directions — and manifest format 4 records them.
+- **Custom routing was labelled `cited`.** Any caller-supplied routing table was
+  persisted as a sourced value. Supplying a table is not evidence that anyone
+  published it; the default is now `user assumption`, and only an explicit
+  `provenance` mapping can mark a material cited.
+- **A gas could interfere with itself.** When VOC was absent the lab promoted the
+  first remaining gas to ground truth and then counted it again in the
+  interference sum, inflating the indicated value at non-zero cross-sensitivity.
+- **Device-model parameters were silently reset.** `set_config()` → `config()`
+  dropped `sensitivity`, `baseline_ppm`, and the temperature/humidity
+  coefficients, so loading a project changed the replay and the next edit wrote
+  the defaults back into the project.
+
+### Changed
+
+- **A phase-I CO₂ source concentration is refused as uncited.** The aerobic
+  phase's CO₂ mass is a carbon balance; AP-42 gives no CO₂/N₂ split for it, so
+  dividing by the modelled mixture reported 1 000 000 ppmv (100%). The mass stays
+  in the batch report; `auto_concentration_ppmv(scenario, "CO2")` raises and names
+  the gap.
+- **The moisture test now asserts what moisture actually does.** The previous
+  `wet > dry` assertion on the CH₄ *source* passed only on float noise
+  (549999.9999999999 vs 550000.0); the steady-state share is cited at 55%. The
+  test asserts the gas *mass* difference (2.16× on the measured example).
+- **Manifest format 4.** The scenario block gains `tonnage_t`, the composition
+  fractions, and a `generation` block captured at reservation time. Version 3
+  manifests are rejected rather than misread.
+- **Documentation corrected against the code.** The roadmap and task list now
+  record W0–W3 as implemented, T-024's field view as done, T-056's sandbox
+  table-publishing as superseded, and the module/test counts as they are.
+
+---
+
 ## [0.2.1] — 2026-09-19
 
 The release that makes the gas model match the thing being modelled, and adds a
@@ -128,7 +196,10 @@ plan), and `docs/logo.svg`.
   the gas phase. The code reports the three parameters and withholds the class
   rather than inventing thresholds.
 - **Mercury is not selectable.** It is the only Table 2.4-1 entry with no
-  counterpart: it is an element, not a gas.
+  counterpart in the gas catalogue: it is an element, not a compound with a
+  molecular weight the FSG correlation applies to. The reason recorded earlier —
+  "it is an element, not a gas" — was wrong; mercury does exist as a vapour in
+  landfill gas, and its Table 2.4-1 default is 2.9×10⁻⁴ ppmv (rating E).
 - **Fresh-waste VOC composition is not yet extracted.** Phase I has no cited
   composition in the repository; the three sources are identified in
   `docs/gas-composition-basis.md` §5.1 and the gap is recorded rather than filled.
@@ -181,6 +252,7 @@ Initial release. 2D bin cross-section, gmsh meshing, OpenFOAM case generation,
 Podman runner, probe sampling, results table with CSV export, bilingual UI
 (English / Indonesian), and persistent per-run manifests with provenance.
 
+[0.2.2]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.2
 [0.2.1]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/alertxsto/scentinel/releases/tag/v0.1.0

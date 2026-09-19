@@ -103,6 +103,22 @@ def test_an_explicit_routing_table_can_be_marked_cited():
     assert not any("assumptions" in note for note in result.notes)
 
 
+def test_custom_routing_without_provenance_stays_a_user_assumption():
+    """Supplying a routing table is not evidence that anyone published it.
+
+    ``balance()`` labelled every material ``cited`` whenever the caller passed
+    its own table, so a hand-edited split could be persisted as a sourced
+    value. Provenance must be stated, never assumed from the presence of an
+    argument.
+    """
+    custom = {m: dict(v) for m, v in mb.DEFAULT_ROUTING.items()}
+    custom["food"] = {"organic": 1.0}
+    result = mb.balance(
+        comp.PRESETS["mixed-msw"], tonnage_t=10.0, moisture=0.4, routing=custom
+    )
+    assert set(result.routing_provenance.values()) == {mb.USER_ASSUMPTION}
+
+
 def test_scaling_tonnage_scales_every_stream():
     one = mb.balance(comp.PRESETS["mixed-msw"], tonnage_t=1.0, moisture=0.4)
     ten = mb.balance(comp.PRESETS["mixed-msw"], tonnage_t=10.0, moisture=0.4)

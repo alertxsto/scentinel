@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from scentinel.core import generation as gen
 from scentinel.core.casegen import resolve_sources
 from scentinel.core.gas_data import source_concentration
 from scentinel.core.scenario import (
@@ -70,11 +71,68 @@ def test_resolve_sources_carries_the_generated_value_as_a_volume_fraction():
     assert resolved["CH4"] == pytest.approx(0.55, rel=1e-6)
 
 
-def test_moisture_changes_the_generated_source():
-    """The input that used to be dead now moves the result."""
+def test_moisture_changes_the_generation_mass_not_the_steady_state_share():
+    """Moisture moves the decay rate; the steady-state share is cited and fixed.
+
+    The old assertion (``wet > dry`` on the ppmv source) passed only on float
+    noise — 549999.9999999999 vs 550000.0 — because CO2 and N2 are tied to CH4
+    at the AP-42 ratio, so the methane *share* is exactly 55% in phases III/IV
+    no matter what. What moisture really changes is how much gas the load
+    produces, which is what this asserts instead of a phantom concentration
+    difference.
+    """
     dry = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.10)
     wet = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.60)
-    assert auto_concentration_ppmv(wet, "CH4") > auto_concentration_ppmv(dry, "CH4")
+
+    dry_gas = gen.generate(dry.composition, tonnage_t=1.0, age_h=dry.age_h, moisture=0.10)
+    wet_gas = gen.generate(wet.composition, tonnage_t=1.0, age_h=wet.age_h, moisture=0.60)
+
+    assert wet_gas.ch4_kg > dry_gas.ch4_kg
+    assert wet_gas.k_per_year > dry_gas.k_per_year
+    # The cited steady-state share is a ceiling, not a moisture function.
+    assert auto_concentration_ppmv(dry, "CH4") == pytest.approx(550_000.0, abs=1e-6)
+    assert auto_concentration_ppmv(wet, "CH4") == pytest.approx(550_000.0, abs=1e-6)
+
+
+def test_a_phase_one_carbon_dioxide_source_is_refused_rather_than_fabricated():
+    """Phase I is CO2-dominated with high N2, and AP-42 gives no split.
+
+    The model computed CO2 mass from the carbon and then reported its share of
+    a mixture that contained nothing else, so a fresh load's CO2 source read
+    1 000 000 ppmv (100%). The mass is real and stays in the batch report; the
+    volume share is not cited, so asking for it is an error naming the gap.
+    """
+    fresh = Scenario(waste_type="mixed-msw", age_h=8.0, moisture_fraction=0.40)
+    with pytest.raises(ValueError, match="not cited"):
+        auto_concentration_ppmv(fresh, "CO2")
+
+
+def test_a_scenario_can_carry_an_explicit_composition_and_tonnage():
+    """The batch panel's fractions must reach the model, not just the readout.
+
+    ``waste_type`` selects a preset; a user-edited fraction table is not any
+    preset, and the run has to use the composition the assessment described.
+    """
+    from scentinel.core.composition import WasteComposition
+
+    composition = WasteComposition(
+        food=0.5, garden=0.1, paper=0.1, wood=0.1, textile=0.1, diaper=0.05, inert=0.05
+    )
+    scenario = Scenario(
+        gas_sources={"CH4": "auto"},
+        composition_fractions=composition.as_dict(),
+        tonnage_t=7.5,
+    )
+
+    assert scenario.composition == composition
+    assert scenario.tonnage_t == pytest.approx(7.5)
+    # A scenario without an override still resolves through its preset.
+    assert Scenario().composition == waste_spec("mixed-msw").composition
+
+
+def test_an_invalid_composition_override_is_rejected():
+    with pytest.raises(ValueError, match="sum to 1.0"):
+        Scenario(composition_fractions={"food": 0.5, "paper": 0.2})
 
 
 def test_age_and_moisture_are_validated():

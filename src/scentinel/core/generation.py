@@ -182,6 +182,10 @@ def generate(
         # CO2-dominated, which is exactly what AP-42 §2.4.4 describes, and it is
         # why a fresh bin smells of decomposition rather than of landfill gas.
         # The carbon available is the same DOC, oxidised to CO2 instead of CH4.
+        # This is a *mass* balance, not a mixture composition: AP-42 gives no
+        # CO2/N2 split for phase I, so ``methane_fraction`` below is 0.0 rather
+        # than a share, and consumers that need a phase-I CO2 volume fraction
+        # must treat it as uncited (see ``scenario.generated_source_ppmv``).
         carbon_kg = (
             1000.0
             * doc

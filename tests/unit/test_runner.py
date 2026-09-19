@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from scentinel.core.casegen import IMAGE
 from scentinel.core.runner import (
     EXIT_STAGE,
+    TIMEOUT_EXIT_CODE,
     build_podman_command,
     podman_available,
     read_log,
@@ -71,6 +73,46 @@ def test_cancel_before_start_does_not_launch(tmp_path: Path):
     result = run_case(tmp_path, cancel=cancel, command_override=["bash", "-lc", "exit 0"])
     assert result.exit_code == -2
     assert "cancelled" in result.log_path.read_text()
+
+
+def test_cancel_interrupts_a_silent_process(tmp_path: Path):
+    """A solver that logs to a file emits nothing on stdout.
+
+    Cancellation is checked between output lines today, so a silent child runs
+    to completion before the cancel is noticed. The user presses Cancel and the
+    run keeps going.
+    """
+    cancel = threading.Event()
+    timer = threading.Timer(0.2, cancel.set)
+    timer.start()
+    start = time.monotonic()
+    try:
+        result = run_case(
+            tmp_path,
+            cancel=cancel,
+            command_override=["bash", "-lc", "sleep 5"],
+        )
+    finally:
+        timer.cancel()
+    elapsed = time.monotonic() - start
+
+    assert result.exit_code == -2
+    assert elapsed < 2.0, f"cancel waited {elapsed:.1f}s for a silent process"
+
+
+def test_timeout_interrupts_a_silent_process(tmp_path: Path):
+    """``timeout_s`` is a wall-clock bound, not a post-hoc wait."""
+    start = time.monotonic()
+    result = run_case(
+        tmp_path,
+        timeout_s=0.2,
+        command_override=["bash", "-lc", "sleep 5"],
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.exit_code == TIMEOUT_EXIT_CODE
+    assert not result.ok
+    assert elapsed < 2.0, f"timeout waited {elapsed:.1f}s for a silent process"
 
 
 def test_read_log_returns_the_tail(tmp_path: Path):

@@ -1,6 +1,6 @@
 # Scentinel — Architecture
 
-**Version:** 0.1.0 · **Last updated:** 2026-09-19
+**Version:** 0.2.1 · **Last updated:** 2026-09-19
 
 How the application is put together: what each module owns, how data flows from
 a click in the viewport to a concentration in the results table, and which
@@ -53,32 +53,48 @@ reports rather than restating it.
 
 | Module | Lines | Owns |
 |---|---|---|
-| `geometry.py` | 148 | `BinGeometry`; mound surface, polygon, height, area, fill fraction |
-| `scenario.py` | 45 | `Scenario`: wind, ventilation flag, per-gas sources (ppmv or `"auto"`) |
-| `project.py` | 59 | `Project`, `Sensor`; `.scentinel` JSON round-trip |
-| `gas_data.py` | 84 | AP-42 loader: `GasSpec`, `source_concentration`, `default_sources`, `citation` |
-| `gas_defaults.py` | 338 | Generated data — do not edit by hand (see `scripts/build_gas_data.py`) |
-| `mesh.py` | 234 | gmsh: air-region outline, 1-cell extrusion, physical groups → `MeshResult` |
-| `casegen.py` | 728 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, applied-physics constants, case-input digest |
-| `runner.py` | 194 | Podman invocation, log streaming, cancellation, per-stage logs |
-| `post.py` | 170 | VTK reading, sensor sampling, concentration fields, mass-balance helper |
-| `history.py` | 1677 | Run allocation, `run.json` schema/validation, atomic writes, `load_run`/`list_runs`/`get_run` |
+| `geometry.py` | 160 | `BinGeometry`; mound surface, polygon, height, area, fill fraction |
+| `scenario.py` | 255 | `Scenario`: wind, ventilation flag, waste stream, composition/tonnage overrides, per-gas sources (ppmv or `"auto"`) |
+| `composition.py` | 236 | `WasteComposition`, Table HH-1 `DOC`/`k`, AP-42 phases |
+| `generation.py` | 252 | 40 CFR 98.343(a)(1) Equation HH-1: CH₄/CO₂/N₂ from a batch and its age |
+| `massbalance.py` | 188 | Per-stream tonnage; every split carries its provenance |
+| `suitability.py` | 284 | Route scores, fuel-quality inputs and their missing set |
+| `recommend.py` | 174 | One recommendation with reasons, caveats, and a runner-up margin |
+| `pipeline.py` | 108 | Composition → generation → balance → suitability → recommendation in one call |
+| `project.py` | 75 | `Project`, `Sensor`; `.scentinel` JSON round-trip |
+| `gas_data.py` | 262 | AP-42 loader: `GasSpec`, `source_concentration`, `default_sources`, `citation` |
+| `gas_defaults.py` | 780 | Generated data — do not edit by hand (see `scripts/build_gas_data.py`) |
+| `mesh.py` | 238 | gmsh: air-region outline, 1-cell extrusion, physical groups → `MeshResult` |
+| `casegen.py` | 741 | OpenFOAM case writer: fields, dictionaries, patch roles, wind profile, applied-physics constants, case-input digest |
+| `runner.py` | 273 | Podman invocation, log streaming, cancellation/timeout, per-stage logs |
+| `container.py` | 268 | Isolated Podman storage, image pull and tool verification |
+| `assessment.py` | 315 | Exposure thresholds, peak-to-mean coverage, gas-phase Cl/S loading |
+| `post.py` | 265 | VTK reading, sensor sampling, concentration fields, mass-balance helper |
+| `virtual_sensor.py` | 80 | Deterministic device response models (PID/MOX/electrochemical/NDIR/pellistor) |
+| `history.py` | 1938 | Run allocation, `run.json` schema/validation, atomic writes, `load_run`/`list_runs`/`get_run` |
 
 ### UI (`src/scentinel/ui/`)
 
 | Module | Lines | Owns |
 |---|---|---|
-| `main_window.py` | 654 | Menus, project lifecycle, dirty tracking, run orchestration |
-| `setup_panel.py` | 285 | Geometry/scenario/gas forms; emits `changed(geom, scenario)` |
+| `home_window.py` | 346 | Start screen and the one dock-based workspace |
+| `main_window.py` | 949 | Menus, project lifecycle, dirty tracking, run orchestration |
+| `setup_panel.py` | 499 | Geometry/scenario/gas forms; emits `changed(geom, scenario)` |
+| `batch_panel.py` | 383 | Composition/age/tonnage/moisture inputs and the live assessment |
 | `viewport.py` | 268 | `QGraphicsView`: bin + mound drawing, sensor placement |
-| `results_panel.py` | 201 | Probe table, log pane, Run/Cancel/Export buttons |
-| `solver_worker.py` | 283 | Background pipeline: mesh → case → solve → sample |
+| `results_panel.py` | 526 | Probe table, summary, field tab, log pane, Run/Cancel/Export |
+| `field_view.py` | 128 | Rendered OpenFOAM concentration field with sensor overlays |
+| `sensor_lab.py` | 401 | Virtual-sensor replay, telemetry, and device evaluation |
+| `solver_worker.py` | 286 | Background pipeline: mesh → case → solve → sample |
+| `workspace.py` | 248 | Dock layout and per-workspace layout persistence |
+| `theme.py` | — | Application stylesheet |
 | `i18n.py` | 53 | `Translator`, runtime language switch |
 
 ### Tests (`tests/`)
 
-204 collected: 196 unit + UI, 7 integration (6 in the e2e scenario plus the
-podman-availability check in `test_runner.py`), 1 verification.
+566 collected: 553 unit + UI, 8 integration (7 in the e2e scenario plus the
+podman-availability check in `test_runner.py`), 4 verification (analytical
+benchmarks and the mesh-independence record), plus the deselection overlap.
 
 ## 3. Data flow
 

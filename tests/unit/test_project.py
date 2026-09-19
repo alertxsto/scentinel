@@ -73,6 +73,33 @@ def test_waste_stream_and_sensor_lab_round_trip(tmp_path):
     assert loaded == original
 
 
+def test_the_batch_inputs_round_trip_through_the_project_file(tmp_path):
+    """The composition and tonnage the batch panel edits must persist.
+
+    They are inputs to the run now, not display-only state: losing them on save
+    would mean reopening a project silently solves a different waste.
+    """
+    from scentinel.core.composition import WasteComposition
+
+    path = tmp_path / "batch.scentinel"
+    original = Project(
+        name="batch",
+        geometry=BinGeometry(),
+        scenario=Scenario(
+            gas_sources={"CH4": "auto"},
+            age_h=24.0 * 365 * 2,
+            moisture_fraction=0.25,
+            tonnage_t=6.5,
+            composition_fractions=WasteComposition(paper=0.7, food=0.3).as_dict(),
+        ),
+    )
+    save_project(original, path)
+    loaded = load_project(path)
+
+    assert loaded.scenario.tonnage_t == pytest.approx(6.5)
+    assert loaded.scenario.composition == WasteComposition(paper=0.7, food=0.3)
+
+
 def test_legacy_project_without_waste_or_lab_still_loads(tmp_path):
     path = tmp_path / "legacy.scentinel"
     path.write_text(

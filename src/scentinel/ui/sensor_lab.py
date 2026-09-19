@@ -64,6 +64,9 @@ class SensorLabPanel(QWidget):
         self._sensors: list = []
         self._readings: list[SensorReading] = []
         self._loading = False
+        #: Model parameters with no widget of their own; preserved across
+        #: :meth:`set_config` / :meth:`config` so a loaded project keeps them.
+        self._extra_config: dict[str, float] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -88,7 +91,14 @@ class SensorLabPanel(QWidget):
         self._sync_sensors()
 
     def set_config(self, config: VirtualSensorConfig) -> None:
-        """Load a saved device model without emitting :attr:`config_changed`."""
+        """Load a saved device model without emitting :attr:`config_changed`.
+
+        Parameters without a widget of their own (sensitivity, baseline, and the
+        temperature/humidity coefficients) are carried through on
+        ``_extra_config`` so that :meth:`config` can return them unchanged: a
+        project loaded into the panel must not silently lose them, and the next
+        edit must not write the dataclass defaults back over the project.
+        """
         self._loading = True
         try:
             widgets = (
@@ -107,6 +117,12 @@ class SensorLabPanel(QWidget):
             self.noise.setValue(config.noise_ppm)
             self.drift.setValue(config.drift_ppm_h)
             self.cross_factor.setValue(config.cross_sensitivity)
+            self._extra_config = {
+                "sensitivity": config.sensitivity,
+                "baseline_ppm": config.baseline_ppm,
+                "temperature_coefficient_per_c": config.temperature_coefficient_per_c,
+                "humidity_coefficient_per_rh": config.humidity_coefficient_per_rh,
+            }
             for widget in widgets:
                 widget.blockSignals(False)
         finally:
@@ -122,6 +138,7 @@ class SensorLabPanel(QWidget):
             cross_sensitivity=self.cross_factor.value(),
             noise_ppm=self.noise.value(),
             drift_ppm_h=self.drift.value(),
+            **self._extra_config,
         )
 
     def is_replaying(self) -> bool:
@@ -240,20 +257,27 @@ class SensorLabPanel(QWidget):
         self.config_changed.emit(self.config())
 
     def _exposure(self, sensor_id: str) -> tuple[float, float, str]:
-        """Return (truth ppm, cross ppm, source label) for one sensor."""
+        """Return (truth ppm, cross ppm, source label) for one sensor.
+
+        The gas promoted to ground truth is excluded from the interference sum:
+        a gas cannot interfere with the measurement of itself, and counting it
+        both ways inflated the indicated value whenever the cross-sensitivity
+        was non-zero.
+        """
         for reading in self._readings:
             if reading.sensor_id != sensor_id:
                 continue
             if "VOC" in reading.values:
                 truth, source = reading.values["VOC"], "cfd-voc"
+                target = "VOC"
             elif reading.values:
-                gas, truth = next(iter(reading.values.items()))
-                source = f"cfd-{gas.lower()}"
+                target, truth = next(iter(reading.values.items()))
+                source = f"cfd-{target.lower()}"
             else:
                 break
             cross = 0.0
             for gas in ("CH4", "H2S", "CO"):
-                if gas in reading.values:
+                if gas != target and gas in reading.values:
                     cross += reading.values[gas]
             return truth, cross if cross else self.cross.value(), source
         return self.truth.value(), self.cross.value(), "lab-fallback"

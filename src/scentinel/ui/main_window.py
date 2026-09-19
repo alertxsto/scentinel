@@ -182,6 +182,11 @@ class MainWindow(DockedWorkspace):
         self._viewport.cursor_moved.connect(self._on_cursor_moved)
         self._results_panel.cancel_requested.connect(self.cancel_run)
         self._results_panel.run_requested.connect(self.start_run)
+        # The lab is the device-model view of whatever the results table holds.
+        # Wiring the two panels through this signal (rather than each reaching
+        # into the other) keeps a replay evaluating the run that was just solved,
+        # not a stale reading or the lab fallback.
+        self._results_panel.results_changed.connect(self._on_results_changed)
         self._sensor_lab.config_changed.connect(self._on_lab_config_changed)
 
     def _build_menus(self) -> None:
@@ -374,6 +379,17 @@ class MainWindow(DockedWorkspace):
             self._viewport.set_sensors(project.sensors)
             self._sensor_lab.set_config(project.sensor_lab)
             self._sensor_lab.set_context(project.sensors, self._results_panel.readings())
+            # The batch panel is the other editor of the same scenario; loading a
+            # project must populate it too, or its first recompute would write
+            # the widget defaults (10 t, 8 h, the selected preset) back over the
+            # stored batch.
+            self._batch_panel.set_values(
+                tonnage_t=project.scenario.tonnage_t,
+                age_h=project.scenario.age_h,
+                moisture=project.scenario.moisture_fraction,
+                waste_type=project.scenario.waste_type,
+                composition=project.scenario.composition,
+            )
         finally:
             self._loading = False
         self._refresh_title()
@@ -656,8 +672,22 @@ class MainWindow(DockedWorkspace):
     def _on_setup_changed(self, geom: BinGeometry, scenario: Scenario) -> None:
         if self._loading:
             return
+        # The setup panel builds a fresh Scenario from its own widgets, so the
+        # fields it does not carry (the batch panel's fractions and tonnage) are
+        # copied over rather than silently dropped. A wind-speed edit must not
+        # erase the composition the assessment was made with.
+        scenario.composition_fractions = self._project.scenario.composition_fractions
+        scenario.tonnage_t = self._project.scenario.tonnage_t
         self._project.geometry = geom
         self._project.scenario = scenario
+        # The two panels share the holding time and the moisture. Push the setup
+        # form's values into the batch panel so the readout it shows is the one
+        # this scenario now describes.
+        self._batch_panel.set_batch_inputs(
+            age_h=scenario.age_h,
+            moisture=scenario.moisture_fraction,
+            waste_type=scenario.waste_type,
+        )
         self._viewport.set_geometry(geom)
         self._mark_dirty()
         # Selecting a gas or placing a sensor can unblock Run, so the action's
@@ -665,16 +695,33 @@ class MainWindow(DockedWorkspace):
         self._refresh_run_action()
 
     def _on_batch_assessed(self, assessment) -> None:
-        """Keep the panel's waste selection and the CFD scenario in step.
+        """Mirror the batch panel's batch into the scenario the run uses.
 
-        The batch panel is the surface where composition is edited; the setup
-        panel still carries the scenario the case generator reads. Mirroring the
-        selected preset and moisture across means the run cannot use a different
-        waste than the one the assessment describes.
+        The batch panel is the surface where the composition, holding time,
+        tonnage, and moisture are edited; the setup panel carries the scenario
+        the case generator reads. Without this copy the assessment would
+        describe one batch and the run would solve another — and the manifest
+        would record a waste the user never assessed.
         """
         if self._loading:
             return
         self._last_assessment = assessment
+        scenario = self._project.scenario
+        # The preset names are the scenario's stream keys, and the stream selects
+        # the AP-42 regime for the trace species.
+        scenario.waste_type = self._batch_panel.preset_key()
+        scenario.age_h = self._batch_panel.age_h()
+        scenario.moisture_fraction = self._batch_panel.moisture()
+        scenario.tonnage_t = self._batch_panel.tonnage_t()
+        scenario.composition_fractions = self._batch_panel.composition().as_dict()
+        # The setup form shows the same two inputs; keep it in step so its next
+        # edit cannot write a stale age or moisture back over this batch.
+        self._setup_panel.set_batch_inputs(
+            age_h=scenario.age_h,
+            moisture=scenario.moisture_fraction,
+            waste_type=scenario.waste_type,
+        )
+        self._mark_dirty()
 
     def _on_sensors_changed(self) -> None:
         if self._loading:
@@ -684,6 +731,12 @@ class MainWindow(DockedWorkspace):
         self._mark_dirty()
         self._refresh_counters()
         self._refresh_run_action()
+
+    def _on_results_changed(self, readings) -> None:
+        """Keep the device lab on the same readings the table shows."""
+        if self._loading:
+            return
+        self._sensor_lab.set_context(self._project.sensors, readings)
 
     def _on_lab_config_changed(self, config) -> None:
         """Persist a device model edited in the lab panel."""

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from scentinel.core import composition as comp
+from scentinel.core import gas_data
 from scentinel.core import generation as gen
 from scentinel.core.gas_data import regime_concentration
 
@@ -90,6 +91,13 @@ def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
     so the source strength of a product is its volume share of that mixture:
     methane is 0 ppmv in a fresh load and 550 000 ppmv at the cited steady state,
     and nothing in between is invented.
+
+    In the pre-methanogenic phases the CO2 volume share is **not cited**: AP-42
+    describes phase I as CO2-dominated with high N2 but gives no split, and the
+    generation model's CO2 mass is a carbon-balance result, not a measured
+    mixture composition. Returning a share would mean dividing by a mixture that
+    contains only CO2 — 1 000 000 ppmv — so the gap is stated instead. The mass
+    remains available on :class:`~scentinel.core.generation.Generation`.
     """
     if gas not in GENERATED_GASES:
         raise ValueError(f"{gas!r} is not a decomposition product")
@@ -102,6 +110,14 @@ def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
     )
     if gas == "CH4":
         return result.methane_fraction * PPMV_PER_FRACTION
+    if result.phase in ("I", "II"):
+        raise ValueError(
+            f"a phase-{result.phase} CO2 volume share is not cited: AP-42 §2.4.4 "
+            "describes the aerobic/transition gas as CO2-dominated with high N2 "
+            "but publishes no split, and the generation model's CO2 mass is a "
+            "carbon balance, not a mixture measurement. Use the mass "
+            "(Generation.co2_kg) or an aged scenario instead."
+        )
     # CO2 share of the same mixture.
     molar = gen.MOLAR_MASS_G_PER_MOL
     moles_ch4 = result.ch4_kg / (molar["CH4"] / 1000.0)
@@ -125,6 +141,26 @@ def auto_concentration_ppmv(scenario: Scenario, gas: str) -> float:
     return regime_concentration(gas, regime=scenario.regime)
 
 
+def auto_provenance(scenario: Scenario, gas: str) -> str:
+    """One-line provenance for an ``"auto"`` source, matching its resolved value.
+
+    Trace species keep :func:`gas_data.citation` — their number is the table's.
+    A decomposition product's number is not in any table: it comes from the
+    generation model, so its provenance names that model, the composition, and
+    the age, and states the value the manifest is about to persist. Citing the
+    static ``SOURCE_DEFAULTS`` entry here made the record contradict itself.
+    """
+    if gas in GENERATED_GASES:
+        ppmv = generated_source_ppmv(scenario, gas)
+        return (
+            f"{gas}: {ppmv:.0f} ppmv — computed by the generation model "
+            f"(40 CFR 98.343(a)(1) Equation HH-1) for waste_type={scenario.waste_type!r}, "
+            f"age_h={scenario.age_h:g}, moisture={scenario.moisture_fraction:.2f}; "
+            f"AP-42 Ch.2.4 steady-state ratio 55% CH4 / 40% CO2 / 5% N2"
+        )
+    return gas_data.citation(gas)
+
+
 @dataclass
 class Scenario:
     """One simulation configuration.
@@ -132,6 +168,13 @@ class Scenario:
     ``gas_sources`` maps a gas key to either an explicit ppmv value or the string
     ``"auto"``, which resolves through :func:`auto_concentration_ppmv` when the
     case is written.
+
+    ``composition_fractions`` overrides the preset composition that
+    ``waste_type`` selects. It exists because the batch panel edits the fraction
+    table directly: without it the assessment would describe one waste and the
+    run would solve another. ``tonnage_t`` is carried for the same reason — the
+    yield and the generation report are per-batch, and a record that cannot say
+    how much waste it assessed is not reproducible.
     """
 
     wind_speed_m_s: float = 1.0
@@ -140,7 +183,9 @@ class Scenario:
     waste_type: str = "mixed-msw"
     age_h: float = 8.0
     moisture_fraction: float = 0.40
+    tonnage_t: float = 10.0
     gas_sources: dict[str, float | str] = field(default_factory=dict)
+    composition_fractions: dict[str, float] | None = None
 
     def __post_init__(self) -> None:
         if self.wind_speed_m_s < 0.0:
@@ -153,6 +198,14 @@ class Scenario:
             raise ValueError("age_h must not be negative")
         if not 0.0 <= self.moisture_fraction <= 1.0:
             raise ValueError("moisture_fraction must be in [0, 1]")
+        if self.tonnage_t < 0.0:
+            raise ValueError("tonnage_t must not be negative")
+        if self.composition_fractions is not None:
+            # ``WasteComposition`` validates the range and the sum, so an
+            # invalid override is rejected here rather than reaching the model.
+            self.composition_fractions = comp.WasteComposition(
+                **self.composition_fractions
+            ).as_dict()
         resolved: dict[str, float | str] = {}
         for key, value in self.gas_sources.items():
             if isinstance(value, str):
@@ -174,6 +227,9 @@ class Scenario:
 
     @property
     def composition(self) -> comp.WasteComposition:
+        """The composition the model uses: the override, else the preset."""
+        if self.composition_fractions is not None:
+            return comp.WasteComposition(**self.composition_fractions)
         return self.waste.composition
 
     @property

@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -48,6 +49,13 @@ EXIT_STAGE = {
     13: "solver",
     14: "foamToVTK",
 }
+
+#: Exit code reported when a run was cancelled. Same sentinel the container
+#: setup uses, so a cancelled attempt is one value everywhere.
+CANCELLED_EXIT_CODE = -2
+
+#: Exit code reported when ``timeout_s`` elapsed before the process exited.
+TIMEOUT_EXIT_CODE = -3
 
 #: Pipeline for a case whose mesh comes from ``blockMesh`` rather than gmsh.
 #:
@@ -164,7 +172,7 @@ def run_case(
 
     if cancel is not None and cancel.is_set():
         log_path.write_text("cancelled before start\n", encoding="utf-8")
-        return RunResult(case_dir=case_dir, exit_code=-2, log_path=log_path)
+        return RunResult(case_dir=case_dir, exit_code=CANCELLED_EXIT_CODE, log_path=log_path)
 
     with log_path.open("w", encoding="utf-8") as log_file:
         process = subprocess.Popen(
@@ -180,21 +188,56 @@ def run_case(
             env=container.podman_env(),
         )
         assert process.stdout is not None
-        try:
+
+        # Output is pumped by a reader thread so the wait below stays responsive.
+        # The solver writes its progress to ``log.<solver>`` inside the case and
+        # may emit nothing on stdout for minutes; checking cancellation inside a
+        # blocking ``for line in process.stdout`` would leave the user's Cancel
+        # unanswered until the solve finished on its own.
+        def pump() -> None:
+            assert process.stdout is not None
             for line in process.stdout:
                 log_file.write(line)
                 log_file.flush()
                 if on_log is not None:
                     on_log(line.rstrip("\n"))
-                if cancel is not None and cancel.is_set():
-                    _kill_tree(process)
-                    break
-            exit_code = process.wait(timeout=timeout_s)
-        finally:
-            process.stdout.close()
 
+        reader = threading.Thread(target=pump, daemon=True)
+        reader.start()
+
+        deadline = None if timeout_s is None else time.monotonic() + timeout_s
+        timed_out = False
+        cancelled = False
+        while True:
+            try:
+                exit_code = process.wait(timeout=0.1)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            if cancel is not None and cancel.is_set():
+                _kill_tree(process)
+                process.wait()
+                exit_code = CANCELLED_EXIT_CODE
+                cancelled = True
+                break
+            if deadline is not None and time.monotonic() >= deadline:
+                _kill_tree(process)
+                process.wait()
+                exit_code = TIMEOUT_EXIT_CODE
+                timed_out = True
+                break
+
+        reader.join(timeout=5)
+        process.stdout.close()
+
+    if timed_out or cancelled:
+        # The process was killed by a signal (SIGTERM/SIGKILL), so its raw exit
+        # code is negative and stage-less. The sentinel is what tells the UI
+        # "the user cancelled" from "the solver failed"; without it a cancelled
+        # run would be persisted as a failure.
+        return RunResult(case_dir=case_dir, exit_code=exit_code, log_path=log_path)
     if cancel is not None and cancel.is_set() and exit_code == 0:
-        exit_code = -2
+        exit_code = CANCELLED_EXIT_CODE
     return RunResult(case_dir=case_dir, exit_code=exit_code, log_path=log_path)
 
 

@@ -1,6 +1,6 @@
 # Scentinel — Task Breakdown
 
-**Version:** 0.1.0 · **Last updated:** 2026-09-19
+**Version:** 0.2.2 · **Last updated:** 2026-09-19
 
 Every task with its status, the files it touches, and its acceptance test. Phase
 context is in [ROADMAP.md](ROADMAP.md).
@@ -217,12 +217,19 @@ published limit reported as unchecked rather than given an invented one.
 **Known defect, see T-122:** `halogen_load()` takes no scenario argument, so the
 RDF block produces byte-identical output for every waste type. It is decorative.
 
-#### T-056 Sandbox publishes its readings · DONE
-Files: `src/scentinel/ui/sensor_sandbox.py`, `tests/ui/test_home_window.py`
-Acceptance met: the replay writes into the same results table a solve fills
-(`TVOC`, `GROUND_TRUTH`, `INTERFERENCE`); each sensor's CFD VOC is the ground
-truth when a run result exists, with the lab fallback otherwise; reset clears
-both the state and the table.
+#### T-056 Sandbox publishes its readings · SUPERSEDED (record corrected 2026-09-19)
+Files: `src/scentinel/ui/sensor_lab.py`, `tests/ui/test_main_window.py`
+Original claim: the replay writes into the same results table a solve fills
+(`TVOC`, `GROUND_TRUTH`, `INTERFERENCE`); reset clears both the state and the
+table.
+**Correction:** `sensor_sandbox.py` no longer exists and the replay updates the
+lab's own telemetry, not the results table. `ResultsPanel.set_virtual_sensor_summary()`
+has no caller, and the TVOC summary row reads "requires sensor hardware" for
+every run.
+What is true today: the lab reads the project's sensors and the latest run
+readings, and `_on_run_finished` pushes a finished solve's readings into it via
+the `results_changed` signal. Resurrecting the table-publishing behaviour is open
+work, tracked with T-140/T-141.
 
 #### T-057 Analytical solver benchmarks · DONE
 Files: `tests/verification/test_analytical_benchmarks.py` (new),
@@ -264,7 +271,12 @@ Files: `src/scentinel/core/casegen.py`, `src/scentinel/ui/setup_panel.py`, `docs
 Why: the current `fixedValue` concentration makes sampled values depend on the first cell height, so mesh independence fails and does not converge. Measured 2026-09-19 with the analytical-benchmark harness: **56.4% (S1), 87.2% (S2), 8.5% (S3)** deviation between mesh sizes 0.50 m and 0.25 m on CO. The earlier 76.5% figure came from a different sensor set; both are far outside the 10% gate.
 Change: impose emission as kg/m²/s on the `source` patch; convert to a wall concentration using molecular weight and a mass-transfer coefficient; expose the source strength in the UI with its citation.
 Acceptance: `pytest -m verification` shows probe deviation <10% between mesh sizes 0.5 m and 0.25 m, with the trend decreasing.
-Note: this restores what the design spec originally described (§4.2, §4.3). Until it lands, every concentration output is classified `screening_estimate` and no decision output may claim more confidence than the transport underneath it.
+Note: this changes the plan from the design spec's §4.2/§4.3 `fixedValue`
+concentration boundary, which is what shipped. The spec's gas-source field
+comment left the basis open (`kg/m2/s or ppm basis`); T-020 resolves it toward a
+flux. Until it lands, every concentration output is classified
+`screening_estimate` and no decision output may claim more confidence than the
+transport underneath it.
 
 #### T-021 Mesh-independence gate · BLOCKED on T-020
 Files: `tests/verification/test_mesh_independence.py`
@@ -361,66 +373,60 @@ cited value exists, the output states the gap rather than filling it.
 
 ### W0 — Composition and generation model
 
-#### T-100 Waste composition model · TODO
-Files: `src/scentinel/core/composition.py` (new), `tests/unit/test_composition.py` (new)
-Change: `WasteComposition` with seven mass fractions (food, garden, paper, wood,
-textile, diaper, inert), each carrying its Table HH-1 `DOC` and `k` range.
-Preset compositions for the six existing streams so nothing regresses.
-Acceptance: fractions sum to 1.0 ± 1e-6 and an invalid sum is rejected naming the
-offending value; every preset's fractions match its cited source in the basis
-document §3.1; a preset round-trips through `Project`.
-
-#### T-101 Holding-time and phase model · TODO
+#### T-100 Waste composition model · DONE (record corrected 2026-09-19)
 Files: `src/scentinel/core/composition.py`, `tests/unit/test_composition.py`
-Why: `age` is the parameter separating a truck bin (hours, aerobic, no CH₄) from
-a landfill (years, anaerobic, 55% CH₄). AP-42 §2.4.4 defines four phases by time;
-the app models none.
-Change: `age_h` on the scenario; `phase()` returns I/II/III/IV from the AP-42
-§2.4.4 description; the phase gates which gases are generated at all.
-Acceptance: `age_h=8` → phase I, `age_h=8760` → phase IV; a phase-I batch
-produces CH₄ below 0.1% of ultimate yield (the decay table in the basis document
-§3.1 is the expected value).
+Acceptance met: `WasteComposition` carries the eight Table HH-1 fractions, each
+with its cited `DOC` and `k` range; the six stream presets are normalised and
+round-trip through `Project`; an invalid sum raises naming the gap.
+Note: this task was carried as TODO while the code existed. Corrected so the
+record matches the repository.
 
-#### T-102 Methane generation engine (Eq. HH-1) · TODO
-Files: `src/scentinel/core/generation.py` (new), `tests/unit/test_generation.py` (new)
-Why: the linear rule is uncited and can exceed the 55% physical ceiling.
-Change: implement 40 CFR §98.343(a)(1) Equation HH-1 with `DOC_F = 0.5`,
-`F = 0.5`, `MCF` from the stream type, and composition-weighted `DOC`/`k`. Cap
-the CH₄ volume fraction at the AP-42 steady-state ceiling.
-Acceptance: ultimate yield for DOC = 0.31 is 103.3 kg CH₄/Mg (basis document
-§3.2); the 24-hour decay fraction is below 0.06% for every Table HH-1 `k`; CH₄
-never exceeds 550 000 ppmv for any composition or age.
+#### T-101 Holding-time and phase model · DONE (record corrected 2026-09-19)
+Files: `src/scentinel/core/composition.py`, `tests/unit/test_composition.py`
+Acceptance met: `Scenario.age_h` selects phase I–IV via `phase_for()`, and
+`PHASE_GASES` gates which gases a phase can produce; a fresh load reports no
+methane. Note: the phase boundaries (48 h, 90 d, 1 yr) are the AP-42 narrative
+expressed as a decision rule, stated as such in the module.
 
-#### T-103 Replace linear scaling in the source path · TODO
+#### T-102 Methane generation engine (Eq. HH-1) · DONE (record corrected 2026-09-19)
+Files: `src/scentinel/core/generation.py`, `tests/unit/test_generation.py`
+Acceptance met: ultimate yield for DOC = 0.31 is 103.33 kg CH₄/t; the 24-hour
+decay fraction is below 0.06% for every Table HH-1 `k`; the methane volume
+fraction is capped by the cited 55% steady-state ceiling and asserted, not
+clamped. Note: the pre-methanogenic CO₂ **volume share** is refused as uncited
+(`scenario.generated_source_ppmv`); the CO₂ mass stays in the batch report.
+
+#### T-103 Replace linear scaling in the source path · DONE (record corrected 2026-09-19)
 Files: `src/scentinel/core/scenario.py`, `src/scentinel/core/casegen.py`,
 `tests/unit/test_scenario.py`, `tests/unit/test_casegen.py`
-Why: `auto_concentration_ppmv()` is the function producing the impossible 85% CH₄.
-Change: route `auto` sources through `generation.py`; delete `ORGANIC_REFERENCE`,
-`ORGANIC_SCALE_GASES`, and the linear rule outright — no alias, no fallback.
-Acceptance: `green-waste` at its preset no longer yields 850 000 ppmv; every
-generated source is traceable to HH-1 or a Table 2.4-1 row;
-`grep -r ORGANIC_SCALE_GASES src/` returns nothing.
+Acceptance met: `auto` sources route through `generation.py`; `ORGANIC_REFERENCE`,
+`ORGANIC_SCALE_GASES`, and the linear rule are deleted; `green-waste` reports the
+cited 55% share instead of 85%.
 
-#### T-104 Make moisture a real input · TODO
-Files: `src/scentinel/core/generation.py`, `src/scentinel/core/scenario.py`,
-`tests/unit/test_generation.py`
-Why: `moisture_fraction` is persisted, displayed, and never used — verified by
-`inspect.getsource`. AP-42 p.2.4-5 states the decay rate depends on waste moisture.
-Change: moisture selects `k` within its cited range and adjusts the dry-mass basis
-for `DOC`. Use the table's own range endpoints and interpolate linearly between
-them, stating that choice in the docstring; do not invent a curve.
-Acceptance: two scenarios differing only in moisture produce different `k` and
-therefore different generation; the mapping's endpoints match Table HH-1.
+#### T-104 Make moisture a real input · DONE — corrected 2026-09-19
+Files: `src/scentinel/core/generation.py`, `src/scentinel/core/composition.py`,
+`tests/unit/test_generation.py`, `tests/unit/test_scenario.py`
+Change: moisture selects `k` within the Table HH-1 range (endpoints
+`DRY_REFERENCE=0.15`, `WET_REFERENCE=0.65`, linear interpolation between), which
+is this model's stated choice — the table's own footnote c governs
+evapotranspiration vs precipitation, not moisture directly.
+Acceptance met for the *mass*: two scenarios differing only in moisture produce
+different `k` and different gas mass (2.16× on the measured example).
+**Correction:** the original acceptance test asserted the moisture *source
+concentration* moved, which passed only on float noise (549999.9999999999 vs
+550000.0). The steady-state share is cited at 55% and is not a moisture
+function; the honest assertion is on `ch4_kg`, and the test now says so.
 
-#### T-105 Manifest version 4 · TODO
+#### T-105 Manifest version 4 · DONE — 2026-09-19
 Files: `src/scentinel/core/history.py`, `tests/unit/test_history.py`
-Why: a version 3 manifest cannot say which composition produced its concentrations.
-Change: bump `RUN_FORMAT_VERSION` to 4; record the seven fractions, `age_h`, the
-derived phase, and the resolved `DOC`/`k` per material; reject version 3 rather
-than misread it.
-Acceptance: a version 3 manifest raises naming both versions; the new manifest
-round-trips; `applied_physics` gains the generation inputs so a manifest cannot
-claim a composition the engine did not use.
+Change: `RUN_FORMAT_VERSION` is 4; the scenario block records `tonnage_t`, the
+eight composition fractions, and a `generation` block (phase, DOC, k,
+decay_fraction, methane_fraction, ch4_kg, co2_kg) captured from the model at
+reservation time. Version 3 manifests are rejected rather than misread.
+Acceptance met: a version 3 manifest raises naming the expected version; the new
+manifest round-trips; `_decode_composition` re-validates through
+`WasteComposition`, so a hand-edited manifest cannot hold a composition the
+model would refuse.
 
 #### T-106 Extract fresh-waste VOC data · TODO — **research, blocks T-107**
 Files: `docs/data/` (new artifacts), `docs/references.md`, `scripts/scrape_references.py`
@@ -446,24 +452,25 @@ merely disabled); CO₂ appears with a cited default; the gas list is a function
 
 ### W1 — Mass balance and yield
 
-#### T-110 Batch mass balance · TODO
-Files: `src/scentinel/core/massbalance.py` (new), `tests/unit/test_massbalance.py` (new)
-Why: the expected output is tonnage per stream ("10 t in → 6.4 t RDF"). No mass
-model exists today (`tonnage` has zero hits in `src/`).
-Change: `Batch(tonnage_t, composition, moisture)` → per-stream mass. Moisture
-leaves as a separate stream, not folded into the product.
-Acceptance: streams sum to the input within 0.1%; zero tonnage raises rather than
-returning zeros.
+#### T-110 Batch mass balance · DONE (record corrected 2026-09-19)
+Files: `src/scentinel/core/massbalance.py`, `tests/unit/test_massbalance.py`
+Acceptance met: moisture leaves as its own stream; every material is routed and
+the total closes on the input; `yield_fraction()` reports each stream's share.
+Correction: the original acceptance said "zero tonnage raises". Zero is a valid
+empty batch and returns zeros; *negative* tonnage raises. The test asserts the
+behaviour the model actually guarantees.
 
-#### T-111 Route split fractions · TODO — **needs cited basis**
+#### T-111 Route split fractions · DONE — corrected 2026-09-19
 Files: `src/scentinel/core/massbalance.py`, `docs/references.md`
-Why: how much of each material goes to RDF vs recycling vs composting is a
-process property, not a physical constant.
-Change: routing as an explicit, editable process parameter with a cited default
-where one exists and an explicit `user input` provenance where one does not.
-Never present an assumption as a citation.
-Acceptance: each split fraction displays its provenance in the UI and records it
-in the manifest.
+Acceptance met: routing is an explicit parameter with per-material provenance;
+defaults are labelled `user assumption`.
+**Correction:** the first implementation labelled *any* caller-supplied routing
+table `cited`. Supplying a table is not evidence that anyone published it, so the
+default label is now `user assumption` in every case; only an explicit
+`provenance` mapping can mark a material `cited`.
+Remaining gap: the fractions are still model assumptions — no source in the
+repository supports a specific split — so they remain labelled as such rather
+than presented as citations.
 
 #### T-112 Process-parameter sensitivity · TODO
 Files: `src/scentinel/core/massbalance.py`, `src/scentinel/ui/`
@@ -476,6 +483,9 @@ it touches, naming which parameter moved.
 
 #### T-120 RDF quality parameters · TODO — **partially blocked on lab data**
 Files: `src/scentinel/core/quality.py` (new), `tests/unit/test_quality.py` (new)
+Status note: `suitability.QualityInputs` and `fuel_grade()` already implement the
+three-mode contract (measured / correlated / unavailable) and refuse to invent a
+class; a dedicated `quality.py` module is still the planned home for it.
 Why: NCV, ash, and fuel-basis chlorine are what an offtaker buys; the basis
 document §6.4 states they cannot be derived from the gas phase.
 Change: three explicit input modes, never mixed — measured (provenance
@@ -492,7 +502,7 @@ measured or correlated with a citation; otherwise state which input is missing.
 Acceptance: a complete input set yields a class and the standard clause; an
 incomplete set names the missing parameter and yields no class.
 
-#### T-122 Fix the decorative RDF block · TODO
+#### T-122 Fix the decorative RDF block · TODO — still open
 Files: `src/scentinel/core/assessment.py`, `src/scentinel/ui/results_panel.py`,
 `tests/unit/test_assessment.py`
 Why: measured — `halogen_load()` takes no `scenario`, so `mixed-msw`,
@@ -501,16 +511,16 @@ Change: make halogen and sulfur loading a function of composition and the select
 trace species, scaled by batch tonnage. If the composition cannot support it, say so.
 Acceptance: two compositions produce different loading; the value changes when
 tonnage changes; the panel text names the composition it used.
+Note: `evaluate()` now accepts `moisture_fraction` and the summary labels the
+moisture row "waste stream input", but the halogen block itself is unchanged.
 
-#### T-123 Suitability scoring · TODO
-Files: `src/scentinel/core/suitability.py` (new), `tests/unit/test_suitability.py` (new)
-Why: scores per route were requested (RDF 87%, recycling 42%, composting 18%).
-Change: score each route from composition, moisture, and quality parameters; each
-score carries its inputs and the rule that produced it. A score missing inputs is
-`insufficient_data`, never a number.
-Acceptance: a dry high-paper batch scores higher for RDF than a wet food-heavy
-one; a batch missing a required parameter yields `insufficient_data`; every score
-exposes its rule.
+#### T-123 Suitability scoring · DONE (record corrected 2026-09-19)
+Files: `src/scentinel/core/suitability.py`, `tests/unit/test_suitability.py`
+Acceptance met: each route has a stated rule over named inputs, exposed with the
+score; a route whose inputs are absent is reported rather than given a number;
+a dry high-paper batch outranks a wet food-heavy one for RDF.
+Note: the scores are *stated heuristics*, not standard classifications, and the
+module says so in its own notes. They are not EN 15359 / ISO 21640 classes.
 
 ### W3 — Interpretation, forecasting, recommendation
 
@@ -539,25 +549,27 @@ Acceptance: a synthetic linear series is recovered within a stated tolerance;
 fewer than N records yields `insufficient_history`; method and sample count appear
 in the output.
 
-#### T-133 Decision recommendation · TODO — blocked by T-123, T-130
-Files: `src/scentinel/core/recommend.py` (new), `tests/unit/test_recommend.py` (new)
-Why: the user called this the most important output — e.g. "recommended for RDF
-after moisture reduction".
-Change: rank routes by suitability score and produce one recommendation with its
-reason and caveats. Refuse to recommend when inputs are insufficient, and carry
-the screening caveat while mesh independence fails.
-Acceptance: the recommendation names the route, the reason, and every input it
-rested on; an insufficient batch yields "not enough information" plus the missing
-list; the text never presents a screening estimate as a measurement.
+#### T-133 Decision recommendation · DONE — 2026-09-19
+Files: `src/scentinel/core/recommend.py`, `tests/unit/test_recommend.py`
+Acceptance met: one recommendation naming the route, the rule behind its score,
+the projected yield, and every input it rested on; an unscoreable batch yields
+"not enough information" plus the missing list; a zero-tonnage batch is refused;
+the screening caveat is carried by default and dropping it is a deliberate
+argument (`screening=False`).
+Note: a below-threshold best route is still named — a load that physically
+exists has to go somewhere — with the shortfall stated as a caveat.
 
 ### W4 — UI for the decision flow
 
-#### T-140 Characterization panel · TODO
-Files: `src/scentinel/ui/characterization_panel.py` (new), `src/scentinel/ui/home_window.py`
-Change: a panel for composition, age, tonnage, and moisture emitting a `Batch`,
-with the derived phase and generation preview shown live.
-Acceptance: editing a fraction updates the preview without a solve; the panel
-emits a valid `Batch` or names the invalid field.
+#### T-140 Characterization panel · DONE (record corrected 2026-09-19)
+Files: `src/scentinel/ui/batch_panel.py`, `src/scentinel/ui/main_window.py`,
+`tests/ui/test_batch_panel.py`, `tests/ui/test_main_window.py`
+Acceptance met: `BatchPanel` carries the composition fractions, age, tonnage, and
+moisture, and recomputes the whole chain live without a solve; it emits
+`assessed(BatchAssessment)`, and the window mirrors those inputs into the
+scenario so the run and the assessment describe the same batch.
+Note: the module was planned as `characterization_panel.py`; the shipped name is
+`batch_panel.py`.
 
 #### T-141 Decision panel · TODO — blocked by T-133
 Files: `src/scentinel/ui/decision_panel.py` (new)

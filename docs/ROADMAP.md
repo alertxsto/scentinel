@@ -1,6 +1,6 @@
 # Scentinel — Roadmap
 
-**Version:** 0.1.0 · **Last updated:** 2026-09-19
+**Version:** 0.2.1 · **Last updated:** 2026-09-19
 
 Phase plan, current position, and what each remaining phase has to prove. Task
 detail lives in [TASKS.md](TASKS.md); design rationale in
@@ -16,7 +16,7 @@ F1  2D geometry, mesh, sensor placement  █████████████
 F2  Multi-gas, visualisation, probes     ███████████████████░░░  probes + field view done, verification failing
 F3  Comparison and reporting             ████████░░░░░░░░░░░░░░  history done, no comparison UI
 F4  3D and transient                     ░░░░░░░░░░░░░░░░░░░░░░  not started
-W   Waste intelligence (characterization ░░░░░░░░░░░░░░░░░░░░░░  planned — W0 is the critical path
+W   Waste intelligence (characterization ░░░░░░░░░░░░░░░░░░░░░░  W0 done; W1–W3 engine done, UI partial
     → suitability → yield → decision)
 ```
 
@@ -38,8 +38,8 @@ into an app-private store.
 below); nothing reads the run history back into the UI, so there is still no
 scenario comparison view and no PDF reporting; the ventilation flag is stored —
 recorded as requested but unmodelled — but has no effect on the case; and the
-waste layer does not exist: the app cannot say what the waste *is*, only what a
-sensor would read next to it.
+fuel-basis RDF parameters (NCV, ash, Cl) still need laboratory input, so no
+EN 15359 / ISO 21640 class is claimed.
 
 A recorded run separates four things that are easy to conflate. The *requested*
 inputs are the project snapshot; the *applied* experiment is the block of
@@ -107,7 +107,7 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 3), `list_runs()` / `get_run()` |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 4), `list_runs()` / `get_run()` |
 | 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
@@ -127,22 +127,19 @@ when its inputs are missing.
 **Plan:** [superpowers/plans/2026-09-19-waste-intelligence.md](superpowers/plans/2026-09-19-waste-intelligence.md)
 **Basis:** [gas-composition-basis.md](gas-composition-basis.md)
 
-Not started. Why it is needed, measured rather than asserted:
-
-| Defect | Evidence | Consequence |
-|---|---|---|
-| Wrong generation basis | AP-42 Ch.2.4 (landfill, anaerobic, aged) drives a fresh-bin model | CH₄ ≈ 500 000 ppmv for waste loaded hours ago |
-| Uncited linear scaling | `organic_fraction / 0.50`; zero citations in `docs/` | `green-waste` → 85% CH₄ against a 55% physical ceiling |
-| Dead input | `inspect.getsource(auto_concentration_ppmv)` — `moisture` never referenced | `moisture_fraction` is persisted and displayed but changes nothing |
-| Decorative RDF block | `halogen_load()` takes no `scenario`; three waste types give identical output | The RDF panel does not respond to any input |
+The W0–W3 engine shipped in 0.2.1: composition, phase, Equation HH-1
+generation, mass balance, suitability, and the recommendation all exist as core
+modules with unit tests, and `ui/batch_panel.py` exposes them live. The batch
+panel now also mirrors its composition, holding time, tonnage, moisture, and
+stream into the scenario the run uses, and manifest format 4 records them.
 
 | Sub-phase | Content | Status |
 |---|---|---|
-| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v4 | Not started — critical path |
-| W1 | Batch mass balance and per-stream yield | Not started |
-| W2 | RDF quality parameters and route suitability scores | Not started; T-120 is partly blocked on laboratory data |
-| W3 | Interpretation, batch history, forecast, recommendation | Not started |
-| W4 | Characterization and decision panels, comparison view, layout | Not started |
+| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v4 | Done |
+| W1 | Batch mass balance and per-stream yield | Done; split fractions remain labelled assumptions |
+| W2 | RDF quality parameters and route suitability scores | Engine done; T-120 is partly blocked on laboratory data |
+| W3 | Interpretation, batch history, forecast, recommendation | Recommendation done; interpretation/history/forecast not started |
+| W4 | Characterization and decision panels, comparison view, layout | Batch panel done; comparison view and decision panel not started |
 
 The governing rule for this phase: **a value without a citation does not enter
 the model.** Where no cited value exists, the output states the gap rather than
@@ -185,8 +182,10 @@ rankings hold, while absolute concentrations do not.
 1. **Mass-flux source.** Switch to a `fixedFluxPressure`-style or
    `externalWallHeatFluxTemperature`-equivalent scalar flux boundary so the
    emission rate (kg/m²/s) is imposed rather than the surface concentration.
-   This is also what the design spec originally described (§4.2, §4.3) before
-   the plan changed it to a concentration.
+   Note: the design spec's §4.2/§4.3 describe a `fixedValue` *concentration*
+   boundary, so this is a change of plan, not a restoration of the spec. The
+   spec's own gas-source field comment (`gas_sources: … kg/m2/s or ppm basis`)
+   left the basis open, and this is the resolution.
 2. **Near-wall refinement.** Add boundary-layer grading normal to the waste
    surface so the first cell height is resolved, then demonstrate convergence.
 3. **Accept and document.** Keep the concentration boundary and state clearly

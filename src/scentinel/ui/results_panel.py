@@ -66,6 +66,11 @@ class ResultsPanel(QWidget):
     cancel_requested = Signal()
     run_requested = Signal()
     clear_requested = Signal()
+    #: Emitted with the new readings whenever :meth:`set_results` publishes a
+    #: set. The sensor lab consumes this so a device replay always evaluates the
+    #: concentrations the table is showing, without the two panels knowing each
+    #: other.
+    results_changed = Signal(object)
 
     def __init__(self, translator: Translator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -425,6 +430,7 @@ class ResultsPanel(QWidget):
                 self._table.setItem(row, column, item)
         self._stack.setCurrentWidget(self._table if readings else self._placeholder)
         self._export_button.setEnabled(bool(readings))
+        self.results_changed.emit(list(self._readings))
 
     def set_running(self, running: bool) -> None:
         self._cancel_button.setVisible(running)

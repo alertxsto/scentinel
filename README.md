@@ -29,7 +29,7 @@ concentrations with a persisted, auditable record of every attempt.
    mercaptan, dimethyl sulfide)
 5. Run CFD (airflow + passive scalar transport) in an OpenFOAM container
 6. Inspect concentration fields and per-sensor values, then export CSV
-7. Replay each placement through a virtual sensor model in the sandbox
+7. Replay each placement through a virtual sensor model in the sensor lab
 
 ## Status
 
@@ -48,6 +48,12 @@ and per-sensor ppmv results. Records survive restarts and are readable through
 `scentinel.core.history` (`list_runs()` / `get_run()`); failed and cancelled
 attempts are recorded too.
 
+Manifest format 4 also records the batch the run solved: the composition
+fractions, the tonnage, and the generation chemistry (phase, DOC, k, methane
+fraction) the model derived from them. The batch panel and the setup form edit
+one scenario, so the assessment a user reads is the waste the case actually
+solves.
+
 `execution_status: "succeeded"` means the container pipeline exited 0 and every
 captured sensor was sampled. It does **not** mean the run converged, or that
 mesh independence, mass balance, or experimental validation passed: each of
@@ -61,8 +67,9 @@ for an ordinary run. The `ventilation` input is recorded as
 |---|---|---|
 | **F0** | App skeleton, Podman runner, OpenFOAM integration | Done |
 | **F1** | 2D geometry, mesh, sensor placement, project save/load | Done |
-| **F2** | Multi-gas scalars, probes, results panel | Probes done; **physics verification failing**, field view pending |
+| **F2** | Multi-gas scalars, probes, results panel | Probes and field view done; **physics verification failing** |
 | **F3** | Run history, comparison, reporting | History done; comparison view and PDF pending |
+| **W** | Waste intelligence: composition → generation → yield → decision | Engine done; comparison/decision UI pending |
 | **F4** | 3D geometry, transient solver, response-delay analysis | Not started |
 
 **Milestones**
@@ -153,12 +160,15 @@ existing `run-NNN` directory, so a restart never overwrites an earlier run. The
 run samples a frozen copy of the project, so editing during a run cannot change
 what a record claims to have measured.
 
-**Sensor Sandbox** opens the same project with the virtual measurement chain: it
+**Sensor Lab** opens the same project with the virtual measurement chain: it
 replays each placement through a selectable sensor model (PID, MOX,
 electrochemical, NDIR, pellistor) with its own range, detection limit, response
-and recovery times, noise, drift, and cross-sensitivity. The replayed readings
-land in the same results table a solve fills, so the device model's output is
-what a reviewer reads.
+and recovery times, noise, drift, and cross-sensitivity. The lab reads the
+latest solved run's readings as ground truth (falling back to a manual value
+when there is no run), and a finished solve is pushed into it automatically, so
+the device model always evaluates the concentrations on screen. The replay's
+output is shown in the lab's own telemetry tab; it does not write into the
+results table.
 
 ## Outputs
 
@@ -170,7 +180,7 @@ it cannot rather than filling the gap with a guess:
 | Gas results | Per-gas min / mean / maximum ppmv across the sampled sensors, and the peak sensor for each gas |
 | Safety and placement | Each gas's peak against a published limit (NIOSH REL, or the methane LEL), with the exceedance ratio; peak-to-mean spread as a placement-coverage indicator; gases with no published limit listed as unchecked |
 | RDF suitability | Gas-phase chlorine and sulfur loading in mg/Nm³ from the AP-42 Table 2.4-1 trace species, with the largest carrier named |
-| Physical TVOC | The sandbox device model's output: compensated concentration, LOD, calibration status, and uncertainty |
+| Physical TVOC | Reports "requires sensor hardware and calibration" for an ordinary run; the lab's virtual device output lives in the Sensor Lab panel |
 
 Fuel-basis RDF class (NCV, Cl %, ash as a percentage of dry mass) needs a
 laboratory analysis of the material. It is reported as needing that analysis and

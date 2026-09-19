@@ -1,6 +1,6 @@
 # Scentinel — Basis Komposisi Gas & Sumber Emisi
 
-**Versi:** 0.1.0 · **Terakhir diperbarui:** 2026-09-19
+**Versi:** 0.2.2 · **Terakhir diperbarui:** 2026-09-19
 **Status:** dokumen riset — dasar keputusan, belum sepenuhnya diimplementasikan
 
 Dokumen ini mencatat **dasar ilmiah** untuk komposisi gas yang disimulasikan

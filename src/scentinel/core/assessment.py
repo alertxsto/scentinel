@@ -37,7 +37,8 @@ S_ATOMIC_MASS = 32.06
 #: species that carries one. Counted from the molecular formula implied by each
 #: compound name; a species absent from this table contributes nothing to
 #: either loading, so an unlisted halogenated compound under-reports rather
-#: than being guessed.
+#: than being guessed. Mercury is absent by nature, not by omission: it is an
+#: element with no molecular formula, so it carries no Cl or S atoms.
 HALOGEN_ATOMS: dict[str, tuple[int, int]] = {
     "1,1,1-Trichloroethane (methyl chloroform)a": (3, 0),
     "1,1,2,2-Tetrachloroethanea": (4, 0),

@@ -294,6 +294,41 @@ class SetupPanel(QScrollArea):
             selected[gas] = "auto" if self._gas_auto[gas].isChecked() else self._gas_spins[gas].value()
         return selected
 
+    def age_h(self) -> float:
+        return self._age_h.value()
+
+    def moisture_fraction(self) -> float:
+        return self._moisture.value()
+
+    def set_batch_inputs(
+        self, *, age_h: float, moisture: float, waste_type: str | None = None
+    ) -> None:
+        """Mirror the batch panel's holding time and moisture into the form.
+
+        Both panels carry these two inputs. Without this the setup widgets stay
+        stale, and the next setup edit writes the stale values back over the
+        batch the assessment was made with. ``waste_type`` is mirrored too when
+        given: the stream key selects the AP-42 regime, so the two panels must
+        agree on it. Signals are blocked because the setup panel's own waste
+        handler would otherwise re-apply the stream's default gases.
+        """
+        self._loading_waste = True
+        widgets = [self._age_h, self._moisture]
+        if waste_type is not None:
+            widgets.append(self._waste_type)
+        try:
+            for widget in widgets:
+                widget.blockSignals(True)
+            self._age_h.setValue(age_h)
+            self._moisture.setValue(moisture)
+            if waste_type is not None:
+                self._waste_type.setCurrentIndex(self._waste_type.findData(waste_type))
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)
+            self._loading_waste = False
+        self._refresh_derived()
+
     def set_values(self, geom: BinGeometry, scenario: Scenario) -> None:
         """Push a loaded project into the widgets without emitting spurious changes."""
         widgets = (

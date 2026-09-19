@@ -49,7 +49,10 @@ from pathlib import Path
 from typing import Literal
 
 from scentinel import __version__
-from scentinel.core import casegen, gas_data
+from scentinel.core import casegen
+from scentinel.core import composition as comp
+from scentinel.core import generation as gen
+from scentinel.core.composition import PHASES
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry
 from scentinel.core.project import Project, Sensor
 from scentinel.core.scenario import (
@@ -58,6 +61,7 @@ from scentinel.core.scenario import (
     WIND_DIRECTIONS,
     Scenario,
     auto_concentration_ppmv,
+    auto_provenance,
 )
 
 #: Version of the manifest schema. Any change to the serialized shape or its
@@ -73,7 +77,11 @@ from scentinel.core.scenario import (
 #:     scenario block, because it selects the AP-42 regime and scales the auto
 #:     source strengths. A version 2 manifest cannot say which stream produced
 #:     its resolved concentrations.
-RUN_FORMAT_VERSION = 3
+#: 4 — records the batch itself: the composition fractions, the tonnage, and the
+#:     derived generation chemistry (phase, DOC, k, methane fraction). A version
+#:     3 manifest stores a stream label, not the fractions the model actually
+#:     used, so an edited composition cannot be reconstructed from it.
+RUN_FORMAT_VERSION = 4
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -191,6 +199,28 @@ _SCENARIO_KEYS = (
     "age_h",
     "organic_fraction",
     "moisture_fraction",
+    "tonnage_t",
+    "composition",
+    "generation",
+)
+_COMPOSITION_KEYS = (
+    "food",
+    "garden",
+    "paper",
+    "wood",
+    "textile",
+    "diaper",
+    "sludge",
+    "inert",
+)
+_GENERATION_KEYS = (
+    "phase",
+    "doc",
+    "k_per_year",
+    "decay_fraction",
+    "methane_fraction",
+    "ch4_kg",
+    "co2_kg",
 )
 _VENTILATION_KEYS = ("requested_on", "modelled")
 _GAS_SOURCE_KEYS = ("mode", "requested_ppmv", "resolved_ppmv", "provenance")
@@ -298,6 +328,23 @@ class VentilationRecord:
 
 
 @dataclass(frozen=True)
+class GenerationRecord:
+    """The generation chemistry the composition produced, as the model reported it.
+
+    Persisted rather than recomputed on read: a later change to the model must
+    not silently rewrite what an old record says it solved.
+    """
+
+    phase: str
+    doc: float
+    k_per_year: float
+    decay_fraction: float
+    methane_fraction: float
+    ch4_kg: float
+    co2_kg: float
+
+
+@dataclass(frozen=True)
 class ScenarioRecord:
     """Wind, the waste stream, the qualified ventilation request, and sources."""
 
@@ -309,6 +356,9 @@ class ScenarioRecord:
     age_h: float
     organic_fraction: float
     moisture_fraction: float
+    tonnage_t: float
+    composition: dict[str, float]
+    generation: GenerationRecord
 
 
 @dataclass(frozen=True)
@@ -487,7 +537,13 @@ def snapshot_project(project: Project) -> Project:
             waste_type=project.scenario.waste_type,
             age_h=project.scenario.age_h,
             moisture_fraction=project.scenario.moisture_fraction,
+            tonnage_t=project.scenario.tonnage_t,
             gas_sources=dict(project.scenario.gas_sources),
+            composition_fractions=(
+                dict(project.scenario.composition_fractions)
+                if project.scenario.composition_fractions is not None
+                else None
+            ),
         ),
         sensors=[
             Sensor(sensor_id=sensor.sensor_id, x=sensor.x, y=sensor.y)
@@ -774,7 +830,7 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 mode=AUTO_MODE,
                 requested_ppmv=None,
                 resolved_ppmv=auto_concentration_ppmv(scenario, gas),
-                provenance=gas_data.citation(gas),
+                provenance=auto_provenance(scenario, gas),
             )
         else:
             entered = float(value)
@@ -785,6 +841,16 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 resolved_ppmv=entered,
                 provenance=MANUAL_PROVENANCE,
             )
+
+    # The generation chemistry is captured from the model the run will use, at
+    # the tonnage the assessment was made for. Persisting it means a later model
+    # change cannot rewrite what an old record says it solved.
+    generation = gen.generate(
+        scenario.composition,
+        tonnage_t=scenario.tonnage_t,
+        age_h=scenario.age_h,
+        moisture=scenario.moisture_fraction,
+    )
 
     geometry = project.geometry
     return ProjectRecord(
@@ -811,6 +877,17 @@ def _snapshot_project(project: Project) -> ProjectRecord:
             age_h=scenario.age_h,
             organic_fraction=scenario.organic_fraction,
             moisture_fraction=scenario.moisture_fraction,
+            tonnage_t=scenario.tonnage_t,
+            composition=scenario.composition.as_dict(),
+            generation=GenerationRecord(
+                phase=generation.phase,
+                doc=generation.doc,
+                k_per_year=generation.k_per_year,
+                decay_fraction=generation.decay_fraction,
+                methane_fraction=generation.methane_fraction,
+                ch4_kg=generation.ch4_kg,
+                co2_kg=generation.co2_kg,
+            ),
         ),
         sensors=tuple(
             SensorRecord(sensor_id=sensor.sensor_id, x_m=sensor.x, y_m=sensor.y)
@@ -1104,6 +1181,17 @@ def _payload(record: RunRecord) -> dict[str, object]:
                 "age_h": scenario.age_h,
                 "organic_fraction": scenario.organic_fraction,
                 "moisture_fraction": scenario.moisture_fraction,
+                "tonnage_t": scenario.tonnage_t,
+                "composition": dict(scenario.composition),
+                "generation": {
+                    "phase": scenario.generation.phase,
+                    "doc": scenario.generation.doc,
+                    "k_per_year": scenario.generation.k_per_year,
+                    "decay_fraction": scenario.generation.decay_fraction,
+                    "methane_fraction": scenario.generation.methane_fraction,
+                    "ch4_kg": scenario.generation.ch4_kg,
+                    "co2_kg": scenario.generation.co2_kg,
+                },
             },
             "sensors": [
                 {"sensor_id": sensor.sensor_id, "x_m": sensor.x_m, "y_m": sensor.y_m}
@@ -1235,7 +1323,28 @@ def _decode_manifest(payload: object, run_dir: Path) -> RunRecord:
                 f"{where}: an incomplete run must not carry a case_input_digest; "
                 "the digest is computed once the case exists"
             )
-    elif project.sensors and execution_status == "succeeded" and not results.sensor_readings:
+    elif execution_status == "succeeded":
+        # ``succeeded`` is defined as "the pipeline exited 0 and every captured
+        # sensor was sampled". The schema already guarantees the sampling half;
+        # these checks enforce the process half, so a record cannot claim
+        # success while its own execution block says the solver died. This runs
+        # on load as well as at finalization, so a hand-edited manifest is
+        # rejected rather than trusted.
+        if execution.exit_code != 0:
+            raise HistoryError(
+                f"{where}: a succeeded run must record exit code 0, "
+                f"got {execution.exit_code!r}"
+            )
+        if execution.error is not None:
+            raise HistoryError(
+                f"{where}: a succeeded run must not carry an error, got {execution.error!r}"
+            )
+        if execution.failed_stage is not None:
+            raise HistoryError(
+                f"{where}: a succeeded run must not name a failed stage, "
+                f"got {execution.failed_stage!r}"
+            )
+    if execution_status == "succeeded" and project.sensors and not results.sensor_readings:
         # A project with sensors that produced no readings did not succeed; an
         # empty table must never be recorded as a successful empty result.
         raise HistoryError(
@@ -1354,6 +1463,58 @@ def _decode_scenario(payload: object, where: str) -> ScenarioRecord:
             minimum=0.0,
             maximum=1.0,
         ),
+        tonnage_t=_number(
+            mapping["tonnage_t"], "project.scenario.tonnage_t", where, minimum=0.0
+        ),
+        composition=_decode_composition(mapping["composition"], where),
+        generation=_decode_generation(mapping["generation"], where),
+    )
+
+
+def _decode_composition(payload: object, where: str) -> dict[str, float]:
+    """The batch's seven-plus-one mass fractions, validated as a composition."""
+    field = "project.scenario.composition"
+    mapping = _mapping(payload, field, where)
+    _exact_keys(mapping, _COMPOSITION_KEYS, field, where)
+    fractions = {
+        key: _number(mapping[key], f"{field}.{key}", where, minimum=0.0, maximum=1.0)
+        for key in _COMPOSITION_KEYS
+    }
+    # Reuse the model's own validator so a manifest cannot hold a composition
+    # the model would refuse; the error is re-raised as a HistoryError.
+    try:
+        comp.WasteComposition(**fractions)
+    except ValueError as error:
+        raise HistoryError(f"{where}: {field} is not a valid composition: {error}") from error
+    return fractions
+
+
+def _decode_generation(payload: object, where: str) -> GenerationRecord:
+    """The persisted generation chemistry, drawn from the closed phase set."""
+    field = "project.scenario.generation"
+    mapping = _mapping(payload, field, where)
+    _exact_keys(mapping, _GENERATION_KEYS, field, where)
+    phase = _text(mapping["phase"], f"{field}.phase", where)
+    if phase not in PHASES:
+        raise HistoryError(f"{where}: {field}.phase {phase!r} must be one of {PHASES}")
+    return GenerationRecord(
+        phase=phase,
+        doc=_number(mapping["doc"], f"{field}.doc", where, minimum=0.0, maximum=1.0),
+        k_per_year=_number(
+            mapping["k_per_year"], f"{field}.k_per_year", where, minimum=0.0
+        ),
+        decay_fraction=_number(
+            mapping["decay_fraction"], f"{field}.decay_fraction", where, minimum=0.0, maximum=1.0
+        ),
+        methane_fraction=_number(
+            mapping["methane_fraction"],
+            f"{field}.methane_fraction",
+            where,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        ch4_kg=_number(mapping["ch4_kg"], f"{field}.ch4_kg", where, minimum=0.0),
+        co2_kg=_number(mapping["co2_kg"], f"{field}.co2_kg", where, minimum=0.0),
     )
 
 

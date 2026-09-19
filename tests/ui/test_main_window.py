@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 
 from scentinel.core import history
+from scentinel.core.composition import WasteComposition
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError
 from scentinel.core.post import SensorReading as RawReading
@@ -313,6 +314,225 @@ def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
     assert "CO" in threshold_text
     assert "within limit" in threshold_text
     assert summary["tvoc_concentration"].text() == "Requires sensor hardware and calibration"
+
+
+def test_the_sensor_lab_receives_the_finished_run_readings(run_window, monkeypatch):
+    """The lab is the device-model view of this run; it must see the run.
+
+    ``_on_run_finished`` updated the results table but never pushed the new
+    readings into the lab, so a replay kept using the lab fallback (or an older
+    run's numbers) instead of the concentrations just solved.
+    """
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    lab = run_window.sensor_lab()
+    lab.truth.setValue(999.0)
+
+    assert run_window.start_run() is True
+
+    truth, _cross, source = lab._exposure("S1")
+    assert source == "cfd-co"
+    assert truth == pytest.approx(0.465)
+
+
+def test_the_lab_keeps_the_device_configuration_it_is_given(window):
+    """``set_config`` -> ``config`` must round-trip every model parameter.
+
+    The panel only carried the eight widgets it builds, so a project's
+    ``sensitivity``, ``baseline_ppm``, and temperature/humidity coefficients
+    were silently reset to their dataclass defaults on load, and the next edit
+    wrote those defaults back into the project.
+    """
+    from scentinel.core.virtual_sensor import VirtualSensorConfig
+
+    lab = window.sensor_lab()
+    original = VirtualSensorConfig(
+        family="MOX",
+        range_ppm=500.0,
+        detection_limit_ppm=0.2,
+        response_time_s=12.0,
+        recovery_time_s=30.0,
+        sensitivity=2.0,
+        cross_sensitivity=0.15,
+        noise_ppm=0.5,
+        drift_ppm_h=0.1,
+        baseline_ppm=7.0,
+        temperature_coefficient_per_c=0.03,
+        humidity_coefficient_per_rh=0.02,
+    )
+    lab.set_config(original)
+
+    restored = lab.config()
+    assert restored.sensitivity == pytest.approx(original.sensitivity)
+    assert restored.baseline_ppm == pytest.approx(original.baseline_ppm)
+    assert restored.temperature_coefficient_per_c == pytest.approx(
+        original.temperature_coefficient_per_c
+    )
+    assert restored.humidity_coefficient_per_rh == pytest.approx(
+        original.humidity_coefficient_per_rh
+    )
+
+
+def test_the_target_gas_is_not_counted_as_its_own_interference(window):
+    """A gas cannot interfere with the measurement of itself.
+
+    When VOC is absent the lab promotes the first remaining gas to ground truth
+    and then summed CH4/H2S/CO as cross-gas without excluding the promoted one,
+    so with a non-zero cross-sensitivity the same CH4 counted twice.
+    """
+    from scentinel.core.post import SensorReading as RawReading
+    from scentinel.core.virtual_sensor import VirtualSensorConfig
+
+    window.viewport().add_sensor(3.0, 2.0)
+    lab = window.sensor_lab()
+    lab.set_config(VirtualSensorConfig(cross_sensitivity=1.0))
+    lab.set_context(
+        window.viewport().sensors(),
+        [RawReading(sensor_id="S1", x=3.0, y=2.0, values={"CH4": 80.0})],
+    )
+
+    truth, cross, source = lab._exposure("S1")
+    assert source == "cfd-ch4"
+    assert truth == pytest.approx(80.0)
+    assert cross == pytest.approx(0.0)
+
+
+def test_the_batch_panel_edits_reach_the_scenario_the_run_uses(window):
+    """The assessment and the run must describe the same waste.
+
+    ``_on_batch_assessed`` used to only stash the assessment on the window, so a
+    user could edit the fraction table, read a recommendation for it, and then
+    run a simulation with the setup panel's unchanged preset.
+    """
+    from scentinel.core.composition import WasteComposition
+
+    panel = window.batch_panel()
+    panel._preset.setCurrentIndex(panel._preset.findData("green-waste"))
+    # A hand-edited table that no preset describes.
+    for widget in panel._fractions.values():
+        widget.setValue(0.0)
+    panel._fractions["paper"].setValue(0.7)
+    panel._fractions["food"].setValue(0.3)
+    panel._age_h.setValue(24.0 * 365 * 2)
+    panel._moisture.setValue(0.25)
+    panel._tonnage.setValue(6.0)
+
+    scenario = window.project().scenario
+    assert scenario.composition == WasteComposition(paper=0.7, food=0.3)
+    assert scenario.age_h == pytest.approx(24.0 * 365 * 2)
+    assert scenario.moisture_fraction == pytest.approx(0.25)
+    assert scenario.tonnage_t == pytest.approx(6.0)
+
+
+def test_a_successful_run_records_the_batch_that_was_assessed(run_window, tmp_path, monkeypatch):
+    """The manifest must carry the composition, not just the stream label."""
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    run_window.batch_panel()._tonnage.setValue(6.0)
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.project.scenario.tonnage_t == pytest.approx(6.0)
+    assert record.project.scenario.composition["food"] > 0.0
+    assert record.project.scenario.generation.phase in ("I", "II", "III", "IV")
+
+
+def test_opening_a_project_loads_the_batch_panel(qapp, translator, tmp_path):
+    """The batch editor must show the stored batch, not its widget defaults."""
+    from scentinel.core.scenario import Scenario as Scn
+
+    path = tmp_path / "batch.scentinel"
+    save_project(
+        Project(
+            name="batch",
+            geometry=BinGeometry(),
+            scenario=Scn(
+                gas_sources={"CO": 105.0},
+                age_h=1000.0,
+                moisture_fraction=0.2,
+                tonnage_t=6.5,
+                composition_fractions=WasteComposition(paper=0.7, food=0.3).as_dict(),
+            ),
+            sensors=[Sensor(sensor_id="S1", x=1.2, y=2.1)],
+        ),
+        path,
+    )
+    widget = MainWindow(translator, project=load_project(path), path=path)
+    batch = widget.batch_panel()
+
+    assert batch.tonnage_t() == pytest.approx(6.5)
+    assert batch.age_h() == pytest.approx(1000.0)
+    assert batch.moisture() == pytest.approx(0.2)
+    assert batch.composition() == WasteComposition(paper=0.7, food=0.3)
+    # And the loaded project was not rewritten by the panel's first recompute.
+    assert widget.project().scenario.tonnage_t == pytest.approx(6.5)
+    widget.deleteLater()
+
+
+def test_a_setup_edit_does_not_erase_the_assessed_batch(window):
+    """Both panels edit one project; a wind change must not drop the batch.
+
+    ``_on_setup_changed`` replaces the whole scenario with the setup panel's
+    fresh ``Scenario``, which knows nothing about the batch panel's fractions or
+    tonnage. Without carrying those fields over, touching any setup field
+    silently reset the assessed composition.
+    """
+    batch = window.batch_panel()
+    for widget in batch._fractions.values():
+        widget.setValue(0.0)
+    batch._fractions["paper"].setValue(0.7)
+    batch._fractions["food"].setValue(0.3)
+    batch._tonnage.setValue(6.0)
+
+    window.setup_panel()._wind_speed.setValue(3.5)
+
+    scenario = window.project().scenario
+    assert scenario.wind_speed_m_s == pytest.approx(3.5)
+    assert scenario.tonnage_t == pytest.approx(6.0)
+    assert scenario.composition == WasteComposition(paper=0.7, food=0.3)
+
+
+def test_the_two_panels_show_the_same_holding_time_and_moisture(window):
+    """The batch panel's age/moisture are mirrored into the setup form.
+
+    Both panels carry the same two inputs. Leaving the setup widgets stale would
+    let the next setup edit overwrite the values the assessment was made with.
+    """
+    batch = window.batch_panel()
+    batch._age_h.setValue(500.0)
+    batch._moisture.setValue(0.25)
+
+    setup = window.setup_panel()
+    assert setup._age_h.value() == pytest.approx(500.0)
+    assert setup._moisture.value() == pytest.approx(0.25)
+
+    # And the other way: a setup edit reaches the batch panel.
+    setup._age_h.setValue(48.0)
+    assert batch.age_h() == pytest.approx(48.0)
+
+
+def test_choosing_a_stream_in_either_panel_selects_it_in_both(window):
+    """The stream key drives the AP-42 regime, so the panels must agree.
+
+    The batch panel used to leave the scenario's ``waste_type`` untouched: a run
+    started from an edited batch could resolve its trace species under the setup
+    panel's stream instead of the one the assessment named.
+    """
+    batch = window.batch_panel()
+    setup = window.setup_panel()
+
+    batch._preset.setCurrentIndex(batch._preset.findData("co-disposal"))
+    assert window.project().scenario.waste_type == "co-disposal"
+    assert setup._waste_type.currentData() == "co-disposal"
+
+    setup._waste_type.setCurrentIndex(setup._waste_type.findData("rdf-feedstock"))
+    assert window.project().scenario.waste_type == "rdf-feedstock"
+    assert batch.preset_key() == "rdf-feedstock"
 
 
 def test_a_failed_run_is_finalized_as_failed(run_window, tmp_path, monkeypatch):

@@ -188,6 +188,73 @@ class BatchPanel(QScrollArea):
     def assessment(self):
         return self._assessment
 
+    def preset_key(self) -> str:
+        """The stream key currently selected, which names the AP-42 regime."""
+        return self._preset.currentData()
+
+    def set_values(
+        self,
+        *,
+        tonnage_t: float,
+        age_h: float,
+        moisture: float,
+        waste_type: str,
+        composition,
+    ) -> None:
+        """Load a stored batch without emitting a spurious assessment.
+
+        Called while the window is ``_loading``, so the recompute below paints
+        the readout for the stored batch but cannot mark the project dirty.
+        """
+        self._loading = True
+        widgets = [
+            self._preset,
+            self._tonnage,
+            self._age_h,
+            self._moisture,
+            *self._fractions.values(),
+        ]
+        try:
+            for widget in widgets:
+                widget.blockSignals(True)
+            self._preset.setCurrentIndex(self._preset.findData(waste_type))
+            self._tonnage.setValue(tonnage_t)
+            self._age_h.setValue(age_h)
+            self._moisture.setValue(moisture)
+            for key, widget in self._fractions.items():
+                widget.setValue(getattr(composition, key))
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)
+            self._loading = False
+        self.recompute()
+
+    def set_batch_inputs(
+        self, *, age_h: float, moisture: float, waste_type: str | None = None
+    ) -> None:
+        """Mirror the setup panel's holding time, moisture, and stream into this panel.
+
+        The stream is mirrored without re-applying its preset fractions: this is
+        a synchronisation of the label the two panels share, not a request to
+        overwrite the composition the user is editing.
+        """
+        self._loading = True
+        widgets = [self._age_h, self._moisture]
+        if waste_type is not None:
+            widgets.append(self._preset)
+        try:
+            for widget in widgets:
+                widget.blockSignals(True)
+            self._age_h.setValue(age_h)
+            self._moisture.setValue(moisture)
+            if waste_type is not None:
+                self._preset.setCurrentIndex(self._preset.findData(waste_type))
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)
+            self._loading = False
+        self.recompute()
+
     # -- behaviour -----------------------------------------------------------
 
     def _on_preset_changed(self) -> None:

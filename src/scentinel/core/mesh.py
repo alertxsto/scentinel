@@ -176,11 +176,15 @@ def generate_mesh(
         cell_count = 0
         element_types: dict[str, int] = {}
         for _dim, tag in gmsh.model.getEntities(3):
-            types, _tags, counts = gmsh.model.mesh.getElements(3, tag)
-            for element_type, count in zip(types, counts):
+            # ``getElements`` returns (types, elementTags, nodeTags). The count
+            # of *elements* is ``len(element_tags)``; ``len(node_tags)`` is the
+            # connectivity length, which counts a hexahedron eight times.
+            types, element_tags, _node_tags = gmsh.model.mesh.getElements(3, tag)
+            for element_type, tags in zip(types, element_tags):
                 name = _ELEMENT_NAMES.get(int(element_type), str(element_type))
-                element_types[name] = element_types.get(name, 0) + len(count)
-                cell_count += len(count)
+                count = len(tags)
+                element_types[name] = element_types.get(name, 0) + count
+                cell_count += count
     finally:
         gmsh.finalize()
 

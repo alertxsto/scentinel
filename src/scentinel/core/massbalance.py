@@ -127,9 +127,13 @@ def balance(
     table = routing if routing is not None else DEFAULT_ROUTING
     _validate_routing(table)
 
+    # A routing table is a *process* property. Passing one is not evidence that
+    # anyone published it, so the default label is the user's assumption in
+    # every case; ``provenance`` is the only way a material may be marked
+    # ``cited``, and it has to be stated explicitly by the caller.
     labels = dict(provenance or {})
     for material in MATERIAL_KEYS:
-        labels.setdefault(material, USER_ASSUMPTION if routing is None else CITED)
+        labels.setdefault(material, USER_ASSUMPTION)
 
     moisture_tonnes = tonnage_t * moisture
     dry_tonnage = tonnage_t - moisture_tonnes
@@ -156,7 +160,7 @@ def balance(
     }
 
     notes: list[str] = []
-    if routing is None:
+    if USER_ASSUMPTION in labels.values():
         notes.append(
             "routing fractions are model assumptions, not measurements; edit them per facility"
         )

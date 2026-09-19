@@ -73,6 +73,32 @@ def test_element_types_are_known_names(mesh):
     assert set(mesh.element_types) <= {"hex", "prism", "pyr", "tet"}
 
 
+def test_cell_count_matches_the_elements_in_the_written_file(mesh):
+    """The persisted mesh count must be the number of cells, not node tags.
+
+    ``gmsh.model.mesh.getElements`` returns ``(types, elementTags, nodeTags)``.
+    The counter read ``len()`` of the node-tag arrays, so a hexahedron was
+    counted eight times: the manifest recorded 3444 cells for a file that holds
+    431, and the same inflated number was reported as the mesh-size evidence.
+    """
+    lines = mesh.msh_path.read_text().splitlines()
+    start = lines.index("$Elements")
+    declared = int(lines[start + 1])
+    true_counts: dict[int, int] = {}
+    for line in lines[start + 2 : start + 2 + declared]:
+        element_type = int(line.split()[1])
+        true_counts[element_type] = true_counts.get(element_type, 0) + 1
+    volume_types = {4: "tet", 5: "hex", 6: "prism", 7: "pyr"}
+    true_cells = sum(
+        count for element_type, count in true_counts.items() if element_type in volume_types
+    )
+
+    assert mesh.cell_count == true_cells
+    assert mesh.cell_count == sum(mesh.element_types.values())
+    assert mesh.element_types.get("hex", 0) == true_counts.get(5, 0)
+    assert mesh.element_types.get("prism", 0) == true_counts.get(6, 0)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [{"mesh_size_m": 0.0}, {"air_extension_m": -1.0}, {"thickness_m": 0.0}],
