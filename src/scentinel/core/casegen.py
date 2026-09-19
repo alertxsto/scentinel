@@ -1,8 +1,14 @@
 """OpenFOAM case generation: turn a scenario and a mesh into a runnable case.
 
 Writes a complete case directory (``0/``, ``constant/``, ``system/``) for the
-``incompressibleFluid`` solver module run by ``foamRun``, plus the mesh itself
-and the patch-type dictionary that ``gmshToFoam`` needs.
+ESI ``simpleFoam`` solver, plus the mesh itself and the patch-type dictionary
+that ``gmshToFoam`` needs.
+
+Every constant this module applies — wind profile, viscosity, scalar
+diffusivity, linear-solver tolerances, SIMPLE residual targets, relaxation
+factors — is a named module constant, and the case files are rendered *from*
+those constants. `scentinel.core.history` persists the same constants, so a
+manifest cannot claim a value the generated case does not use.
 
 Two details drive the layout:
 
@@ -16,15 +22,24 @@ Two details drive the layout:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from scentinel.core.gas_data import source_concentration
 from scentinel.core.geometry import BinGeometry
-from scentinel.core.mesh import MeshResult
 from scentinel.core.scenario import Scenario
+
+if TYPE_CHECKING:
+    # Imported for annotations only. ``core.mesh`` imports ``gmsh``, which is
+    # an optional (``cfd``) dependency, so a case writer must not drag it in:
+    # ``core.history`` imports this module and the history read API has to work
+    # on a machine without the mesher installed.
+    from scentinel.core.mesh import MeshResult
 
 #: Container image used for the solver. Fully qualified: podman enforces
 #: short-name resolution and refuses to guess a registry in a non-interactive
@@ -47,8 +62,71 @@ SOLVER = "simpleFoam"
 #: Kinematic viscosity of air at 25 C [m^2/s].
 NU_AIR = 1.5e-05
 
-#: Reference wind height and roughness for the power-law profile [m].
+#: Wind profile applied to the inlet boundary. The reported wind speed is
+#: scaled from the reference height to the bin rim by a power law; both the
+#: profile name and the exponent are persisted, because they change the applied
+#: inlet velocity as much as the reported speed does.
+WIND_PROFILE = "power-law"
+WIND_PROFILE_EXPONENT = 1.0 / 7.0
+
+#: Reference wind height for the power-law profile [m].
 WIND_REFERENCE_HEIGHT_M = 10.0
+
+#: Scalar diffusivity written into every ``scalarTransport`` function object
+#: [m^2/s]. One value for every gas: the solver's diffusivity is constant and
+#: gas-independent, and ``gas_data``'s per-gas diffusivities are **not** used
+#: here. Recording the unused table instead of this value would misdescribe the
+#: case, so the manifest persists this constant per gas.
+SCALAR_DIFFUSIVITY_M2_S = 2.0e-05
+
+#: Linear-solver settings written into ``system/fvSolution``. ``fields`` holds
+#: the OpenFOAM key **exactly as it is emitted**, quotes included, so the
+#: persisted settings can be compared byte-for-byte with the generated file.
+#: The per-gas entry is appended by :func:`linear_solver_settings`.
+LINEAR_SOLVER_SETTINGS = (
+    {
+        "fields": "p",
+        "solver": "GAMG",
+        "tolerance": 1e-06,
+        "relTol": 0.1,
+        "smoother": "GaussSeidel",
+    },
+    {
+        "fields": "pcorr",
+        "solver": "GAMG",
+        "tolerance": 1e-06,
+        "relTol": 0.0,
+        "smoother": "GaussSeidel",
+    },
+    {
+        "fields": '"(U|k|epsilon)"',
+        "solver": "smoothSolver",
+        "smoother": "symGaussSeidel",
+        "tolerance": 1e-05,
+        "relTol": 0.1,
+    },
+)
+
+#: Settings for the per-gas scalar fields, appended to the solver dictionary.
+SCALAR_SOLVER_SETTINGS = {
+    "solver": "PBiCGStab",
+    "preconditioner": "DILU",
+    "tolerance": 1e-08,
+    "relTol": 0.1,
+}
+
+#: SIMPLE residual targets actually written into ``residualControl``, keyed by
+#: the emitted OpenFOAM pattern. Reaching ``endTime`` is not the same as
+#: satisfying these; nothing in an ordinary run parses the achieved residuals,
+#: so a manifest must not claim convergence.
+SIMPLE_RESIDUAL_TARGETS = {"p": 1e-3, "U": 1e-4, '"(k|epsilon)"': 1e-4}
+SCALAR_RESIDUAL_TARGET = 1e-5
+
+#: Relaxation factors written into ``relaxationFactors``, keyed as emitted.
+RELAXATION_FACTORS = {"U": 0.9, '".*"': 0.9}
+
+#: Non-orthogonal correctors in the SIMPLE dictionary.
+NON_ORTHOGONAL_CORRECTORS = 0
 
 #: Patch roles. ``gmshToFoam`` names patches after the gmsh physical groups.
 WALL_PATCHES = ("wallLeft", "wallRight")
@@ -57,6 +135,101 @@ ALL_PATCHES = ("source", "wallLeft", "wallRight", "openLeft", "openRight", "top"
 
 #: PPM is converted to a volume fraction for the solver's dimensionless scalar.
 PPM_SCALE = 1.0e-6
+
+#: Files ``write_case`` writes into ``constant/`` and ``system/``.
+CASE_STATIC_INPUTS = (
+    "constant/transportProperties",
+    "constant/turbulenceProperties",
+    "system/controlDict",
+    "system/fvSchemes",
+    "system/fvSolution",
+    "system/functions",
+    "system/changeDictionaryDict",
+)
+
+#: Files ``write_case`` writes into ``0/`` that are not per-gas scalar fields.
+CASE_FIXED_FIELD_INPUTS = ("0/U", "0/p", "0/k", "0/epsilon", "0/nut")
+
+#: Files ``write_case`` writes beside those directories.
+CASE_ROOT_INPUTS = ("case.msh", "case.json")
+
+
+def case_input_paths(gases: Iterable[str]) -> list[str]:
+    """Every file ``write_case`` generates, as relative POSIX paths, sorted.
+
+    The set is declared rather than discovered by walking the directory,
+    because the container writes *into* the same tree: ``constant/polyMesh``,
+    ``VTK/``, ``postProcessing/``, and the per-stage ``log.*`` files are solver
+    output. Walking would fold them into the digest, so an identical case would
+    digest differently depending on whether it had been solved — and a run that
+    failed before the solve could never match a run that succeeded.
+
+    ``gases`` supplies the per-gas scalar field names.
+    """
+    paths = [
+        *CASE_ROOT_INPUTS,
+        *CASE_FIXED_FIELD_INPUTS,
+        *(f"0/{gas}" for gas in gases),
+        *CASE_STATIC_INPUTS,
+    ]
+    return sorted(set(paths))
+
+
+def case_input_digest(case_dir: Path, gases: Iterable[str]) -> str:
+    """SHA-256 over the generated case inputs, as ``"sha256:<hex>"``.
+
+    Algorithm, fixed so two independent implementations agree:
+
+    1. Take :func:`case_input_paths`, sorted by relative POSIX path.
+    2. For each file, feed the digest the UTF-8 relative path, a ``NUL`` byte,
+       the decimal file size in bytes, another ``NUL``, then the file bytes.
+    3. Render the 32-byte digest as lowercase hex.
+
+    The relative path and size are hashed alongside the bytes so that renaming
+    or truncating a file changes the digest even when the remaining bytes do.
+    Only declared inputs are read; see :func:`case_input_paths` for why solver
+    output must stay out.
+
+    This digest is the authoritative guard for "same applied experiment": a
+    change to any generated input, at identical UI inputs, changes it. A
+    missing declared input raises, because a digest over a partial case would
+    silently understate what was applied.
+    """
+    digest = hashlib.sha256()
+    case_dir = Path(case_dir)
+    for relative in case_input_paths(gases):
+        path = case_dir / relative
+        try:
+            data = path.read_bytes()
+        except OSError as error:
+            raise ValueError(f"case input {relative} is missing or unreadable: {error}") from error
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(len(data)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(data)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def linear_solver_settings(sources: dict[str, float]) -> list[dict[str, object]]:
+    """The ``solvers`` block as written, including the per-gas entry.
+
+    ``fields`` is the emitted dictionary key; the scalar entry keeps the
+    parenthesised, quoted form the case writer has always produced.
+    """
+    settings: list[dict[str, object]] = [dict(entry) for entry in LINEAR_SOLVER_SETTINGS]
+    if sources:
+        pattern = "|".join(sources)
+        settings.append({"fields": f'"({pattern})"', **SCALAR_SOLVER_SETTINGS})
+    return settings
+
+
+def residual_targets(sources: dict[str, float]) -> dict[str, float]:
+    """The ``residualControl`` targets as written, including the per-gas entry."""
+    targets = dict(SIMPLE_RESIDUAL_TARGETS)
+    if sources:
+        targets[f'"({"|".join(sources)})"'] = SCALAR_RESIDUAL_TARGET
+    return targets
 
 
 @dataclass(frozen=True)
@@ -117,7 +290,7 @@ def wind_speed_at(scenario: Scenario, height_m: float) -> float:
     if scenario.wind_speed_m_s <= 0.0 or height_m <= 0.0:
         return 0.0
     ratio = min(height_m, WIND_REFERENCE_HEIGHT_M) / WIND_REFERENCE_HEIGHT_M
-    return scenario.wind_speed_m_s * ratio ** (1.0 / 7.0)
+    return scenario.wind_speed_m_s * ratio ** WIND_PROFILE_EXPONENT
 
 
 def write_case(
@@ -125,10 +298,16 @@ def write_case(
     mesh: MeshResult,
     out_dir: Path,
     *,
-    geom: BinGeometry | None = None,
+    geom: BinGeometry,
     end_time: int = 2000,
 ) -> Path:
-    """Write a complete, ready-to-run OpenFOAM case into ``out_dir``."""
+    """Write a complete, ready-to-run OpenFOAM case into ``out_dir``.
+
+    ``geom`` is required: the inlet velocity is the reported wind speed scaled
+    to the bin rim, so the case cannot be written without the height it is
+    scaled to. An internal default here would let the case and the persisted
+    ``applied_physics`` block describe different reference heights.
+    """
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -143,8 +322,7 @@ def write_case(
     if missing:
         raise ValueError(f"mesh is missing patches required by the case: {sorted(missing)}")
 
-    reference_height = geom.height_m if geom is not None else 2.5
-    inlet_speed = wind_speed_at(scenario, reference_height)
+    inlet_speed = wind_speed_at(scenario, geom.height_m)
 
     _write(out_dir / "0" / "U", _field_u(roles, inlet_speed, scenario.wind_sign))
     _write(out_dir / "0" / "p", _field_p(roles))
@@ -169,6 +347,7 @@ def write_case(
                 "sources_volume_fraction": sources,
                 "inlet_speed_m_s": inlet_speed,
                 "patch_roles": {name: role.kind for name, role in roles.items()},
+                "applied_physics": applied_physics(scenario, geom),
             },
             indent=2,
         )
@@ -176,6 +355,30 @@ def write_case(
         encoding="utf-8",
     )
     return out_dir
+
+
+def applied_physics(scenario: Scenario, geom: BinGeometry) -> dict[str, object]:
+    """The numerical settings this case actually applies, as a JSON-able block.
+
+    Every value is read from the same module constant the case writer renders
+    into the OpenFOAM dictionaries, so persisting this block cannot claim a
+    setting the generated case does not use. It carries no digest: that belongs
+    to the run record and is computed from the written files.
+    """
+    sources = resolve_sources(scenario)
+    return {
+        "wind_speed_reported_m_s": scenario.wind_speed_m_s,
+        "inlet_speed_at_rim_m_s": wind_speed_at(scenario, geom.height_m),
+        "wind_profile": WIND_PROFILE,
+        "wind_profile_exponent": WIND_PROFILE_EXPONENT,
+        "wind_reference_height_m": WIND_REFERENCE_HEIGHT_M,
+        "nu_m2_s": NU_AIR,
+        "scalar_diffusivity_m2_s": {gas: SCALAR_DIFFUSIVITY_M2_S for gas in sources},
+        "linear_solver_settings": linear_solver_settings(sources),
+        "residual_targets": residual_targets(sources),
+        "relaxation_factors": dict(RELAXATION_FACTORS),
+        "non_orthogonal_correctors": NON_ORTHOGONAL_CORRECTORS,
+    }
 
 
 def _write(path: Path, body: str) -> None:
@@ -405,31 +608,68 @@ def _fv_schemes(sources: dict[str, float]) -> str:
 
 
 def _fv_solution(sources: dict[str, float]) -> str:
-    gas_pattern = "|".join(sources) if sources else "none"
+    blocks = []
+    for entry in linear_solver_settings(sources):
+        fields = str(entry["fields"])
+        body = "".join(
+            f"        {key:<15} {_foam_value(value)};\n"
+            for key, value in entry.items()
+            if key != "fields"
+        )
+        blocks.append(f"    {fields}\n    {{\n{body}    }}\n")
+
+    # ``_residual_lines`` keeps the per-gas entry in its historical unpadded
+    # form so this refactor leaves every generated byte unchanged.
+    targets = _residual_lines(sources)
+    relaxation = "".join(
+        f"        {key:<16}{_foam_value(value)};\n"
+        for key, value in RELAXATION_FACTORS.items()
+    )
     return (
         _header("dictionary", "fvSolution")
         + "solvers\n{\n"
-        "    p\n    {\n        solver          GAMG;\n        tolerance       1e-06;\n"
-        "        relTol          0.1;\n        smoother        GaussSeidel;\n    }\n\n"
-        "    pcorr\n    {\n        solver          GAMG;\n        tolerance       1e-06;\n"
-        "        relTol          0;\n        smoother        GaussSeidel;\n    }\n\n"
-        '    "(U|k|epsilon)"\n    {\n        solver          smoothSolver;\n'
-        "        smoother        symGaussSeidel;\n        tolerance       1e-05;\n"
-        "        relTol          0.1;\n    }\n\n"
-        f'    "({gas_pattern})"\n    {{\n        solver          PBiCGStab;\n'
-        "        preconditioner  DILU;\n        tolerance       1e-08;\n        relTol          0.1;\n    }\n}\n\n"
-        "SIMPLE\n{\n    nNonOrthogonalCorrectors 0;\n    consistent      yes;\n\n"
+        + "\n".join(blocks)
+        + "}\n\n"
+        "SIMPLE\n{\n"
+        f"    nNonOrthogonalCorrectors {NON_ORTHOGONAL_CORRECTORS};\n"
+        "    consistent      yes;\n\n"
         "    residualControl\n    {\n"
-        "        p               1e-3;\n"
-        "        U               1e-4;\n"
-        '        "(k|epsilon)"   1e-4;\n'
-        f'        "({gas_pattern})" 1e-5;\n'
-        "    }\n}\n\n"
+        + targets
+        + "    }\n}\n\n"
         "relaxationFactors\n{\n    equations\n    {\n"
-        "        U               0.9;\n"
-        '        ".*"            0.9;\n'
-        "    }\n}\n"
+        + relaxation
+        + "    }\n}\n"
     )
+
+
+def _residual_lines(sources: dict[str, float]) -> str:
+    """``residualControl`` body: fixed targets padded, the gas entry as before."""
+    lines = [
+        f"        {key:<16}{_foam_value(value)};\n"
+        for key, value in SIMPLE_RESIDUAL_TARGETS.items()
+    ]
+    if sources:
+        pattern = "|".join(sources)
+        lines.append(f'        "({pattern})" {_foam_value(SCALAR_RESIDUAL_TARGET)};\n')
+    return "".join(lines)
+
+
+def _foam_value(value: object) -> str:
+    """Render a Python value the way the case dictionaries spell it.
+
+    Floats use general form (``1e-06``, ``0.1``) and ints stay ints, so a
+    constant and the file it produced are visibly the same value. The only
+    cosmetic difference from the pre-constant writer is that a threshold such as
+    ``1e-3`` now renders as ``0.001`` — the same number, parsed identically by
+    OpenFOAM.
+    """
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    return f"{float(value):g}"
 
 
 def _functions(sources: dict[str, float]) -> str:
@@ -439,7 +679,7 @@ def _functions(sources: dict[str, float]) -> str:
         f"    libs            (solverFunctionObjects);\n"
         f"    field           {gas};\n"
         f"    diffusivity     constant;\n"
-        f"    D               2e-05;\n"
+        f"    D               {SCALAR_DIFFUSIVITY_M2_S:g};\n"
         f"    nCorr           1;\n"
         f"    resetOnStartup  false;\n"
         f"}}\n\n"
