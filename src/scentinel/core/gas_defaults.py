@@ -4,27 +4,65 @@
 #   EPA AP-42 Ch.2.4 final (Aug 2024): docs/data/c2s4_2024_final.pdf
 #   EPA AP-42 tables: docs/data/ap-42-chapter-2-section-4-tables-final.xlsx
 #   EPA LMOP landfill gas basics: https://www.epa.gov/lmop/basic-information-about-landfill-gas
+#
+# Diffusivities are computed by the Fuller-Schettler-Giddings correlation
+# from atomic diffusion volumes in Reid, Prausnitz & Poling,
+# 'The Properties of Gases and Liquids', 4th ed., Table 11-1.
 
+# Physical properties at 25 C, 1 atm. Every diffusivity is computed with
+# Fuller-Schettler-Giddings from atomic diffusion volumes in Reid,
+# Prausnitz & Poling, 'The Properties of Gases and Liquids', 4th ed.,
+# Table 11-1 (aromatic rings: -18.3 cm^3 each).
 GAS_PROPERTIES = {
     "CO": {
         "name": "Carbon monoxide",
         "mw_g_mol": 28.01,
-        "diffusivity_m2_s": 2e-05
+        "diffusivity_m2_s": 1.87e-05
     },
     "CH4": {
         "name": "Methane",
         "mw_g_mol": 16.04,
-        "diffusivity_m2_s": 2.2e-05
+        "diffusivity_m2_s": 2.1e-05
     },
     "VOC": {
         "name": "Non-methane organic compounds (as hexane proxy)",
         "mw_g_mol": 86.18,
-        "diffusivity_m2_s": 8.7e-06
+        "diffusivity_m2_s": 7.66e-06
     },
     "H2S": {
         "name": "Hydrogen sulfide",
         "mw_g_mol": 34.08,
-        "diffusivity_m2_s": 1.6e-05
+        "diffusivity_m2_s": 1.71e-05
+    },
+    "BENZENE": {
+        "name": "Benzene",
+        "mw_g_mol": 78.11,
+        "diffusivity_m2_s": 8.96e-06
+    },
+    "TOLUENE": {
+        "name": "Toluene",
+        "mw_g_mol": 92.13,
+        "diffusivity_m2_s": 8.06e-06
+    },
+    "ETHANE": {
+        "name": "Ethane",
+        "mw_g_mol": 30.07,
+        "diffusivity_m2_s": 1.41e-05
+    },
+    "VINYL_CHLORIDE": {
+        "name": "Vinyl chloride",
+        "mw_g_mol": 62.5,
+        "diffusivity_m2_s": 1.1e-05
+    },
+    "METHYL_MERCAPTAN": {
+        "name": "Methyl mercaptan",
+        "mw_g_mol": 48.11,
+        "diffusivity_m2_s": 1.28e-05
+    },
+    "DIMETHYL_SULFIDE": {
+        "name": "Dimethyl sulfide (methyl sulfide)",
+        "mw_g_mol": 62.13,
+        "diffusivity_m2_s": 1.06e-05
     }
 }
 
@@ -50,6 +88,40 @@ SOURCE_DEFAULTS = {
         "conc_ppmv": 36,
         "basis": "AP-42 Table 2.4-1: default concentration",
         "rating": "B"
+    },
+    "BENZENE": {
+        "conc_ppmv": 1.9,
+        "basis": "AP-42 Table 2.4-2: Benzene, No or Unknown co-disposal",
+        "rating": "B",
+        "alternate_conc_ppmv": 11,
+        "alternate_basis": "AP-42 Table 2.4-2: Benzene, Co-disposal"
+    },
+    "TOLUENE": {
+        "conc_ppmv": 39,
+        "basis": "AP-42 Table 2.4-2: Toluene, No or Unknown co-disposal",
+        "rating": "A",
+        "alternate_conc_ppmv": 170,
+        "alternate_basis": "AP-42 Table 2.4-2: Toluene, Co-disposal"
+    },
+    "ETHANE": {
+        "conc_ppmv": 890,
+        "basis": "AP-42 Table 2.4-1: default concentration",
+        "rating": "C"
+    },
+    "VINYL_CHLORIDE": {
+        "conc_ppmv": 7.3,
+        "basis": "AP-42 Table 2.4-1: default concentration",
+        "rating": "B"
+    },
+    "METHYL_MERCAPTAN": {
+        "conc_ppmv": 2.5,
+        "basis": "AP-42 Table 2.4-1: default concentration",
+        "rating": "C"
+    },
+    "DIMETHYL_SULFIDE": {
+        "conc_ppmv": 7.8,
+        "basis": "AP-42 Table 2.4-1: default concentration",
+        "rating": "C"
     }
 }
 

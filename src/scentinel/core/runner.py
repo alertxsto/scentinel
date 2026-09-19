@@ -8,7 +8,6 @@ so a failure can be read back without re-running.
 from __future__ import annotations
 
 import os
-import shutil
 import signal
 import subprocess
 import threading
@@ -16,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from scentinel.core import container
 from scentinel.core.casegen import FOAM_BASHRC, IMAGE, SOLVER
 
 #: Case directory as seen from inside the container.
@@ -69,19 +69,17 @@ class RunResult:
 
 
 def podman_available() -> bool:
-    return shutil.which("podman") is not None
+    """True when podman is on PATH. Thin alias of :mod:`container`'s check."""
+    return container.podman_available()
 
 
 def image_available(image: str = IMAGE) -> bool:
-    """True when the solver image is already pulled locally."""
-    if not podman_available():
-        return False
-    result = subprocess.run(
-        ["podman", "image", "exists", image],
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0
+    """True when the solver image is already pulled locally.
+
+    Delegates to :mod:`scentinel.core.container`, which is the single place
+    that knows the isolated storage config every podman call must use.
+    """
+    return container.image_available(image)
 
 
 def build_podman_command(case_dir: Path, image: str = IMAGE) -> list[str]:
@@ -142,6 +140,10 @@ def run_case(
             text=True,
             bufsize=1,
             start_new_session=True,  # own process group, so we can kill the tree
+            # The container storage must stay inside the app home even for
+            # overridden commands: the override replaces the argv, not the
+            # environment a podman process would inherit.
+            env=container.podman_env(),
         )
         assert process.stdout is not None
         try:

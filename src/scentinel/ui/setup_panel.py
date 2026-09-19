@@ -182,7 +182,7 @@ class SetupPanel(QScrollArea):
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(6)
 
-            box = QCheckBox()
+            box = QCheckBox(gas)
             box.setToolTip(citation(gas))
             spin = _spin(0.0, 1_000_000.0, 0.0, 10.0, " ppmv", 1, decimals=1)
             spin.setEnabled(False)

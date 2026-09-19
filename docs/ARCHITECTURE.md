@@ -129,7 +129,7 @@ MainWindow._on_run_finished
 | Dimensionality | 2D as 3D one cell thick | OpenFOAM has no 2D solver; front/back are `empty` |
 | Solver | `simpleFoam` | Steady SIMPLE, incompressible, isothermal |
 | Turbulence | k-epsilon RAS | `k`, `epsilon`, `nut` written per case |
-| Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D = casegen.SCALAR_DIFFUSIVITY_M2_S` (2e-05 m²/s for every gas) |
+| Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D = casegen.scalar_diffusivity(gas)` — each gas's own FSG-computed diffusivity from `gas_data` |
 | Waste mound | Not meshed | Solid, no flow; contributes only the `source` patch |
 | Source term | `fixedValue` concentration | 105 ppmv CO etc., as volume fraction |
 
@@ -253,10 +253,11 @@ silently or with a misleading error.
     smuggle in foreign readings.
 26. **`applied_physics` and the case digest separate request from experiment.**
     The reported wind speed becomes a different inlet velocity after the
-    power-law scaling, and the case applies one hard-coded scalar diffusivity
-    rather than the per-gas table in `gas_data`. `casegen` owns those constants
-    and renders both the case files and the persisted block from them, so a
-    manifest cannot claim a setting the case does not use. The SHA-256 digest
+    power-law scaling, and the case applies a per-gas scalar diffusivity —
+    `casegen.scalar_diffusivity()` reads each gas's FSG-computed value from
+    `gas_data`. `casegen` owns those constants and renders both the case files
+    and the persisted block from the same source, so a manifest cannot claim a
+    setting the case does not use. The SHA-256 digest
     over the declared case inputs (`casegen.case_input_paths`) is the
     authoritative guard: it covers only what `write_case` generated, never the
     solver's own output into the same tree, so the digest stays valid after a

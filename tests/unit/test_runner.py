@@ -92,3 +92,16 @@ def test_stage_log_reads_the_named_file(tmp_path: Path):
 @pytest.mark.integration
 def test_podman_reports_its_availability():
     assert podman_available() in (True, False)
+
+
+def test_run_case_hands_podman_the_isolated_storage(tmp_path: Path, monkeypatch):
+    """The child process must see the app-home storage conf, overrides included."""
+    monkeypatch.setenv("SCENTINEL_HOME", str(tmp_path))
+
+    result = run_case(
+        tmp_path,
+        command_override=["bash", "-lc", 'echo "conf=$CONTAINERS_STORAGE_CONF"'],
+    )
+
+    assert result.exit_code == 0
+    assert f"conf={tmp_path / 'containers' / 'storage.conf'}" in result.log_path.read_text()

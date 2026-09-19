@@ -150,6 +150,13 @@ def render_concentration_field(
     """Render the real OpenFOAM cell field in the XY plane and return its statistics."""
     import numpy as np
     import pyvista as pv
+    # Imported by name on purpose. ``pv.Plotter`` goes through pyvista's module
+    # ``__getattr__``, which imports ``pyvista.plotting`` on first access; when
+    # the solver thread is concurrently importing that submodule, the attribute
+    # lookup can run against a partially initialised module and raise
+    # ``AttributeError: module 'pyvista' has no attribute 'Plotter'``. A direct
+    # submodule import is served from ``sys.modules`` and has no such window.
+    from pyvista.plotting import Plotter
 
     grid = pv.read(internal_vtu(case_dir, time))
     if gas not in _cell_scalars(grid):
@@ -162,7 +169,7 @@ def render_concentration_field(
 
     image_path = Path(image_path)
     image_path.parent.mkdir(parents=True, exist_ok=True)
-    plotter = pv.Plotter(off_screen=True, window_size=(1200, 700))
+    plotter = Plotter(off_screen=True, window_size=(1200, 700))
     plotter.set_background("white")
     plotter.add_mesh(
         grid,

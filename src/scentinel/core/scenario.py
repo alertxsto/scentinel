@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from scentinel.core.gas_data import source_concentration
+from scentinel.core.gas_data import regime_concentration
 
 WIND_DIRECTIONS = ("left-to-right", "right-to-left")
 
@@ -56,9 +56,17 @@ def waste_spec(key: str) -> WasteSpec:
 
 
 def auto_concentration_ppmv(scenario: Scenario, gas: str) -> float:
-    """Cited AP-42 default for ``gas``, scaled by waste stream when applicable."""
+    """Cited AP-42 default for ``gas``, scaled by waste stream when applicable.
+
+    A co-disposal stream uses the cited alternate when the gas has one. Not
+    every gas does — AP-42 Table 2.4-1 is a single default concentration with no
+    co-disposal split, and Table 2.4-2 only splits benzene and NMOC — so the
+    regime lookup falls back to the base default instead of raising. That keeps
+    every gas in :data:`~scentinel.core.gas_data.DEFAULT_SOURCE_GASES` selectable
+    under every waste stream.
+    """
     spec = waste_spec(scenario.waste_type)
-    ppmv = source_concentration(gas, regime=spec.regime)
+    ppmv = regime_concentration(gas, regime=spec.regime)
     if spec.regime == "msw-only" and gas in ORGANIC_SCALE_GASES:
         ppmv *= scenario.organic_fraction / ORGANIC_REFERENCE
     return ppmv

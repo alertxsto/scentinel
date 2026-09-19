@@ -17,6 +17,7 @@
   "menu.help": "Bantuan",
   "menu.help.about": "Tentang Scentinel",
   "menu.run": "Jalankan",
+  "menu.run.setup_container": "Siapkan container OpenFOAM",
 
   "panel.setup": "Pengaturan",
   "panel.viewport": "Penampang bak",
@@ -96,6 +97,7 @@
   "action.export_csv": "Ekspor CSV",
   "action.clear_sensors": "Hapus sensor",
   "action.fit": "Sesuaikan",
+  "action.setup_container": "Siapkan container OpenFOAM",
 
   "status.ready": "Siap",
   "status.running": "Berjalan…",
@@ -105,6 +107,8 @@
   "status.sensors": "{count} sensor",
   "status.dirty": "Belum disimpan",
   "status.done_history_failed": "Selesai — riwayat tidak tercatat",
+  "status.container_ready": "Container siap",
+  "status.container_failed": "Setup container gagal",
 
   "viewport.hint": "Klik di dalam bak untuk menempatkan sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",

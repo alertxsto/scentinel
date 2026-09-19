@@ -296,7 +296,16 @@ def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
     assert "min 0.465" in summary["concentration_statistics"].text()
     assert "max 0.465 ppmv" in summary["concentration_statistics"].text()
     assert summary["peak_sensor"].text() == "CO: S1 (0.465 ppmv)"
-    assert summary["rdf_suitability"].text() == "Requires laboratory characterisation data"
+    # The RDF block reports the gas-phase loading it can actually compute and
+    # names the fuel-basis gap rather than claiming a class it cannot derive.
+    rdf_text = summary["rdf_suitability"].text()
+    assert "mg/Nm³" in rdf_text
+    assert "laboratory characterisation" in rdf_text
+    assert "mg/Nm³" in summary["chlorine"].text()
+    # 0.465 ppmv CO against the 35 ppmv NIOSH REL is well within limit.
+    threshold_text = summary["threshold_assessment"].text()
+    assert "CO" in threshold_text
+    assert "within limit" in threshold_text
     assert summary["tvoc_concentration"].text() == "Requires sensor hardware and calibration"
 
 
@@ -434,3 +443,30 @@ def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
     assert [reading.sensor_id for reading in run_window.results_panel().readings()] == ["S1"]
     assert run_window._status_label.text() == run_window._t.t("status.done_history_failed")
     assert history.load_run(tmp_path / "runs" / "run-001").execution_status == "incomplete"
+
+
+def test_a_field_render_failure_still_finalizes_the_run(run_window, tmp_path, monkeypatch):
+    """Rendering is a view of the run; a VTK failure must not lose the record.
+
+    ``post.render_concentration_field`` reaches into VTK and a plotting backend.
+    When that raised, the exception escaped ``_on_run_finished`` before
+    ``_finalize_run``, leaving a `succeeded` solve recorded as `incomplete`.
+    """
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+
+    def boom(*_args, **_kwargs):
+        raise AttributeError("module 'pyvista' has no attribute 'Plotter'")
+
+    monkeypatch.setattr("scentinel.ui.results_panel.ResultsPanel.set_field_case", boom)
+
+    assert run_window.start_run() is True
+
+    record = history.load_run(tmp_path / "runs" / "run-001")
+    assert record.execution_status == "succeeded"
+    assert record.results.sensor_readings[0].sensor_id == "S1"
+    assert run_window._status_label.text() == run_window._t.t("status.done")
+    log = run_window.results_panel()._log.toPlainText()
+    assert "WARNING: field visual unavailable" in log

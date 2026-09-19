@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scentinel.core import assessment as assessment_mod
 from scentinel.ui.field_view import FieldResultView
 from scentinel.ui.i18n import Translator
 
@@ -258,16 +259,68 @@ class ResultsPanel(QWidget):
                 f"{sum(values_ppmv) / len(values_ppmv):.4g}, max {peak_value:.4g} ppmv"
             )
             peaks.append(f"{gas}: {peak_sensor} ({peak_value:.4g} ppmv)")
-        sources = ", ".join(
-            f"{gas}: {source.resolved_ppmv:g} ppmv ({source.mode})"
-            for gas, source in sorted(scenario.gas_sources.items())
-        )
         unavailable = self._t.t("results.value.not_available")
         needs_lab = self._t.t("results.value.needs_lab")
         needs_sensor = self._t.t(
             "results.value.virtual_pending" if self._sandbox_mode else "results.value.needs_sensor"
         )
+        assessment = assessment_mod.evaluate(
+            readings, moisture_fraction=scenario.moisture_fraction
+        )
+        verdict = assessment_mod.suitability_verdict(assessment)
+        halogen = assessment.halogen
+        halogen_detail = (
+            f"Cl {halogen.chlorine_mg_per_nm3:.2f} mg/Nm³, "
+            f"S {halogen.sulfur_mg_per_nm3:.2f} mg/Nm³ "
+            "(gas phase, AP-42 Table 2.4-1 defaults)"
+        )
+        if halogen.chlorine_species:
+            top_cl = halogen.chlorine_species[0]
+            halogen_detail += f"\nLargest Cl carrier: {top_cl[0]} ({top_cl[1]:.2f} mg/Nm³)"
+        if halogen.sulfur_species:
+            top_s = halogen.sulfur_species[0]
+            halogen_detail += f"\nLargest S carrier: {top_s[0]} ({top_s[1]:.2f} mg/Nm³)"
+        if assessment.threshold_checks:
+            worst = max(assessment.threshold_checks, key=lambda check: check.ratio)
+            threshold_text = "\n".join(
+                f"{check.gas}: {check.peak_ppmv:.4g} / {check.limit_ppmv:g} ppmv "
+                f"= {check.ratio:.2f}× {check.limit_name} @ {check.peak_sensor}"
+                for check in assessment.threshold_checks
+            )
+            threshold_text += (
+                f"\nWorst: {worst.gas} at {worst.ratio:.2f}× its limit"
+                + (" — EXCEEDS" if worst.exceeds else " — within limit")
+            )
+        else:
+            threshold_text = unavailable
+        if assessment.unchecked_gases:
+            threshold_text += (
+                "\nNo published limit applied to: " + ", ".join(assessment.unchecked_gases)
+            )
+        if assessment.peak_to_mean:
+            coverage_text = "\n".join(
+                f"{gas}: peak/mean {ratio:.2f}×"
+                for gas, ratio in sorted(assessment.peak_to_mean.items())
+            )
+            coverage_text += (
+                "\n1.00× is a uniform field; higher means the plume reaches only "
+                "part of the placement."
+            )
+        else:
+            coverage_text = unavailable
+        blind_text = (
+            "Needs a spatial field, not probe-only data: a sensor that reads zero "
+            "cannot be distinguished from an unsampled region here."
+        )
+        moisture_text = (
+            f"{scenario.moisture_fraction:.0%} (waste stream input; not a laboratory "
+            "measurement of the material)"
+        )
         not_assessed = self._t.t("results.value.not_assessed")
+        sources = ", ".join(
+            f"{gas}: {source.resolved_ppmv:g} ppmv ({source.mode})"
+            for gas, source in sorted(scenario.gas_sources.items())
+        )
         values = {
             "run_id": record.run_id,
             "started": record.started_at_utc,
@@ -277,17 +330,20 @@ class ResultsPanel(QWidget):
             "gases": ", ".join(gases) or "—",
             "concentration_statistics": "\n".join(statistics) or unavailable,
             "peak_sensor": "\n".join(peaks) or unavailable,
-            "threshold_assessment": not_assessed,
-            "coverage": unavailable,
-            "blind_zone": unavailable,
-            "rdf_suitability": needs_lab,
+            "threshold_assessment": threshold_text,
+            "coverage": coverage_text,
+            "blind_zone": blind_text,
+            "rdf_suitability": verdict,
             "rdf_standard": not_assessed,
             "offtaker_match": not_assessed,
             "ncv": needs_lab,
-            "moisture": needs_lab,
+            "moisture": moisture_text,
             "ash": needs_lab,
-            "chlorine": needs_lab,
-            "sulfur": needs_lab,
+            "chlorine": halogen_detail,
+            "sulfur": (
+                f"{halogen.sulfur_mg_per_nm3:.2f} mg/Nm³ gas phase; fuel-basis "
+                "sulfur needs laboratory characterisation"
+            ),
             "tvoc_concentration": needs_sensor,
             "voc_index": needs_sensor,
             "raw_signal": needs_sensor,

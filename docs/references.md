@@ -3,7 +3,7 @@
 Semua data default di Scentinel berasal dari sumber publik yang terverifikasi.
 Dokumen ini mencatat setiap angka, asal-usulnya, dan tingkat kepercayaannya.
 
-Terakhir diperbarui: 2026-09-18
+Terakhir diperbarui: 2026-09-19
 
 ---
 
@@ -33,16 +33,25 @@ terdiri dari ~55% CH4, 40% CO2, dan 5% N2. EPA LMOP menggunakan angka umum
 | NMOC (as hexane), MSW-only 1992+ | 550 ppmv | AP-42 Table 2.4-2 | Moderately representative |
 | NMOC (as hexane), co-disposal | 2400 ppmv | AP-42 Table 2.4-2 | D |
 | H2S | 36 ppmv | AP-42 Table 2.4-1 | B |
-| Benzene (no co-disposal) | 1.9 ppmv | AP-42 Table 2.4-2 | B |
-| Benzene (co-disposal) | 11 ppmv | AP-42 Table 2.4-2 | D |
-| Toluene (no co-disposal) | 39 ppmv | AP-42 Table 2.4-2 | A |
-| Toluene (co-disposal) | 170 ppmv | AP-42 Table 2.4-2 | D |
 | Ethane | 890 ppmv | AP-42 Table 2.4-1 | C |
 | Vinyl chloride | 7.3 ppmv | AP-42 Table 2.4-1 | B |
 | Methyl mercaptan | 2.5 ppmv | AP-42 Table 2.4-1 | C |
+| Dimethyl sulfide | 7.8 ppmv | AP-42 Table 2.4-1 | C |
+| Benzene (no/unknown co-disposal) | 1.9 ppmv | AP-42 Table 2.4-2 | B |
+| Benzene (co-disposal) | 11 ppmv | AP-42 Table 2.4-2 | D |
+| Toluene (no/unknown co-disposal) | 39 ppmv | AP-42 Table 2.4-2 | A |
+| Toluene (co-disposal) | 170 ppmv | AP-42 Table 2.4-2 | D |
 
-Rating EPA (A-E) menunjukkan kualitas data: A = excellent, E = poor.
+Rating EPA (A–E) menunjukkan kualitas data: A = excellent, E = poor.
 Lihat AP-42 Table 2.4-1 dan 2.4-2 untuk daftar lengkap ~45 komponen trace.
+
+**Catatan co-disposal:** hanya benzene, NMOC, dan toluene yang dipecah AP-42
+menurut riwayat co-disposal. Gas lain — termasuk semua baris Table 2.4-1 —
+hanya punya satu nilai default, sehingga pada aliran co-disposal gas tersebut
+memakai nilai dasarnya, bukan nilai alternatif yang tidak ada.
+
+Ammonia tidak disertakan: workbook AP-42 Ch.2.4 tidak memuat baris ammonia,
+sehingga tidak ada nilai yang bisa dikutip.
 
 ### 1.3 Nilai kalori LFG
 
@@ -54,15 +63,38 @@ Lihat AP-42 Table 2.4-1 dan 2.4-2 untuk daftar lengkap ~45 komponen trace.
 
 ## 2. Properti Fisika Gas (25°C, 1 atm)
 
-| Gas | MW (g/mol) | Difusivitas di udara (m²/s) | Sumber difusivitas |
-|---|---|---|---|
-| CO | 28.01 | 2.0 × 10⁻⁵ | Nilai standar literatur |
-| CH4 | 16.04 | 2.2 × 10⁻⁵ | Nilai standar literatur |
-| VOC (hexane proxy) | 86.18 | 8.7 × 10⁻⁶ | Nilai standar literatur |
-| H2S | 34.08 | 1.6 × 10⁻⁵ | Nilai standar literatur |
+Difusivitas setiap gas **dihitung**, bukan disalin dari literatur, memakai
+korelasi Fuller-Schettler-Giddings:
 
-Difusivitas gas biner pada 1 atm dapat dihitung dengan korelasi Fuller-Schettler-Giddings.
-Nilai di atas adalah aproksimasi pada 25°C yang cukup untuk simulasi screening.
+$$D_{AB}\ [\text{cm}^2/\text{s}] = \frac{0.00143\,T^{1.75}}{P\sqrt{M_{AB}}\left(V_A^{1/3} + V_B^{1/3}\right)^2},
+\qquad M_{AB} = \frac{2}{1/M_A + 1/M_B}$$
+
+dengan $T = 298.15$ K, $P = 1.01325$ bar, dan udara sebagai komponen B
+($M_B = 28.96$ g/mol, $V_B = 19.7$). Volume difusi atomik dari Reid, Prausnitz &
+Poling, *The Properties of Gases and Liquids*, 4th ed., Table 11-1: C 15.9,
+H 2.31, O 6.11, N 12.7, F 16.5, Cl 21.0, Br 26.7, I 32.9, S 20.1; setiap cincin
+aromatik dikurangi 18.3. Satu korelasi untuk semua gas menjaga tabel tetap
+konsisten — nilai publikasi per gas berasal dari kumpulan pengukuran berbeda,
+sehingga mencampurnya akan membuat perbedaan antar gas mencerminkan perbedaan
+metode, bukan perbedaan molekul.
+
+| Gas | MW (g/mol) | V (cm³) | Difusivitas di udara (m²/s) |
+|---|---|---|---|
+| CO | 28.01 | 22.01 | 1.87 × 10⁻⁵ |
+| CH4 | 16.04 | 25.14 | 2.10 × 10⁻⁵ |
+| VOC (hexane proxy) | 86.18 | 127.74 | 7.66 × 10⁻⁶ |
+| H2S | 34.08 | 24.72 | 1.71 × 10⁻⁵ |
+| Ethane | 30.07 | 45.66 | 1.41 × 10⁻⁵ |
+| Benzene | 78.11 | 90.96 | 8.96 × 10⁻⁶ |
+| Toluene | 92.13 | 111.48 | 8.06 × 10⁻⁶ |
+| Vinyl chloride | 62.50 | 59.73 | 1.10 × 10⁻⁵ |
+| Methyl mercaptan | 48.11 | 45.24 | 1.28 × 10⁻⁵ |
+| Dimethyl sulfide | 62.13 | 65.76 | 1.06 × 10⁻⁵ |
+
+Nilai acuan untuk memeriksa korelasi: CO ≈ 1.9 × 10⁻⁵, H2S ≈ 1.7 × 10⁻⁵, dan
+hexane ≈ 7.4 × 10⁻⁶ m²/s. Semua gas memakai metode yang sama, dan difusivitas
+per gas inilah yang ditulis ke `scalarTransport` di `system/functions` serta
+dicatat di blok `applied_physics`.
 
 ---
 
@@ -147,6 +179,17 @@ Semua metadata dari Crossref API, terverifikasi dengan DOI.
 
 4. **Moukalled, F., Mangani, L., Darwish, M. (2016).** *The Finite Volume Method
    in Computational Fluid Dynamics*. Springer.
+
+5. **Reid, R.C., Prausnitz, J.M., Poling, B.E. (1987).** *The Properties of Gases
+   and Liquids* (4th ed.). McGraw-Hill. — Table 11-1: volume difusi atomik dan
+   koreksi cincin aromatik (−18.3 cm³ per cincin) yang dipakai untuk menghitung
+   seluruh difusivitas di §2.
+
+6. **Fuller, E.N., Schettler, P.D., Giddings, J.C. (1966).** A new method for
+   prediction of binary gas-phase diffusion coefficients. *Industrial &
+   Engineering Chemistry*, 58(5), 18–27.
+   DOI: [10.1021/ie50677a007](https://doi.org/10.1021/ie50677a007)
+   — Korelasi Fuller-Schettler-Giddings yang menghasilkan difusivitas §2.
 
 ---
 

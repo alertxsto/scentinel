@@ -8,8 +8,21 @@ from scentinel.core.gas_defaults import GAS_PROPERTIES, SOURCE_DEFAULTS
 
 REGIMES = ("msw-only", "co-disposal")
 
-#: Gas keys offered as scenario sources, in display order.
-DEFAULT_SOURCE_GASES = ("CO", "CH4", "VOC", "H2S")
+#: Gas keys offered as scenario sources, in display order: the AP-42 headline
+#: gases first, then the added trace species grouped by chemical family
+#: (hydrocarbon, aromatics, chlorinated, sulfur).
+DEFAULT_SOURCE_GASES = (
+    "CO",
+    "CH4",
+    "VOC",
+    "H2S",
+    "ETHANE",
+    "BENZENE",
+    "TOLUENE",
+    "VINYL_CHLORIDE",
+    "METHYL_MERCAPTAN",
+    "DIMETHYL_SULFIDE",
+)
 
 
 @dataclass(frozen=True)
@@ -59,7 +72,13 @@ def get_gas(key: str) -> GasSpec:
 
 
 def source_concentration(gas_key: str, regime: str = "msw-only") -> float:
-    """Cited default source concentration in ppmv for one gas and disposal regime."""
+    """Cited default source concentration in ppmv for one gas and disposal regime.
+
+    Strict by design: a co-disposal lookup for a gas AP-42 gives no alternate for
+    raises rather than guessing. Use :func:`default_sources` (or
+    :func:`scentinel.core.scenario.auto_concentration_ppmv`) when the desired
+    behaviour is a fallback.
+    """
     if regime not in REGIMES:
         raise ValueError(f"regime must be one of {REGIMES}")
     spec = get_gas(gas_key)
@@ -70,9 +89,31 @@ def source_concentration(gas_key: str, regime: str = "msw-only") -> float:
     return spec.default_conc_ppmv
 
 
+def regime_concentration(gas_key: str, regime: str = "msw-only") -> float:
+    """Default concentration for ``gas_key`` under ``regime``, falling back.
+
+    Uses the cited co-disposal alternate where AP-42 publishes one and the base
+    default where it does not, so this never raises for a gas in
+    :data:`DEFAULT_SOURCE_GASES`. :func:`source_concentration` is the strict
+    variant, for callers that need to know whether a cited alternate exists.
+    """
+    if regime not in REGIMES:
+        raise ValueError(f"regime must be one of {REGIMES}")
+    spec = get_gas(gas_key)
+    if regime == "co-disposal" and spec.alternate_conc_ppmv is not None:
+        return spec.alternate_conc_ppmv
+    return spec.default_conc_ppmv
+
+
 def default_sources(regime: str = "msw-only") -> dict[str, float]:
-    """Every source gas at its cited default, ready to drop into a scenario."""
-    return {key: source_concentration(key, regime) for key in DEFAULT_SOURCE_GASES}
+    """Every source gas at its cited default, ready to drop into a scenario.
+
+    Mirrors :func:`scentinel.core.scenario.auto_concentration_ppmv`: a
+    co-disposal regime uses each gas's cited alternate where AP-42 has one and
+    falls back to the base default where it does not, so this covers every entry
+    of :data:`DEFAULT_SOURCE_GASES` under both regimes.
+    """
+    return {key: regime_concentration(key, regime) for key in DEFAULT_SOURCE_GASES}
 
 
 def citation(gas_key: str) -> str:

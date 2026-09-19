@@ -4,11 +4,13 @@ Writes a complete case directory (``0/``, ``constant/``, ``system/``) for the
 ESI ``simpleFoam`` solver, plus the mesh itself and the patch-type dictionary
 that ``gmshToFoam`` needs.
 
-Every constant this module applies — wind profile, viscosity, scalar
-diffusivity, linear-solver tolerances, SIMPLE residual targets, relaxation
-factors — is a named module constant, and the case files are rendered *from*
-those constants. `scentinel.core.history` persists the same constants, so a
-manifest cannot claim a value the generated case does not use.
+Every constant this module applies — wind profile, viscosity, linear-solver
+tolerances, SIMPLE residual targets, relaxation factors — is a named module
+constant, and the case files are rendered *from* those constants. Per-gas
+scalar diffusivity is the exception, and deliberately so: it is not one value
+for the case but one per species, read from ``gas_data``'s FSG-computed table by
+:func:`scalar_diffusivity`. `scentinel.core.history` persists the same constants,
+so a manifest cannot claim a value the generated case does not use.
 
 Two details drive the layout:
 
@@ -30,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scentinel.core import gas_data
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.scenario import Scenario, auto_concentration_ppmv
 
@@ -71,12 +74,10 @@ WIND_PROFILE_EXPONENT = 1.0 / 7.0
 #: Reference wind height for the power-law profile [m].
 WIND_REFERENCE_HEIGHT_M = 10.0
 
-#: Scalar diffusivity written into every ``scalarTransport`` function object
-#: [m^2/s]. One value for every gas: the solver's diffusivity is constant and
-#: gas-independent, and ``gas_data``'s per-gas diffusivities are **not** used
-#: here. Recording the unused table instead of this value would misdescribe the
-#: case, so the manifest persists this constant per gas.
-SCALAR_DIFFUSIVITY_M2_S = 2.0e-05
+#: Scalar diffusivity is **not** a module constant: it is read per gas from
+#: :func:`scalar_diffusivity`, which returns ``gas_data``'s FSG-computed value for
+#: that species. A light gas and a heavy one therefore spread at different rates,
+#: and the manifest persists the same number that was written into the case.
 
 #: Linear-solver settings written into ``system/fvSolution``. ``fields`` holds
 #: the OpenFOAM key **exactly as it is emitted**, quotes included, so the
@@ -208,6 +209,17 @@ def case_input_digest(case_dir: Path, gases: Iterable[str]) -> str:
         digest.update(b"\0")
         digest.update(data)
     return f"sha256:{digest.hexdigest()}"
+
+
+def scalar_diffusivity(gas: str) -> float:
+    """Diffusivity in air [m^2/s] applied to ``gas``'s scalar transport.
+
+    Read from :func:`scentinel.core.gas_data.get_gas`, whose table is computed
+    by the Fuller-Schettler-Giddings correlation at 25 C, 1 atm. This is the
+    single source of the number: the case writer and :func:`applied_physics`
+    both call it, so a manifest cannot claim a diffusivity the case did not use.
+    """
+    return gas_data.get_gas(gas).diffusivity_m2_s
 
 
 def linear_solver_settings(sources: dict[str, float]) -> list[dict[str, object]]:
@@ -374,7 +386,7 @@ def applied_physics(scenario: Scenario, geom: BinGeometry) -> dict[str, object]:
         "wind_profile_exponent": WIND_PROFILE_EXPONENT,
         "wind_reference_height_m": WIND_REFERENCE_HEIGHT_M,
         "nu_m2_s": NU_AIR,
-        "scalar_diffusivity_m2_s": {gas: SCALAR_DIFFUSIVITY_M2_S for gas in sources},
+        "scalar_diffusivity_m2_s": {gas: scalar_diffusivity(gas) for gas in sources},
         "linear_solver_settings": linear_solver_settings(sources),
         "residual_targets": residual_targets(sources),
         "relaxation_factors": dict(RELAXATION_FACTORS),
@@ -680,7 +692,7 @@ def _functions(sources: dict[str, float]) -> str:
         f"    libs            (solverFunctionObjects);\n"
         f"    field           {gas};\n"
         f"    diffusivity     constant;\n"
-        f"    D               {SCALAR_DIFFUSIVITY_M2_S:g};\n"
+        f"    D               {scalar_diffusivity(gas):g};\n"
         f"    nCorr           1;\n"
         f"    resetOnStartup  false;\n"
         f"}}\n\n"

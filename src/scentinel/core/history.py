@@ -52,7 +52,13 @@ from scentinel import __version__
 from scentinel.core import casegen, gas_data
 from scentinel.core.geometry import MOUND_SHAPES, BinGeometry
 from scentinel.core.project import Project, Sensor
-from scentinel.core.scenario import WIND_DIRECTIONS, Scenario, auto_concentration_ppmv
+from scentinel.core.scenario import (
+    WASTE_SPECS,
+    WASTE_TYPES,
+    WIND_DIRECTIONS,
+    Scenario,
+    auto_concentration_ppmv,
+)
 
 #: Version of the manifest schema. Any change to the serialized shape or its
 #: meaning bumps this and is rejected by older readers.
@@ -63,7 +69,11 @@ from scentinel.core.scenario import WIND_DIRECTIONS, Scenario, auto_concentratio
 #:     ``execution_status``, names the requested iteration count explicitly,
 #:     and adds closed-enum scientific gate states. Version 1 manifests are
 #:     rejected rather than misread: they cannot describe what they applied.
-RUN_FORMAT_VERSION = 2
+#: 3 — records the waste stream (type, organic and moisture fraction) in the
+#:     scenario block, because it selects the AP-42 regime and scales the auto
+#:     source strengths. A version 2 manifest cannot say which stream produced
+#:     its resolved concentrations.
+RUN_FORMAT_VERSION = 3
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -172,7 +182,15 @@ _TOP_LEVEL_KEYS = (
 _APPLICATION_KEYS = ("name", "version")
 _PROJECT_KEYS = ("name", "geometry", "scenario", "sensors")
 _GEOMETRY_KEYS = ("length_m", "height_m", "mound_shape", "mound_fill_fraction")
-_SCENARIO_KEYS = ("wind_speed_m_s", "wind_direction", "ventilation", "gas_sources")
+_SCENARIO_KEYS = (
+    "wind_speed_m_s",
+    "wind_direction",
+    "ventilation",
+    "gas_sources",
+    "waste_type",
+    "organic_fraction",
+    "moisture_fraction",
+)
 _VENTILATION_KEYS = ("requested_on", "modelled")
 _GAS_SOURCE_KEYS = ("mode", "requested_ppmv", "resolved_ppmv", "provenance")
 _SENSOR_KEYS = ("sensor_id", "x_m", "y_m")
@@ -280,12 +298,15 @@ class VentilationRecord:
 
 @dataclass(frozen=True)
 class ScenarioRecord:
-    """Wind, the qualified ventilation request, and per-gas sources, in order."""
+    """Wind, the waste stream, the qualified ventilation request, and sources."""
 
     wind_speed_m_s: float
     wind_direction: str
     ventilation: VentilationRecord
     gas_sources: dict[str, GasSourceRecord]
+    waste_type: str
+    organic_fraction: float
+    moisture_fraction: float
 
 
 @dataclass(frozen=True)
@@ -784,6 +805,9 @@ def _snapshot_project(project: Project) -> ProjectRecord:
                 modelled=False,
             ),
             gas_sources=sources,
+            waste_type=scenario.waste_type,
+            organic_fraction=scenario.organic_fraction,
+            moisture_fraction=scenario.moisture_fraction,
         ),
         sensors=tuple(
             SensorRecord(sensor_id=sensor.sensor_id, x_m=sensor.x, y_m=sensor.y)
@@ -1073,6 +1097,9 @@ def _payload(record: RunRecord) -> dict[str, object]:
                     }
                     for key, source in scenario.gas_sources.items()
                 },
+                "waste_type": scenario.waste_type,
+                "organic_fraction": scenario.organic_fraction,
+                "moisture_fraction": scenario.moisture_fraction,
             },
             "sensors": [
                 {"sensor_id": sensor.sensor_id, "x_m": sensor.x_m, "y_m": sensor.y_m}
@@ -1305,7 +1332,34 @@ def _decode_scenario(payload: object, where: str) -> ScenarioRecord:
         wind_direction=direction,
         ventilation=ventilation,
         gas_sources=sources,
+        waste_type=_waste_type(mapping["waste_type"], where),
+        organic_fraction=_number(
+            mapping["organic_fraction"],
+            "project.scenario.organic_fraction",
+            where,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        moisture_fraction=_number(
+            mapping["moisture_fraction"],
+            "project.scenario.moisture_fraction",
+            where,
+            minimum=0.0,
+            maximum=1.0,
+        ),
     )
+
+
+def _waste_type(value: object, where: str) -> str:
+    """Decode the waste stream, refusing one this build cannot reproduce."""
+    field = "project.scenario.waste_type"
+    text = _text(value, field, where)
+    if text not in WASTE_SPECS:
+        raise HistoryError(
+            f"{where}: {field} {text!r} is not a known waste stream; "
+            f"expected one of {WASTE_TYPES}"
+        )
+    return text
 
 
 def _decode_ventilation(payload: object, where: str) -> VentilationRecord:
@@ -1637,7 +1691,14 @@ def _optional_integer(
     return None if value is None else _integer(value, field, where, minimum=minimum)
 
 
-def _number(value: object, field: str, where: str, *, minimum: float | None = None) -> float:
+def _number(
+    value: object,
+    field: str,
+    where: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise HistoryError(f"{where}: {field} must be a number")
     number = float(value)
@@ -1645,6 +1706,8 @@ def _number(value: object, field: str, where: str, *, minimum: float | None = No
         raise HistoryError(f"{where}: {field} must be finite, got {value!r}")
     if minimum is not None and number < minimum:
         raise HistoryError(f"{where}: {field} must be at least {minimum}")
+    if maximum is not None and number > maximum:
+        raise HistoryError(f"{where}: {field} must be at most {maximum}")
     return number
 
 

@@ -49,6 +49,25 @@ def test_unknown_waste_type_is_rejected():
         Scenario(waste_type="nuclear")
 
 
+def test_a_no_alternate_gas_under_a_co_disposal_stream_falls_back():
+    """AP-42 splits only benzene/NMOC/toluene; the rest keep their base default.
+
+    Selecting an added trace gas under the co-disposal stream must resolve to a
+    cited number rather than raising, otherwise the gas would be unselectable in
+    the panel for that waste type.
+    """
+    scenario = Scenario(waste_type="co-disposal", gas_sources={"ETHANE": "auto"})
+
+    assert auto_concentration_ppmv(scenario, "ETHANE") == pytest.approx(890.0)
+    assert auto_concentration_ppmv(scenario, "ETHANE") == pytest.approx(
+        source_concentration("ETHANE", regime="msw-only")
+    )
+    # The gases AP-42 does split still switch to their cited alternate.
+    assert auto_concentration_ppmv(scenario, "BENZENE") == pytest.approx(11.0)
+    assert auto_concentration_ppmv(scenario, "TOLUENE") == pytest.approx(170.0)
+    assert resolve_sources(scenario)["ETHANE"] == pytest.approx(890e-6)
+
+
 def test_waste_spec_default_gases_are_nonempty():
     assert waste_spec("mixed-msw").default_gases == ("CO", "CH4", "VOC", "H2S")
     assert "VOC" in waste_spec("dry-recyclables").default_gases

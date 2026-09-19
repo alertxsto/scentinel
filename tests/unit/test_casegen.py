@@ -4,15 +4,16 @@ from pathlib import Path
 
 import pytest
 
+from scentinel.core import casegen, gas_data
 from scentinel.core.casegen import (
     IMAGE,
-    SCALAR_DIFFUSIVITY_M2_S,
     SOLVER,
     WALL_PATCHES,
     applied_physics,
     case_input_digest,
     patch_roles,
     resolve_sources,
+    scalar_diffusivity,
     wind_speed_at,
     write_case,
 )
@@ -184,10 +185,19 @@ def test_persisted_applied_physics_matches_the_generated_case(tmp_path, mesh):
 
     applied = applied_physics(scenario, geom)
 
+    # Each gas's own diffusivity reaches the case, and the persisted block
+    # reports exactly that number. Two gases in one case must differ, otherwise
+    # the per-gas transport is not actually applied.
     functions = (case / "system" / "functions").read_text()
-    assert f"D               {SCALAR_DIFFUSIVITY_M2_S:g};" in functions
     for gas in ("CO", "VOC"):
-        assert applied["scalar_diffusivity_m2_s"][gas] == SCALAR_DIFFUSIVITY_M2_S
+        expected = gas_data.get_gas(gas).diffusivity_m2_s
+        assert applied["scalar_diffusivity_m2_s"][gas] == pytest.approx(expected)
+        assert f"{gas}Transport" in functions
+        assert f"D               {expected:g};" in functions
+    assert (
+        applied["scalar_diffusivity_m2_s"]["CO"]
+        != applied["scalar_diffusivity_m2_s"]["VOC"]
+    )
 
     transport = (case / "constant" / "transportProperties").read_text()
     assert f"nu              {applied['nu_m2_s']:g};" in transport
@@ -228,10 +238,49 @@ def test_the_case_digest_is_stable_and_sensitive_to_applied_constants(tmp_path, 
     (case / "VTK" / "internal.vtu").write_text("vtk")
     assert case_input_digest(case, gases) == first
 
-    # A changed applied constant, at identical UI inputs, changes the digest.
-    monkeypatch.setattr("scentinel.core.casegen.SCALAR_DIFFUSIVITY_M2_S", 3.0e-05)
+    # A changed applied diffusivity, at identical UI inputs, changes the digest.
+    monkeypatch.setattr(casegen, "scalar_diffusivity", lambda gas: 3.0e-05)
     changed = write_case(scenario, mesh, tmp_path / "changed", geom=geom)
     assert case_input_digest(changed, gases) != first
+
+
+def test_each_gas_writes_its_own_diffusivity_into_the_case(tmp_path, mesh):
+    """One scalarTransport object per gas, each with that gas's own D.
+
+    This is the point of the change: a single hard-coded diffusivity made every
+    species spread at the same rate regardless of molecular weight.
+    """
+    gases = ("CO", "ETHANE", "VOC", "BENZENE")
+    scenario = Scenario(gas_sources={gas: "auto" for gas in gases})
+    case = write_case(scenario, mesh, tmp_path / "case", geom=BinGeometry())
+
+    functions = (case / "system" / "functions").read_text()
+    for gas in gases:
+        block = functions.split(f"{gas}Transport\n")[1]
+        assert f"    field           {gas};\n" in block
+        assert f"    D               {scalar_diffusivity(gas):g};\n" in block
+        assert scalar_diffusivity(gas) == pytest.approx(
+            gas_data.get_gas(gas).diffusivity_m2_s
+        )
+
+    # The light gas must not carry the heavy gas's diffusivity.
+    assert f"D               {scalar_diffusivity('ETHANE'):g};" in functions
+    assert f"D               {scalar_diffusivity('BENZENE'):g};" in functions
+    assert scalar_diffusivity("ETHANE") != scalar_diffusivity("BENZENE")
+
+
+def test_an_added_gas_resolves_and_writes_under_a_co_disposal_stream(tmp_path, mesh):
+    """A gas AP-42 gives no co-disposal alternate for must still generate a case."""
+    scenario = Scenario(
+        waste_type="co-disposal", gas_sources={"ETHANE": "auto", "TOLUENE": "auto"}
+    )
+    case = write_case(scenario, mesh, tmp_path / "case", geom=BinGeometry())
+
+    sources = resolve_sources(scenario)
+    assert sources["ETHANE"] == pytest.approx(890e-6)
+    assert sources["TOLUENE"] == pytest.approx(170e-6)
+    assert "0.00089" in (case / "0" / "ETHANE").read_text()
+    assert "0.00017" in (case / "0" / "TOLUENE").read_text()
 
 
 def test_the_case_digest_covers_each_selected_gas(tmp_path, mesh):

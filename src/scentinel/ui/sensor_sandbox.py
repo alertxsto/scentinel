@@ -24,6 +24,7 @@ from scentinel.core.project import Project
 from scentinel.core.virtual_sensor import SENSOR_FAMILIES, VirtualSensorConfig, step_response
 from scentinel.ui.i18n import Translator
 from scentinel.ui.main_window import MainWindow
+from scentinel.ui.results_panel import SensorReading
 
 
 class SensorSandbox(MainWindow):
@@ -275,19 +276,52 @@ class SensorSandbox(MainWindow):
         self._detected_at = {key: value for key, value in self._detected_at.items() if key in live}
         self._telemetry.setRowCount(len(sensors))
         for row, sensor in enumerate(sensors):
+            truth, cross, source = self._exposure(sensor.sensor_id)
+            indicated = self._values.get(sensor.sensor_id)
             cells = (
                 sensor.sensor_id,
                 self.family.currentText(),
-                "—",
-                "—",
-                "—",
-                "—",
-                "ready",
-                "—",
+                source,
+                f"{truth:.4f} ppm",
+                f"{indicated:.4f} ppm" if indicated is not None else "—",
+                f"{indicated - truth:+.4f} ppm" if indicated is not None else "—",
+                "ready" if indicated is None else "measuring",
+                f"{self._detected_at[sensor.sensor_id]:.2f} s"
+                if sensor.sensor_id in self._detected_at
+                else "—",
             )
             for column, text in enumerate(cells):
                 self._telemetry.setItem(row, column, QTableWidgetItem(text))
+        self._publish_sensor_table()
         self._refresh_evaluation()
+
+    def _publish_sensor_table(self) -> None:
+        """Push the current replay into the results table, so the lab output is visible.
+
+        The table is the same one a solve fills, so the numbers a reviewer reads
+        are the numbers the device model produced. Until the first sample lands
+        the ground truth is shown with the indicated value still pending, which
+        is why the entries are only written once a value exists.
+        """
+        rows = []
+        for sensor in self.viewport().sensors():
+            indicated = self._values.get(sensor.sensor_id)
+            if indicated is None:
+                continue
+            truth, cross, source = self._exposure(sensor.sensor_id)
+            values = {"TVOC": indicated, "GROUND_TRUTH": truth}
+            if cross:
+                values["INTERFERENCE"] = cross
+            rows.append(
+                SensorReading(
+                    sensor_id=sensor.sensor_id,
+                    x=sensor.x,
+                    y=sensor.y,
+                    values=values,
+                )
+            )
+        if rows:
+            self.results_panel().set_results(rows)
 
     def toggle(self) -> None:
         if not self.viewport().sensors():
@@ -307,6 +341,7 @@ class SensorSandbox(MainWindow):
         self._values.clear()
         self._detected_at.clear()
         self._replay_button.setText("Start sensor replay")
+        self.results_panel().set_results([])
         self._sync_sensors()
 
     def advance(self) -> None:
@@ -367,6 +402,7 @@ class SensorSandbox(MainWindow):
                 mean_error_ppm=mean_error,
             )
         self._sample += 1
+        self._publish_sensor_table()
         self._refresh_evaluation()
 
     def _refresh_evaluation(self) -> None:

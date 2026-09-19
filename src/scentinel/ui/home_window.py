@@ -42,6 +42,15 @@ class HomeWindow(QMainWindow):
         self.setWindowTitle("Scentinel")
         self.resize(1520, 940)
 
+        # A path without a loaded project still opens that project: the caller
+        # should not have to know that the editor needs the object as well.
+        if project is None and path is not None:
+            try:
+                project = load_project(path)
+            except (OSError, ValueError, KeyError):
+                project = None
+                path = None
+
         self._editor = SensorSandbox(translator, project=project, path=path)
         self._prepare_embedded(self._editor)
         self._editor.home_requested.connect(self.show_home)

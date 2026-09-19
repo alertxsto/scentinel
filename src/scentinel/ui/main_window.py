@@ -11,10 +11,9 @@ allocates run ids itself.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -23,11 +22,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QStatusBar,
+    QToolBar,
     QWidget,
 )
 
 from scentinel import __version__
-from scentinel.core import history
+from scentinel.core import container, history
 from scentinel.core.casegen import PPM_SCALE
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError, RunRecord
@@ -47,6 +47,42 @@ from scentinel.ui.viewport import ViewportWidget
 
 IMAGE = "opencfd/openfoam-default:2512"
 
+
+
+class ContainerSetupWorker(QObject):
+    """Pulls the solver image and verifies it, off the GUI thread.
+
+    Delegates to :func:`scentinel.core.container.setup_container`, which is the
+    single implementation shared with the CLI and the shell script; this class
+    only adapts its callback to a Qt signal.
+
+    A raise is reported as a failed result rather than propagating: the window
+    clears its "setting up" state on the result, and an unhandled exception
+    would leave both triggers disabled forever.
+    """
+
+    log_message = Signal(str)
+    finished = Signal(object)  # ContainerSetupResult
+
+    def run(self) -> None:
+        try:
+            result = container.setup_container(on_log=self.log_message.emit)
+        except Exception as error:  # surfaced in the log, never swallowed
+            self.log_message.emit(f"ERROR: {type(error).__name__}: {error}")
+            result = container.ContainerSetupResult(ok=False, exit_code=1, log=[])
+        self.finished.emit(result)
+
+
+class ContainerSetupThread(QThread):
+    """QThread wrapper so a setup can run without blocking the window."""
+
+    def __init__(self, worker: ContainerSetupWorker) -> None:
+        super().__init__()
+        self._worker = worker
+        worker.moveToThread(self)
+
+    def run(self) -> None:
+        self._worker.run()
 
 
 class MainWindow(QMainWindow):
@@ -75,10 +111,13 @@ class MainWindow(QMainWindow):
         self._status_args: dict[str, object] = {}
         self._solver_available, self._solver_note = _probe_solver()
         self._solver_thread: SolverThread | None = None
+        self._container_thread: ContainerSetupThread | None = None
+        self._container_setup_active = False
         self._active_run: RunRecord | None = None
 
         self._build_panels()
         self._build_menus()
+        self._build_toolbar()
         self._build_status_bar()
 
         self._t.changed.connect(self.retranslate)
@@ -144,6 +183,10 @@ class MainWindow(QMainWindow):
         self._action_run = _action(run_menu, "F5", self.start_run)
         self._action_run.setEnabled(self._solver_available)
         self._action_cancel = _action(run_menu, "Shift+F5", self.cancel_run)
+        run_menu.addSeparator()
+        self._action_setup_container = _action(
+            run_menu, None, self.setup_container
+        )
 
         view_menu = self.menuBar().addMenu("")
         self._view_menu = view_menu
@@ -167,6 +210,16 @@ class MainWindow(QMainWindow):
         self._action_about = _action(help_menu, None, self._show_about)
 
         self._results_panel.export_requested.connect(self.export_csv)
+
+    def _build_toolbar(self) -> None:
+        """A toolbar with the same container action, so it is discoverable."""
+        toolbar = QToolBar("Container", self)
+        toolbar.setObjectName("containerToolbar")
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.addAction(self._action_setup_container)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+        self._container_toolbar = toolbar
 
     def _build_status_bar(self) -> None:
         bar = QStatusBar(self)
@@ -415,9 +468,16 @@ class MainWindow(QMainWindow):
         if readings_ppmv:
             self._results_panel.set_results(readings_ppmv)
         if outcome.ok and outcome.case_dir is not None:
+            # Field rendering is a view of the run, never part of it. It pulls
+            # in VTK and a plotting backend, so it can fail for reasons that
+            # have nothing to do with the solve (an offscreen GL stack, a
+            # partially imported plotting module). Letting that escape here
+            # would skip `_finalize_run` and leave the manifest `incomplete`
+            # even though the solver produced results — a lost audit record for
+            # a purely cosmetic failure.
             try:
                 self._results_panel.set_field_case(outcome.case_dir, readings_ppmv)
-            except (FileNotFoundError, RuntimeError, ValueError) as error:
+            except Exception as error:  # noqa: BLE001 - reported, never fatal
                 self._results_panel.append_log(f"WARNING: field visual unavailable: {error}")
 
         status = _terminal_status(outcome, record) if record is not None else None
@@ -469,7 +529,7 @@ class MainWindow(QMainWindow):
             return None
 
     def _set_running_ui(self, running: bool) -> None:
-        self._action_run.setEnabled(not running)
+        self._refresh_run_action(solving=running)
         self._setup_panel.setEnabled(not running)
         # The viewport is disabled too: it is the only other way to mutate the
         # project while a run is in flight. Correctness does not depend on it —
@@ -477,6 +537,73 @@ class MainWindow(QMainWindow):
         # click change what the *next* run captures mid-flight.
         self._viewport.setEnabled(not running)
         self._results_panel.set_running(running)
+
+    # -- container setup -----------------------------------------------------
+
+    def is_setting_up_container(self) -> bool:
+        """Whether a setup is in flight.
+
+        Tracked as a flag, not as thread liveness: the worker emits its result
+        just before its thread stops, so between those two moments
+        ``isRunning()`` would already be False while the finish handler is
+        still queued — long enough for a second setup to slip through.
+        """
+        return self._container_setup_active
+
+    def _refresh_run_action(self, *, solving: bool | None = None) -> None:
+        """Run is available only when the solver is probed ready and idle.
+
+        ``solving`` is passed explicitly where the caller already knows the
+        solve state: a QThread is neither running yet when a run starts nor
+        reliably stopped when it reports finished, so probing liveness at those
+        two edges would enable Run at the wrong moment. A container setup also
+        blocks Run — the image it enables Run for may not exist yet, and the
+        storage it writes must not race a solve.
+        """
+        if solving is None:
+            solving = self.is_running()
+        busy = solving or self.is_setting_up_container()
+        self._action_run.setEnabled(self._solver_available and not busy)
+        self._action_setup_container.setEnabled(not busy)
+
+    def setup_container(self) -> bool:
+        """Pull and verify the OpenFOAM image, off the GUI thread.
+
+        Both triggers are disabled for the duration: podman must not be asked
+        to pull the same image twice, and the Run action must not race the
+        storage this writes. Returns False when a setup is already in flight.
+        """
+        if self.is_setting_up_container():
+            return False
+        self._container_setup_active = True
+        self._action_setup_container.setEnabled(False)
+        self._action_run.setEnabled(False)
+        self._results_panel.append_log(f"==> {self._t.t('action.setup_container')}")
+        self._results_panel.append_log(f"    Storage: {container.storage_root()}")
+        self._status_flash("status.running")
+
+        worker = ContainerSetupWorker()
+        thread = ContainerSetupThread(worker)
+        worker.log_message.connect(self._results_panel.append_log)
+        worker.finished.connect(self._on_container_setup_finished)
+        thread.finished.connect(thread.deleteLater)
+        self._container_thread = thread
+        thread.start()
+        return True
+
+    def _on_container_setup_finished(self, result: container.ContainerSetupResult) -> None:
+        self._container_setup_active = False
+        # Same lifetime rule as ``SolverThread``: the reference goes when the
+        # worker reports, and the thread deletes itself once it actually stops.
+        self._container_thread = None
+        # Re-probe rather than trusting the exit code: what enables Run is the
+        # image being present in this app's storage, not the pull's own report.
+        self._solver_available, self._solver_note = _probe_solver()
+        self._refresh_solver_note()
+        self._refresh_run_action()
+        self._status_flash(
+            "status.container_ready" if result.ok else "status.container_failed"
+        )
 
     # -- signals from the editing surfaces -----------------------------------
 
@@ -562,7 +689,9 @@ class MainWindow(QMainWindow):
         self._run_menu.setTitle(t("menu.run"))
         self._action_run.setText(t("action.run"))
         self._action_cancel.setText(t("action.cancel"))
-        self._action_run.setEnabled(self._solver_available and not self.is_running())
+        self._action_setup_container.setText(t("action.setup_container"))
+        self._container_toolbar.setWindowTitle(t("menu.run.setup_container"))
+        self._refresh_run_action()
         self._viewport.setToolTip(t("viewport.hint"))
         for code, action in self._language_actions.items():
             action.setChecked(code == self._t.locale)
@@ -681,7 +810,10 @@ def _action(menu, shortcut: QKeySequence.StandardKey | str | None, slot) -> QAct
 
 
 def _probe_solver() -> tuple[bool, str]:
-    """Report whether the OpenFOAM container is reachable; never raises."""
-    if shutil.which("podman") is None:
-        return False, "podman is not installed"
-    return True, ""
+    """Report whether the OpenFOAM container is reachable; never raises.
+
+    Delegates to :mod:`scentinel.core.container`, which also checks that the
+    image is present in this app's own storage — a pull into the user's default
+    storage would otherwise enable Run and then fail at solve time.
+    """
+    return container.container_ready()

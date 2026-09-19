@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from scentinel import __version__
 from scentinel.core import casegen, gas_data, history
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError
@@ -88,11 +89,11 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 2
+    assert payload["format_version"] == 3
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
-    assert payload["application"] == {"name": "scentinel", "version": "0.1.0"}
+    assert payload["application"] == {"name": "scentinel", "version": __version__}
 
     geometry = payload["project"]["geometry"]
     assert geometry == {
@@ -105,6 +106,9 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert scenario["wind_speed_m_s"] == 2.0
     assert scenario["wind_direction"] == "left-to-right"
     assert scenario["ventilation"] == {"requested_on": False, "modelled": False}
+    assert scenario["waste_type"] == "mixed-msw"
+    assert scenario["organic_fraction"] == 0.5
+    assert scenario["moisture_fraction"] == 0.4
     assert payload["project"]["sensors"] == [{"sensor_id": "S1", "x_m": 1.2, "y_m": 2.1}]
 
     execution = payload["execution"]
@@ -701,12 +705,10 @@ def test_the_manifest_records_the_applied_experiment_not_only_the_request(tmp_pa
     assert applied.wind_reference_height_m == casegen.WIND_REFERENCE_HEIGHT_M
     assert applied.nu_m2_s == casegen.NU_AIR
 
-    # The case applies one diffusivity to every gas; the unused per-gas table in
-    # gas_data is not what the solver used, so it must not be recorded here.
-    # VOC's table value (8.7e-06) differs, which is exactly why recording the
-    # table instead of the applied constant would misdescribe the case.
-    assert applied.scalar_diffusivity_m2_s == {"CO": casegen.SCALAR_DIFFUSIVITY_M2_S}
-    assert casegen.SCALAR_DIFFUSIVITY_M2_S != gas_data.get_gas("VOC").diffusivity_m2_s
+    # The case applies each gas's own diffusivity, so the persisted block must
+    # carry the same per-gas value the case file renders — not one constant.
+    assert applied.scalar_diffusivity_m2_s == {"CO": casegen.scalar_diffusivity("CO")}
+    assert casegen.scalar_diffusivity("CO") != casegen.scalar_diffusivity("VOC")
 
     # An incomplete run has no case, so it cannot yet claim a digest.
     assert applied.case_input_digest is None
@@ -797,7 +799,7 @@ def test_a_changed_applied_constant_changes_the_recorded_digest(tmp_path, monkey
     first_case = _write_case_into(first)
     first_done = _finish(first, case_dir=first_case)
 
-    monkeypatch.setattr(casegen, "SCALAR_DIFFUSIVITY_M2_S", 3.0e-05)
+    monkeypatch.setattr(casegen, "scalar_diffusivity", lambda gas: 3.0e-05)
     second = history.begin_run(
         tmp_path / "runs", _project(), mesh_size_m=0.25, end_iteration=500, started_at=STARTED
     )
@@ -1122,13 +1124,25 @@ def test_source_and_probe_ppmv_values_follow_the_documented_recipe(tmp_path):
 
 
 def test_the_auto_source_value_does_not_follow_a_later_default_change(tmp_path, monkeypatch):
-    """A resolved value is frozen; editing the cited default cannot rewrite it."""
+    """A resolved value is frozen; editing the cited default cannot rewrite it.
+
+    The patch must target the name ``scenario`` actually calls, otherwise it
+    intercepts nothing and the assertion below would hold for the wrong reason.
+    """
     record = _begin(tmp_path)
     assert record.project.scenario.gas_sources["CO"].resolved_ppmv == pytest.approx(105.0)
 
-    monkeypatch.setattr(gas_data, "source_concentration", lambda gas, regime="msw-only": 999.0)
-    reloaded = history.load_run(record.run_dir)
+    monkeypatch.setattr(
+        "scentinel.core.scenario.regime_concentration",
+        lambda gas, regime="msw-only": 999.0,
+    )
 
+    # The patch is live: a new run picks the changed default up.
+    fresh = _begin(tmp_path, _project(name="AfterChange"))
+    assert fresh.project.scenario.gas_sources["CO"].resolved_ppmv == pytest.approx(999.0)
+
+    # The already-frozen record still reports the value it resolved with.
+    reloaded = history.load_run(record.run_dir)
     assert reloaded.project.scenario.gas_sources["CO"].resolved_ppmv == pytest.approx(105.0)
 
 

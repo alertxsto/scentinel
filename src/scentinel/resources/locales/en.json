@@ -17,6 +17,7 @@
   "menu.help": "Help",
   "menu.help.about": "About Scentinel",
   "menu.run": "Run",
+  "menu.run.setup_container": "Set up OpenFOAM container",
 
   "panel.setup": "Setup",
   "panel.viewport": "Bin cross-section",
@@ -96,6 +97,7 @@
   "action.export_csv": "Export CSV",
   "action.clear_sensors": "Clear sensors",
   "action.fit": "Fit",
+  "action.setup_container": "Set up OpenFOAM container",
 
   "status.ready": "Ready",
   "status.running": "Running…",
@@ -105,6 +107,8 @@
   "status.sensors": "{count} sensor(s)",
   "status.dirty": "Unsaved changes",
   "status.done_history_failed": "Finished — run not recorded",
+  "status.container_ready": "Container ready",
+  "status.container_failed": "Container setup failed",
 
   "viewport.hint": "Click inside the bin to place a sensor.",
   "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
