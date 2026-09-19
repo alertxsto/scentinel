@@ -94,6 +94,23 @@ def test_mound_shape_combo_carries_its_key(panel):
     assert panel.geometry().mound_shape == "mounded"
 
 
+@pytest.mark.parametrize(
+    "shape",
+    ["flat", "mounded", "left-heavy", "right-heavy", "twin-mound", "irregular"],
+)
+def test_every_waste_profile_is_available(panel, shape):
+    panel._shape.setCurrentIndex(panel._shape.findData(shape))
+    assert panel.geometry().mound_shape == shape
+    assert panel._shape_help.text()
+
+
+def test_simulation_controls_are_explicit_inputs(panel):
+    panel._mesh_size.setValue(0.15)
+    panel._end_iteration.setValue(750)
+    assert panel.mesh_size_m() == pytest.approx(0.15)
+    assert panel.end_iteration() == 750
+
+
 def test_switching_language_relabels_the_group_boxes(qapp):
     translator = Translator("en")
     panel = SetupPanel(translator)

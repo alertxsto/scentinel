@@ -11,12 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -131,32 +132,34 @@ class ResultsPanel(QWidget):
     def _build_summary_tab(self) -> QWidget:
         content = QWidget()
         content.setObjectName("summaryContent")
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        grid = QGridLayout(content)
+        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
 
         self._summary_hint = QLabel()
         self._summary_hint.setWordWrap(True)
         self._summary_hint.setObjectName("summaryHint")
-        layout.addWidget(self._summary_hint)
+        grid.addWidget(self._summary_hint, 0, 0, 1, 2)
 
         self._summary_fields: dict[str, QLabel] = {}
-        for section, keys in (
-            ("run", ("run_id", "started", "finished", "execution_status")),
+        sections = (
             ("gas_results", ("sensor_count", "gases", "concentration_statistics", "peak_sensor")),
             ("safety", ("threshold_assessment", "coverage", "blind_zone")),
             ("rdf", ("rdf_suitability", "rdf_standard", "offtaker_match", "ncv", "moisture", "ash", "chlorine", "sulfur")),
             ("tvoc", ("tvoc_concentration", "voc_index", "raw_signal", "temperature", "humidity", "calibration", "detection_limit", "uncertainty")),
-            ("numerics", ("solver", "mesh_size", "iterations", "mesh_cells", "case_digest")),
-            ("physics", ("sources", "wind", "inlet", "viscosity", "diffusivity", "ventilation")),
+            ("run", ("run_id", "started", "finished", "execution_status")),
             ("quality", ("classification", "convergence", "mesh_independence", "mass_balance", "validation")),
-        ):
+            ("physics", ("sources", "wind", "inlet", "viscosity", "diffusivity", "ventilation")),
+            ("numerics", ("solver", "mesh_size", "iterations", "mesh_cells", "case_digest")),
+        )
+        for index, (section, keys) in enumerate(sections):
             frame = QFrame()
             frame.setObjectName("summarySection")
             form = QFormLayout(frame)
             form.setContentsMargins(12, 10, 12, 10)
             form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
             heading = QLabel()
             heading.setObjectName("summarySectionTitle")
             heading.setProperty("section", section)
@@ -171,13 +174,16 @@ class ResultsPanel(QWidget):
                 value.setWordWrap(True)
                 form.addRow(name, value)
                 self._summary_fields[key] = value
-            layout.addWidget(frame)
-        layout.addStretch(1)
+            row, column = divmod(index, 2)
+            grid.addWidget(frame, row + 1, column)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(content)
+        QTimer.singleShot(0, lambda: scroll.verticalScrollBar().setValue(0))
         return scroll
 
     def set_run_record(self, record: RunRecord) -> None:

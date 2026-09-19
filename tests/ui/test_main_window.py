@@ -204,6 +204,9 @@ def test_start_run_reserves_a_record_before_the_worker_is_constructed(
     assert seen["mesh_size_m"] == DEFAULT_MESH_SIZE_M
     assert seen["end_time"] == DEFAULT_END_ITERATION
 
+    assert run_window.setup_panel().mesh_size_m() == DEFAULT_MESH_SIZE_M
+    assert run_window.setup_panel().end_iteration() == DEFAULT_END_ITERATION
+
     # The manifest records the same explicit execution settings the worker got.
     record = history.get_run(tmp_path / "runs", "run-001")
     assert record.execution.mesh_size_m == seen["mesh_size_m"]

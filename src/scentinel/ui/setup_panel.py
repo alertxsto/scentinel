@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -26,7 +27,14 @@ from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
 from scentinel.core.scenario import WIND_DIRECTIONS, Scenario
 from scentinel.ui.i18n import Translator
 
-SHAPE_KEYS = {"flat": "shape.flat", "mounded": "shape.mounded", "irregular": "shape.irregular"}
+SHAPE_KEYS = {
+    "flat": "shape.flat",
+    "mounded": "shape.mounded",
+    "left-heavy": "shape.left_heavy",
+    "right-heavy": "shape.right_heavy",
+    "twin-mound": "shape.twin_mound",
+    "irregular": "shape.irregular",
+}
 DIRECTION_KEYS = {
     "left-to-right": "dir.left_to_right",
     "right-to-left": "dir.right_to_left",
@@ -38,12 +46,20 @@ class SetupPanel(QScrollArea):
 
     changed = Signal(object, object)  # (BinGeometry, Scenario)
 
-    def __init__(self, translator: Translator, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        translator: Translator,
+        *,
+        default_mesh_size_m: float = 0.25,
+        default_end_iteration: int = 500,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._t = translator
+        self._default_mesh_size_m = default_mesh_size_m
+        self._default_end_iteration = default_end_iteration
         self._gas_boxes: dict[str, QCheckBox] = {}
         self._gas_spins: dict[str, QDoubleSpinBox] = {}
-
         body = QWidget(self)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -51,11 +67,13 @@ class SetupPanel(QScrollArea):
         layout.addWidget(self._build_geometry_group())
         layout.addWidget(self._build_scenario_group())
         layout.addWidget(self._build_sources_group())
+        layout.addWidget(self._build_simulation_group())
         layout.addStretch(1)
         self.setWidget(body)
         self.setWidgetResizable(True)
 
         self._t.changed.connect(self.retranslate)
+        self.retranslate()
 
     # -- construction --------------------------------------------------------
 
@@ -63,6 +81,8 @@ class SetupPanel(QScrollArea):
         self._geometry_group = QGroupBox(self)
         form = QFormLayout(self._geometry_group)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._geometry_help = _help_label()
+        form.addRow(self._geometry_help)
 
         self._length = _spin(0.5, 30.0, 6.0, 0.1, " m", 2)
         self._height = _spin(0.5, 10.0, 2.5, 0.1, " m", 2)
@@ -79,11 +99,13 @@ class SetupPanel(QScrollArea):
         self._shape_label = QLabel()
         self._fill_label = QLabel()
         self._actual_fill_caption = QLabel()
+        self._shape_help = _help_label()
         form.addRow(self._length_label, self._length)
         form.addRow(self._height_label, self._height)
         form.addRow(self._shape_label, self._shape)
         form.addRow(self._fill_label, self._fill)
         form.addRow(self._actual_fill_caption, self._actual_fill)
+        form.addRow(self._shape_help)
 
         for widget in (self._length, self._height, self._fill):
             widget.valueChanged.connect(self._emit)
@@ -94,6 +116,8 @@ class SetupPanel(QScrollArea):
         self._scenario_group = QGroupBox(self)
         form = QFormLayout(self._scenario_group)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._scenario_help = _help_label()
+        form.addRow(self._scenario_help)
 
         self._wind_speed = _spin(0.0, 20.0, 1.0, 0.1, " m/s", 2)
         self._wind_direction = QComboBox()
@@ -117,6 +141,8 @@ class SetupPanel(QScrollArea):
         self._sources_group = QGroupBox(self)
         form = QFormLayout(self._sources_group)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._sources_help = _help_label()
+        form.addRow(self._sources_help)
 
         self._gas_boxes: dict[str, QCheckBox] = {}
         self._gas_spins: dict[str, QDoubleSpinBox] = {}
@@ -159,6 +185,26 @@ class SetupPanel(QScrollArea):
             form.addRow(box, row)
         return self._sources_group
 
+    def _build_simulation_group(self) -> QGroupBox:
+        self._simulation_group = QGroupBox(self)
+        form = QFormLayout(self._simulation_group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._simulation_help = _help_label()
+        form.addRow(self._simulation_help)
+
+        self._mesh_size = _spin(
+            0.05, 1.0, self._default_mesh_size_m, 0.05, " m", 2, decimals=2
+        )
+        self._end_iteration = QSpinBox()
+        self._end_iteration.setRange(50, 10_000)
+        self._end_iteration.setSingleStep(50)
+        self._end_iteration.setValue(self._default_end_iteration)
+        self._mesh_size_label = QLabel()
+        self._end_iteration_label = QLabel()
+        form.addRow(self._mesh_size_label, self._mesh_size)
+        form.addRow(self._end_iteration_label, self._end_iteration)
+        return self._simulation_group
+
     # -- state ---------------------------------------------------------------
 
     def geometry(self) -> BinGeometry:
@@ -176,6 +222,12 @@ class SetupPanel(QScrollArea):
             ventilation_on=self._ventilation.isChecked(),
             gas_sources=self.gas_sources(),
         )
+
+    def mesh_size_m(self) -> float:
+        return self._mesh_size.value()
+
+    def end_iteration(self) -> int:
+        return self._end_iteration.value()
 
     def gas_sources(self) -> dict[str, float | str]:
         """Selected gases, as ``"auto"`` or an explicit ppmv value."""
@@ -230,6 +282,11 @@ class SetupPanel(QScrollArea):
         self._geometry_group.setTitle(t("group.geometry"))
         self._scenario_group.setTitle(t("group.scenario"))
         self._sources_group.setTitle(t("group.gas_sources"))
+        self._simulation_group.setTitle(t("group.simulation"))
+        self._geometry_help.setText(t("help.geometry"))
+        self._scenario_help.setText(t("help.scenario"))
+        self._sources_help.setText(t("help.gas_sources"))
+        self._simulation_help.setText(t("help.simulation"))
 
         self._length_label.setText(t("field.length"))
         self._height_label.setText(t("field.height"))
@@ -239,11 +296,14 @@ class SetupPanel(QScrollArea):
         self._wind_speed_label.setText(t("field.wind_speed"))
         self._wind_direction_label.setText(t("field.wind_direction"))
         self._ventilation_label.setText(t("field.ventilation"))
+        self._mesh_size_label.setText(t("field.mesh_size"))
+        self._end_iteration_label.setText(t("field.end_iteration"))
 
         for index, shape in enumerate(MOUND_SHAPES):
             self._shape.setItemText(index, t(SHAPE_KEYS[shape]))
         for index, direction in enumerate(WIND_DIRECTIONS):
             self._wind_direction.setItemText(index, t(DIRECTION_KEYS[direction]))
+        self._shape_help.setText(t(f"help.shape.{self._shape.currentData()}"))
 
         self._refresh_derived()
 
@@ -263,6 +323,7 @@ class SetupPanel(QScrollArea):
         else:
             self._actual_fill.setToolTip("")
             self._actual_fill.setStyleSheet("")
+        self._shape_help.setText(self._t.t(f"help.shape.{self._shape.currentData()}"))
 
 
 def _spin(
@@ -283,3 +344,10 @@ def _spin(
     spin.setSuffix(suffix)
     spin.setKeyboardTracking(False)
     return spin
+
+
+def _help_label() -> QLabel:
+    label = QLabel()
+    label.setObjectName("fieldHelp")
+    label.setWordWrap(True)
+    return label

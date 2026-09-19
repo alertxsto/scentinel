@@ -60,6 +60,10 @@ QGroupBox {
 QGroupBox QLabel, QGroupBox QCheckBox { color: #1f2937; }
 QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #174c36; }
 QLabel#resultsTitle, QLabel#viewportTitle { font-size: 16px; font-weight: 700; color: #153f30; }
+QLabel#fieldHelp {
+    color: #64748b; font-size: 11px; font-weight: 400;
+    padding: 2px 0 8px 0;
+}
 QLabel#actualFillLabel { color: #1b6b4a; }
 QLabel#runStatus {
     border-radius: 10px; padding: 3px 10px; font-weight: 700;
@@ -126,20 +130,31 @@ class MainWindow(QMainWindow):
     # -- construction --------------------------------------------------------
 
     def _build_panels(self) -> None:
-        self._setup_panel = SetupPanel(self._t)
+        self._setup_panel = SetupPanel(
+            self._t,
+            default_mesh_size_m=DEFAULT_MESH_SIZE_M,
+            default_end_iteration=DEFAULT_END_ITERATION,
+        )
         self._viewport = ViewportWidget()
         self._results_panel = ResultsPanel(self._t)
+
+        workspace = QSplitter(Qt.Orientation.Vertical)
+        workspace.setChildrenCollapsible(False)
+        workspace.addWidget(self._viewport)
+        workspace.addWidget(self._results_panel)
+        workspace.setStretchFactor(0, 3)
+        workspace.setStretchFactor(1, 2)
+        workspace.setSizes([520, 380])
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setChildrenCollapsible(False)
         splitter.addWidget(self._setup_panel)
-        splitter.addWidget(self._viewport)
-        splitter.addWidget(self._results_panel)
+        splitter.addWidget(workspace)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 1)
-        splitter.setSizes([300, 650, 520])
+        splitter.setSizes([320, 1120])
         self.setCentralWidget(splitter)
+        self.resize(1440, 900)
 
         self._setup_panel.changed.connect(self._on_setup_changed)
         self._viewport.sensors_changed.connect(self._on_sensors_changed)
@@ -351,8 +366,8 @@ class MainWindow(QMainWindow):
             record = history.begin_run(
                 _runs_root(self._path),
                 frozen,
-                mesh_size_m=DEFAULT_MESH_SIZE_M,
-                end_iteration=DEFAULT_END_ITERATION,
+                mesh_size_m=self._setup_panel.mesh_size_m(),
+                end_iteration=self._setup_panel.end_iteration(),
             )
         except (HistoryError, OSError, KeyError, ValueError) as error:
             # No durable record, so no run: the reservation is the run identity.
@@ -376,8 +391,8 @@ class MainWindow(QMainWindow):
         worker = SolverWorker(
             frozen,
             record.run_dir,
-            mesh_size_m=DEFAULT_MESH_SIZE_M,
-            end_time=DEFAULT_END_ITERATION,
+            mesh_size_m=self._setup_panel.mesh_size_m(),
+            end_time=self._setup_panel.end_iteration(),
         )
         thread = SolverThread(worker)
         worker.log_message.connect(self._results_panel.append_log)

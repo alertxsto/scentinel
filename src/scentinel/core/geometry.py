@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-MOUND_SHAPES = ("flat", "mounded", "irregular")
+MOUND_SHAPES = ("flat", "mounded", "left-heavy", "right-heavy", "twin-mound", "irregular")
 
 _PROFILE_STEPS = 64
 """Segments used to sample a non-flat mound profile."""
@@ -71,6 +71,18 @@ def mound_surface(geom: BinGeometry) -> list[tuple[float, float]]:
     xs = [length * i / _PROFILE_STEPS for i in range(_PROFILE_STEPS + 1)]
     if geom.mound_shape == "mounded":
         raw = [math.sin(math.pi * x / length) for x in xs]
+    elif geom.mound_shape == "left-heavy":
+        raw = [
+            (x / length) * (1.0 - x / length) ** 2
+            for x in xs
+        ]
+    elif geom.mound_shape == "right-heavy":
+        raw = [
+            (x / length) ** 2 * (1.0 - x / length)
+            for x in xs
+        ]
+    elif geom.mound_shape == "twin-mound":
+        raw = [abs(math.sin(2.0 * math.pi * x / length)) for x in xs]
     else:
         raw = [
             math.sin(math.pi * x / length) * (1.0 + 0.15 * math.sin(7.0 * math.pi * x / length))
