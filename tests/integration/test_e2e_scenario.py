@@ -76,6 +76,22 @@ def test_probes_read_a_positive_concentration_near_the_waste(solved_case: Path):
     assert readings["near"].values["CO"] > 0.0
 
 
+def test_real_field_renders_with_sensor_and_hotspot_overlays(
+    solved_case: Path, tmp_path: Path
+):
+    sensors = [Sensor("near", 5.5, 1.0), Sensor("high", 3.0, 2.2)]
+    image = tmp_path / "co-field.png"
+    summary = post.render_concentration_field(
+        solved_case, "CO", image, sensors=sensors
+    )
+
+    assert image.is_file()
+    assert image.stat().st_size > 10_000
+    assert summary.maximum_ppmv > summary.mean_ppmv > summary.minimum_ppmv
+    assert 0.0 <= summary.hotspot_x_m <= 6.0
+    assert 0.0 <= summary.hotspot_y_m <= 2.5
+
+
 def test_concentration_stays_below_the_source_strength(solved_case: Path):
     """The waste surface is the maximum; nothing may exceed it."""
     source = casegen.resolve_sources(Scenario(gas_sources={"CO": "auto"}))["CO"]

@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scentinel.ui.field_view import FieldResultView
 from scentinel.ui.i18n import Translator
 
 if TYPE_CHECKING:
@@ -85,7 +86,6 @@ class ResultsPanel(QWidget):
         self._placeholder = QLabel()
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setWordWrap(True)
-        self._placeholder.setStyleSheet("color: #6b7280; padding: 24px;")
         self._table = QTableWidget(0, 0)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -109,6 +109,8 @@ class ResultsPanel(QWidget):
         self._tabs.addTab(self._summary_tab, "")
         self._tabs.addTab(self._stack, "")
         self._tabs.addTab(log_tab, "")
+        self._field_view = FieldResultView()
+        self._tabs.addTab(self._field_view, "")
         layout.addWidget(self._tabs, 1)
 
         buttons = QHBoxLayout()
@@ -160,6 +162,11 @@ class ResultsPanel(QWidget):
             f"mean absolute indication error {mean_error_ppm:.4f} ppm"
         )
 
+
+    def set_field_case(self, case_dir: Path, sensors: list) -> None:
+        """Render concentration fields from a completed OpenFOAM case."""
+        self._field_view.set_case(case_dir, sensors)
+        self._tabs.setCurrentWidget(self._field_view)
     def _build_summary_tab(self) -> QWidget:
         content = QWidget()
         content.setObjectName("summaryContent")
@@ -402,6 +409,7 @@ class ResultsPanel(QWidget):
         self._tabs.setTabText(0, t("results.tab.summary"))
         self._tabs.setTabText(1, t("results.tab.sensors"))
         self._tabs.setTabText(2, t("results.tab.log"))
+        self._tabs.setTabText(3, t("results.tab.field"))
         self._summary_hint.setText(t("results.summary.hint"))
         for label in self.findChildren(QLabel):
             section = label.property("section")

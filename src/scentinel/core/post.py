@@ -29,6 +29,19 @@ class SensorReading:
     values: dict[str, float]
 
 
+@dataclass(frozen=True)
+class FieldSummary:
+    """Observable statistics and artifact path for one rendered gas field."""
+
+    gas: str
+    minimum_ppmv: float
+    mean_ppmv: float
+    maximum_ppmv: float
+    hotspot_x_m: float
+    hotspot_y_m: float
+    image_path: Path
+
+
 def time_directories(case_dir: Path) -> list[float]:
     """Numeric time directories present in the case, ascending."""
     times: list[float] = []
@@ -124,6 +137,81 @@ def sample_sensors(
             )
         )
     return readings
+
+
+def render_concentration_field(
+    case_dir: Path,
+    gas: str,
+    image_path: Path,
+    *,
+    sensors: list | None = None,
+    time: float | None = None,
+) -> FieldSummary:
+    """Render the real OpenFOAM cell field in the XY plane and return its statistics."""
+    import numpy as np
+    import pyvista as pv
+
+    grid = pv.read(internal_vtu(case_dir, time))
+    if gas not in _cell_scalars(grid):
+        raise KeyError(f"{gas!r} is not a concentration field in {case_dir}")
+    values_ppmv = np.asarray(grid.cell_data[gas], dtype=float) * 1.0e6
+    display_name = f"{gas}_ppmv"
+    grid.cell_data[display_name] = values_ppmv
+    maximum_cell = int(values_ppmv.argmax())
+    hotspot = grid.cell_centers().points[maximum_cell]
+
+    image_path = Path(image_path)
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    plotter = pv.Plotter(off_screen=True, window_size=(1200, 700))
+    plotter.set_background("white")
+    plotter.add_mesh(
+        grid,
+        scalars=display_name,
+        preference="cell",
+        cmap="turbo",
+        show_edges=True,
+        edge_color="#d4d4d4",
+        scalar_bar_args={"title": f"{gas} [ppmv]", "fmt": "%.3g"},
+    )
+    if sensors:
+        depth = grid.center[2]
+        points = np.array([(sensor.x, sensor.y, depth) for sensor in sensors])
+        if len(points):
+            plotter.add_points(
+                points,
+                color="#dc2626",
+                point_size=14,
+                render_points_as_spheres=True,
+                label="Sensors",
+            )
+            plotter.add_point_labels(
+                points,
+                [sensor.sensor_id for sensor in sensors],
+                text_color="#991b1b",
+                font_size=10,
+                shape_opacity=0.65,
+                show_points=False,
+            )
+    plotter.add_point_labels(
+        [hotspot],
+        [f"Hotspot {float(values_ppmv[maximum_cell]):.4g} ppmv"],
+        point_color="#7c2d12",
+        text_color="#7c2d12",
+        font_size=12,
+        shape_opacity=0.75,
+    )
+    plotter.view_xy()
+    plotter.camera.parallel_projection = True
+    plotter.show(screenshot=str(image_path), auto_close=True)
+    return FieldSummary(
+        gas=gas,
+        minimum_ppmv=float(values_ppmv.min()),
+        mean_ppmv=float(values_ppmv.mean()),
+        maximum_ppmv=float(values_ppmv.max()),
+        hotspot_x_m=float(hotspot[0]),
+        hotspot_y_m=float(hotspot[1]),
+        image_path=image_path,
+    )
 
 
 def mass_balance_error(

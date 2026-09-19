@@ -67,7 +67,6 @@ class SensorSandbox(MainWindow):
             "Simulation Studio. Parameter di bawah menambahkan measurement-chain tiap sensor."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("background:#eff6ff;color:#1e3a8a;padding:9px;border-radius:6px")
         layout.addWidget(note)
         exposure = QGroupBox("Replay input")
         eform = QFormLayout(exposure)
@@ -118,7 +117,6 @@ class SensorSandbox(MainWindow):
     def _build_evaluation_tab(self) -> QWidget:
         tab = QWidget(); layout = QVBoxLayout(tab)
         title = QLabel("Placement and device evaluation")
-        title.setStyleSheet("font-size:16px;font-weight:700;color:#174c36")
         self._evaluation = QLabel()
         self._evaluation.setWordWrap(True)
         layout.addWidget(title); layout.addWidget(self._evaluation); layout.addStretch(1)

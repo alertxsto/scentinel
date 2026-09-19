@@ -89,6 +89,7 @@
   "results.pending": "Belum dijalankan",
   "results.tab.summary": "Ringkasan",
   "results.tab.sensors": "Sensor",
+  "results.tab.field": "Visualisasi field",
   "results.tab.log": "Log",
   "results.summary.hint": "Ringkasan ini memisahkan hasil eksekusi dari bukti kualitas ilmiah. Status selesai tidak otomatis berarti konvergen atau tervalidasi.",
   "results.section.run": "Identitas run",
@@ -179,7 +180,7 @@
   "dialog.overwrite.text": "{name} sudah ada. Timpa?",
 
   "about.title": "Tentang Scentinel",
-  "about.text": "<b>Scentinel</b> {version}<br><br>Studio screening CFD untuk penempatan sensor gas pada bak truk pengangkut sampah.<br><br>Dwiky Candra · Gesang Hemas Bayu Sekti · Ezekiel Benedicte Felice<br>Teknik Lingkungan, President University<br><br>Data default gas dari EPA AP-42 Ch.2.4 dan EPA LMOP; lihat docs/references.md.",
+  "about.text": "<b>Scentinel</b> {version}<br><br>Studio screening CFD untuk penempatan sensor gas pada bak truk pengangkut sampah.<br><br>Data default gas dari EPA AP-42 Ch.2.4 dan EPA LMOP; lihat docs/references.md.",
 
   "log.saved": "Tersimpan {path}",
   "log.opened": "Terbuka {path}",

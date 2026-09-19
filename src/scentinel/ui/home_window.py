@@ -43,9 +43,8 @@ class HomeWindow(QMainWindow):
 
     def _build_navigation(self) -> QWidget:
         rail = QFrame(); rail.setFixedWidth(218)
-        rail.setStyleSheet("QFrame{background:#123c2b} QLabel{color:white} QPushButton{color:#dbeae2;background:transparent;border:0;text-align:left;padding:0 16px;min-height:42px;font-weight:600} QPushButton:hover{background:#1b523b;color:white} QPushButton:checked{background:#e9f4ee;color:#12583a;border-left:4px solid #45a477}")
         layout = QVBoxLayout(rail); layout.setContentsMargins(0,20,0,16); layout.setSpacing(4)
-        brand = QLabel("  SCENTINEL"); brand.setStyleSheet("font-size:19px;font-weight:900;letter-spacing:1px;padding:8px 8px 20px")
+        brand = QLabel("SCENTINEL")
         layout.addWidget(brand)
         self._nav_home = self._nav_button("⌂  Dashboard", self.show_home)
         self._nav_studio = self._nav_button("◫  Simulation Studio", self.show_studio)
@@ -53,7 +52,6 @@ class HomeWindow(QMainWindow):
         for button in (self._nav_home,self._nav_studio,self._nav_sandbox): layout.addWidget(button)
         layout.addStretch(1)
         fidelity = QLabel("  FIDELITY\n  2D SCREENING")
-        fidelity.setStyleSheet("color:#a9c8b7;font-size:11px;font-weight:700;padding:12px")
         layout.addWidget(fidelity)
         return rail
 
@@ -62,34 +60,34 @@ class HomeWindow(QMainWindow):
         button=QPushButton(text); button.setCheckable(True); button.clicked.connect(callback); return button
 
     def _build_context_bar(self) -> QWidget:
-        bar=QFrame(); bar.setFixedHeight(64); bar.setStyleSheet("QFrame{background:white;border-bottom:1px solid #dce5e0}")
+        bar=QFrame(); bar.setFixedHeight(64); bar.setFrameShape(QFrame.Shape.StyledPanel)
         layout=QHBoxLayout(bar); layout.setContentsMargins(22,0,22,0)
-        self._page_title=QLabel(); self._page_title.setStyleSheet("font-size:18px;font-weight:800;color:#173c2b")
-        self._page_context=QLabel(); self._page_context.setStyleSheet("color:#65786e")
+        self._page_title=QLabel()
+        self._page_context=QLabel()
         layout.addWidget(self._page_title); layout.addSpacing(14); layout.addWidget(self._page_context); layout.addStretch(1)
-        badge=QLabel("OpenFOAM 2512"); badge.setStyleSheet("background:#e7f4ed;color:#176342;padding:6px 10px;border-radius:10px;font-weight:700")
+        badge=QLabel("OpenFOAM 2512")
         layout.addWidget(badge); return bar
 
     def _build_home(self) -> QWidget:
         page=QWidget(); page.setObjectName("homePage"); root=QVBoxLayout(page); root.setContentsMargins(38,32,38,32); root.setSpacing(20)
-        title=QLabel("Design, simulate, validate."); title.setStyleSheet("font-size:30px;font-weight:900;color:#153f30")
+        title=QLabel("Design, simulate, validate.")
         subtitle=QLabel("Satu workflow untuk CFD screening, spatial sensor placement, virtual-device evaluation, dan kesiapan validasi lapangan.")
-        subtitle.setWordWrap(True); subtitle.setStyleSheet("font-size:14px;color:#60746a")
+        subtitle.setWordWrap(True)
         root.addWidget(title); root.addWidget(subtitle)
         cards=QHBoxLayout(); cards.setSpacing(18)
         cards.addWidget(self._card("Simulation Studio","Bangun geometri, sumber gas, mesh, placement, dan run OpenFOAM. Semua hasil diberi quality gates.","Open 2D Screening",self.show_studio,"PHYSICS"))
         cards.addWidget(self._card("Universal Sensor Sandbox","Studio yang sama ditambah device models, telemetry, response error, detection time, dan evaluation.","Open Sensor Sandbox",self.show_sandbox,"DIGITAL TWIN"))
         root.addLayout(cards,1)
         warning=QLabel("3D engineering, live hardware, coverage, dan blind-zone analysis hanya akan ditandai tersedia setelah engine dan bukti validasinya benar-benar ada.")
-        warning.setWordWrap(True); warning.setStyleSheet("background:#fff8e8;color:#88520c;border:1px solid #f2d9a5;border-radius:9px;padding:12px")
+        warning.setWordWrap(True)
         root.addWidget(warning); return page
 
     def _card(self,title:str,text:str,action:str,callback,badge:str)->QFrame:
-        card=QFrame(); card.setObjectName("modeCard"); card.setStyleSheet("QFrame#modeCard{background:white;border:1px solid #d7e2dc;border-radius:12px}")
+        card=QFrame(); card.setFrameShape(QFrame.Shape.StyledPanel)
         layout=QVBoxLayout(card); layout.setContentsMargins(24,22,24,22); layout.setSpacing(12)
-        tag=QLabel(badge); tag.setStyleSheet("color:#1a7550;font-size:11px;font-weight:800")
-        heading=QLabel(title); heading.setStyleSheet("font-size:21px;font-weight:800;color:#174c36")
-        body=QLabel(text); body.setWordWrap(True); body.setStyleSheet("color:#5b6f64")
+        tag=QLabel(badge)
+        heading=QLabel(title)
+        body=QLabel(text); body.setWordWrap(True)
         button=QPushButton(action); button.setObjectName("modeButton"); button.clicked.connect(callback)
         layout.addWidget(tag); layout.addWidget(heading); layout.addWidget(body); layout.addStretch(1); layout.addWidget(button); return card
 

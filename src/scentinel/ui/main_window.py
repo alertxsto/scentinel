@@ -47,47 +47,6 @@ from scentinel.ui.viewport import ViewportWidget
 
 IMAGE = "opencfd/openfoam-default:2512"
 
-STYLE_SHEET = """
-QMainWindow { background: #f6f8f7; }
-QGroupBox {
-    background: #ffffff;
-    border: 1px solid #d9e1dd;
-    border-radius: 8px;
-    margin-top: 16px;
-    padding: 12px 8px 8px 8px;
-    font-weight: 600;
-}
-QGroupBox QLabel, QGroupBox QCheckBox { color: #1f2937; }
-QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #174c36; }
-QLabel#resultsTitle, QLabel#viewportTitle { font-size: 16px; font-weight: 700; color: #153f30; }
-QLabel#fieldHelp {
-    color: #64748b; font-size: 11px; font-weight: 400;
-    padding: 2px 0 8px 0;
-}
-QLabel#actualFillLabel { color: #1b6b4a; }
-QLabel#runStatus {
-    border-radius: 10px; padding: 3px 10px; font-weight: 700;
-    background: #e5e7eb; color: #374151;
-}
-QLabel#runStatus[state="succeeded"] { background: #dcfce7; color: #166534; }
-QLabel#runStatus[state="failed"] { background: #fee2e2; color: #991b1b; }
-QFrame#summarySection QLabel { color: #374151; }
-QLabel#summarySectionTitle { color: #174c36; font-weight: 700; padding-bottom: 4px; }
-QFrame#summarySection { background: #ffffff; border: 1px solid #dfe7e3; border-radius: 7px; }
-QWidget#summaryContent { background: #f8faf9; }
-QLabel#summaryValue { color: #111827; }
-QLabel#summaryFieldLabel { color: #64748b; font-size: 11px; padding-top: 3px; }
-QLabel#summaryHint { color: #5f6b66; }
-QPushButton#primaryAction {
-    background: #176b46; color: #ffffff; border: 0; border-radius: 6px;
-    padding: 7px 14px; font-weight: 700;
-}
-QPushButton#primaryAction:disabled { background: #9ca3af; }
-QTabWidget::pane { border: 1px solid #d9e1dd; background: #ffffff; }
-QTabBar::tab { padding: 7px 12px; }
-QTabBar::tab:selected { color: #176b46; font-weight: 700; }
-QStatusBar QLabel { color: #4b5563; }
-"""
 
 
 class MainWindow(QMainWindow):
@@ -120,7 +79,6 @@ class MainWindow(QMainWindow):
         self._build_panels()
         self._build_menus()
         self._build_status_bar()
-        self.setStyleSheet(STYLE_SHEET)
 
         self._t.changed.connect(self.retranslate)
         self._viewport.sensor_added.connect(lambda _sensor: self._status_flash("status.sensors"))
@@ -424,6 +382,11 @@ class MainWindow(QMainWindow):
         readings_ppmv = _ppmv_readings(outcome.readings)
         if readings_ppmv:
             self._results_panel.set_results(readings_ppmv)
+        if outcome.ok and outcome.case_dir is not None:
+            try:
+                self._results_panel.set_field_case(outcome.case_dir, readings_ppmv)
+            except (FileNotFoundError, RuntimeError, ValueError) as error:
+                self._results_panel.append_log(f"WARNING: field visual unavailable: {error}")
 
         status = _terminal_status(outcome, record) if record is not None else None
         persisted = self._finalize_run(record, outcome, readings_ppmv, status)
@@ -534,11 +497,9 @@ class MainWindow(QMainWindow):
     def _refresh_solver_note(self) -> None:
         if self._solver_available:
             self._solver_label.setText(f"OpenFOAM · {IMAGE}")
-            self._solver_label.setStyleSheet("color: #15803d;")
             self._solver_label.setToolTip("")
         else:
             self._solver_label.setText(self._t.t("run.blocked"))
-            self._solver_label.setStyleSheet("color: #b45309;")
             self._solver_label.setToolTip(self._solver_note)
 
     def _refresh_status(self) -> None:

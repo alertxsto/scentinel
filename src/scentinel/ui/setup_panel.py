@@ -319,10 +319,8 @@ class SetupPanel(QScrollArea):
         self._actual_fill.setText(f"{actual:.1%}")
         if abs(actual - requested) > 0.005:
             self._actual_fill.setToolTip(self._t.t("validation.fill_range"))
-            self._actual_fill.setStyleSheet("color: #b45309;")
         else:
             self._actual_fill.setToolTip("")
-            self._actual_fill.setStyleSheet("")
         self._shape_help.setText(self._t.t(f"help.shape.{self._shape.currentData()}"))
 
 

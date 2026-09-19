@@ -89,6 +89,7 @@
   "results.pending": "Not run yet",
   "results.tab.summary": "Summary",
   "results.tab.sensors": "Sensors",
+  "results.tab.field": "Field visual",
   "results.tab.log": "Log",
   "results.summary.hint": "This summary separates execution outcome from scientific evidence. A finished run is not automatically converged or validated.",
   "results.section.run": "Run identity",
@@ -179,7 +180,7 @@
   "dialog.overwrite.text": "{name} already exists. Overwrite it?",
 
   "about.title": "About Scentinel",
-  "about.text": "<b>Scentinel</b> {version}<br><br>CFD screening studio for gas sensor placement in waste collection vehicles.<br><br>Dwiky Candra · Gesang Hemas Bayu Sekti · Ezekiel Benedicte Felice<br>Environmental Engineering, President University<br><br>Gas defaults from EPA AP-42 Ch.2.4 and EPA LMOP; see docs/references.md.",
+  "about.text": "<b>Scentinel</b> {version}<br><br>CFD screening studio for gas sensor placement in waste collection vehicles.<br><br>Gas defaults from EPA AP-42 Ch.2.4 and EPA LMOP; see docs/references.md.",
 
   "log.saved": "Saved {path}",
   "log.opened": "Opened {path}",

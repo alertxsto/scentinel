@@ -14,9 +14,7 @@ authors = [
     { name = "Gesang Hemas Bayu Sekti" },
     { name = "Ezekiel Benedicte Felice" },
 ]
-maintainers = [
-    { name = "Environmental Engineering, President University" },
-]
+maintainers = [{ name = "Scentinel" }]
 
 dependencies = [
     "PySide6-Essentials>=6.11",
