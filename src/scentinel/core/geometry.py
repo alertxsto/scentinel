@@ -29,6 +29,7 @@ class BinGeometry:
 
     length_m: float = 6.0
     height_m: float = 2.5
+    width_m: float = 2.4
     mound_shape: str = "flat"
     mound_fill_fraction: float = 0.5
 
@@ -37,6 +38,8 @@ class BinGeometry:
             raise ValueError("length_m must be positive")
         if self.height_m <= 0.0:
             raise ValueError("height_m must be positive")
+        if self.width_m <= 0.0:
+            raise ValueError("width_m must be positive")
         if self.mound_shape not in MOUND_SHAPES:
             raise ValueError(f"mound_shape must be one of {MOUND_SHAPES}")
         if not 0.0 < self.mound_fill_fraction <= 1.0:
@@ -129,6 +132,30 @@ def mound_height_at(geom: BinGeometry, x: float) -> float:
 def mound_area(geom: BinGeometry) -> float:
     """Area of the mound cross-section, in m^2."""
     return _shoelace(mound_polygon(geom))
+
+
+def mound_profile_length(geom: BinGeometry) -> float:
+    """Length of the mound surface seen by the air, in m.
+
+    The sum of the segment lengths of :func:`mound_surface`. For a flat mound
+    this is just the bin length; a curved profile is longer than its span.
+    """
+    surface = mound_surface(geom)
+    return sum(
+        math.hypot(x1 - x0, y1 - y0)
+        for (x0, y0), (x1, y1) in zip(surface, surface[1:])
+    )
+
+
+def emission_area_m2(geom: BinGeometry) -> float:
+    """Area of waste surface that emits into the air, in m^2.
+
+    The case is a 2D cross-section, so the emitting surface is the mound
+    profile extruded by the bin width: ``mound_profile_length(geom) * width_m``.
+    This is what turns a batch's generation rate (kg/s) into an emission flux
+    (kg/m^2/s).
+    """
+    return mound_profile_length(geom) * geom.width_m
 
 
 def fill_fraction(geom: BinGeometry) -> float:

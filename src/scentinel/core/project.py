@@ -10,7 +10,11 @@ from scentinel.core.geometry import BinGeometry
 from scentinel.core.scenario import Scenario
 from scentinel.core.virtual_sensor import VirtualSensorConfig
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+#: Version 1 files predate the bin width. They load by taking the default,
+#: because the width only scales the emission flux and every other field is
+#: unchanged; refusing them would discard working projects for no data reason.
+_MIGRATABLE_VERSIONS = (1,)
 SUFFIX = ".scentinel"
 FILE_FILTER = f"Scentinel project (*{SUFFIX});;All files (*)"
 
@@ -50,17 +54,23 @@ def save_project(project: Project, path: Path) -> None:
 def load_project(path: Path) -> Project:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     version = payload.get("format_version")
-    if version != FORMAT_VERSION:
+    if version != FORMAT_VERSION and version not in _MIGRATABLE_VERSIONS:
         raise ValueError(
             f"unsupported project format_version {version!r}, expected {FORMAT_VERSION}"
         )
     return Project(
         name=payload["name"],
-        geometry=BinGeometry(**payload["geometry"]),
+        geometry=_load_geometry(payload["geometry"]),
         scenario=_load_scenario(payload["scenario"]),
         sensors=[Sensor(**sensor) for sensor in payload["sensors"]],
         sensor_lab=_load_sensor_lab(payload.get("sensor_lab")),
     )
+
+
+def _load_geometry(payload: dict) -> BinGeometry:
+    """Geometry, tolerant of a v1 file that has no ``width_m``."""
+    allowed = {item.name for item in fields(BinGeometry)}
+    return BinGeometry(**{key: value for key, value in payload.items() if key in allowed})
 
 
 def _load_scenario(payload: dict) -> Scenario:

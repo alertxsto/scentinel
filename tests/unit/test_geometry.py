@@ -7,10 +7,12 @@ from scentinel.core.geometry import (
     MOUND_SHAPES,
     air_domain,
     bin_polygon,
+    emission_area_m2,
     fill_fraction,
     mound_area,
     mound_height_at,
     mound_polygon,
+    mound_profile_length,
 )
 
 
@@ -80,6 +82,7 @@ def test_invalid_mound_shape_raises():
     [
         {"length_m": 0.0},
         {"height_m": -1.0},
+        {"width_m": 0.0},
         {"mound_fill_fraction": 0.0},
         {"mound_fill_fraction": 1.5},
     ],
@@ -87,3 +90,28 @@ def test_invalid_mound_shape_raises():
 def test_invalid_dimensions_raise(kwargs: dict):
     with pytest.raises(ValueError):
         BinGeometry(**kwargs)
+
+
+def test_width_defaults_to_a_truck_bin_width():
+    assert BinGeometry().width_m == pytest.approx(2.4)
+
+
+def test_emission_area_is_the_profile_length_times_the_width():
+    """A flat mound's surface is the bin length; the area extrudes it by width."""
+    geom = BinGeometry(
+        length_m=6.0, height_m=2.5, width_m=2.0,
+        mound_shape="flat", mound_fill_fraction=0.5,
+    )
+    assert mound_profile_length(geom) == pytest.approx(6.0)
+    assert emission_area_m2(geom) == pytest.approx(12.0)
+
+
+def test_a_curved_mound_has_a_longer_profile_than_its_span():
+    geom = BinGeometry(
+        length_m=6.0, height_m=2.5, width_m=2.0,
+        mound_shape="mounded", mound_fill_fraction=0.45,
+    )
+    assert mound_profile_length(geom) > geom.length_m
+    assert emission_area_m2(geom) == pytest.approx(
+        mound_profile_length(geom) * 2.0
+    )

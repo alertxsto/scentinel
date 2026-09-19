@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from scentinel.core.geometry import BinGeometry
@@ -45,6 +47,50 @@ def test_unknown_format_version_is_rejected(tmp_path):
     path.write_text('{"format_version": 99, "name": "x"}', encoding="utf-8")
     with pytest.raises(ValueError, match="format_version"):
         load_project(path)
+
+
+def test_a_version_1_project_loads_with_the_default_width(tmp_path):
+    """A v1 file predates the bin width; it loads with the default, not an error."""
+    path = tmp_path / "old.scentinel"
+    path.write_text(
+        json.dumps(
+            {
+                "format_version": 1,
+                "name": "old",
+                "geometry": {
+                    "length_m": 6.0,
+                    "height_m": 2.5,
+                    "mound_shape": "flat",
+                    "mound_fill_fraction": 0.5,
+                },
+                "scenario": {
+                    "wind_speed_m_s": 1.0,
+                    "wind_direction": "left-to-right",
+                    "ventilation_on": False,
+                    "waste_type": "mixed-msw",
+                    "age_h": 8.0,
+                    "moisture_fraction": 0.4,
+                    "gas_sources": {},
+                },
+                "sensors": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_project(path)
+    assert loaded.geometry.width_m == pytest.approx(2.4)
+    assert loaded.name == "old"
+
+
+def test_a_saved_project_is_version_2_and_carries_the_width(tmp_path):
+    path = tmp_path / "new.scentinel"
+    save_project(
+        Project(name="w", geometry=BinGeometry(width_m=3.0)), path
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["format_version"] == 2
+    assert payload["geometry"]["width_m"] == pytest.approx(3.0)
+    assert load_project(path).geometry.width_m == pytest.approx(3.0)
 
 
 def test_sensor_list_survives_reload_with_order(tmp_path):
