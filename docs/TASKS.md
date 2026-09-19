@@ -126,7 +126,7 @@ as the concurrency authority and scans the highest existing `run-NNN`, so a
 restart cannot reuse an id. `core.history` imports without the optional `cfd`
 extra, so the read API works on a machine without gmsh. No comparison view
 reads the history yet (T-031).
-Tests: 80 unit (core) + 21 UI orchestration.
+Tests: 83 unit (core) + 11 UI orchestration.
 
 #### T-030a Applied-physics evidence and gate states · DONE
 Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/history.py`,
