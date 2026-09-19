@@ -11,6 +11,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
+    QApplication,
     QDockWidget,
     QGroupBox,
     QScrollArea,
@@ -50,18 +51,34 @@ def test_splitters_allow_the_user_to_drag_panes(window):
             assert splitter.handle(index).isEnabled(), "every divider must be draggable"
 
 
-def test_dragging_the_horizontal_divider_changes_pane_widths(window):
-    """The divider must actually move panes, not just be enabled."""
+def test_panes_are_not_pinned_by_minimum_sizes(window):
+    """Panels must accept any size a drag could produce.
+
+    A drag calls ``setSizes`` internally, so this exercises the same path
+    without depending on handle geometry, which the offscreen platform does not
+    lay out. The bounds asserted here are the floors the window declares.
+    """
     window.resize(*NORMAL)
     window.show()
     horizontal = next(s for s in _splitters(window) if s.orientation() == Qt.Orientation.Horizontal)
-    before = horizontal.sizes()
-    handle = horizontal.handle(0)
-    # moveSplitter takes a position along the splitter, so aim past the handle.
-    horizontal.moveSplitter(handle.x() + handle.width() + 120, 0)
-    after = horizontal.sizes()
-    assert after != before, "dragging the divider must resize the panes"
-    assert after[0] > before[0], "the setup panel should have grown"
+    horizontal.setSizes([620, 820])
+    QApplication.processEvents()
+    wide, narrow = horizontal.sizes()
+    assert wide > 600, f"setup panel refused to grow: {horizontal.sizes()}"
+
+    horizontal.setSizes([260, 1180])
+    QApplication.processEvents()
+    small, large = horizontal.sizes()
+    assert small < wide, "setup panel refused to shrink"
+    assert large > narrow, "workspace refused to grow"
+
+    vertical = next(s for s in _splitters(window) if s.orientation() == Qt.Orientation.Vertical)
+    vertical.setSizes([640, 220])
+    QApplication.processEvents()
+    assert vertical.sizes()[0] > 600, "viewport refused to grow"
+    vertical.setSizes([200, 660])
+    QApplication.processEvents()
+    assert vertical.sizes()[0] < 400, "viewport refused to shrink"
 
 
 def test_viewport_keeps_usable_height_in_a_small_window(window):
@@ -143,8 +160,8 @@ class TestSensorLab:
         widget.deleteLater()
 
     def test_every_lab_tab_is_scrollable(self, sandbox):
-        dock = next(d for d in sandbox.findChildren(QDockWidget) if d.isVisible())
-        tabs = dock.widget()
+        dock = sandbox._sensor_dock
+        tabs = dock.findChild(QTabWidget)
         assert isinstance(tabs, QTabWidget)
         for index in range(tabs.count()):
             assert isinstance(tabs.widget(index), QScrollArea), (
@@ -154,7 +171,8 @@ class TestSensorLab:
     def test_lab_content_is_reachable_when_the_dock_is_short(self, sandbox):
         dock = sandbox._sensor_dock
         sandbox.resizeDocks([dock], [150], Qt.Orientation.Vertical)
-        tabs = dock.widget()
+        QApplication.processEvents()
+        tabs = dock.findChild(QTabWidget)
         page = tabs.widget(0)  # sensor models, the tallest page
         inner = page.widget()
         assert inner.sizeHint().height() > page.viewport().height(), (
@@ -164,5 +182,13 @@ class TestSensorLab:
         page.verticalScrollBar().setValue(page.verticalScrollBar().maximum())
         assert page.verticalScrollBar().value() == page.verticalScrollBar().maximum()
 
-    def test_lab_dock_has_no_hard_minimum(self, sandbox):
-        assert sandbox._sensor_dock.minimumHeight() == 0
+    def test_lab_dock_can_be_shrunk_to_its_title_bar(self, sandbox):
+        """The dock's floor must come from its content only when reachable.
+
+        QMainWindowLayout re-applies a floor from minimumSizeHint on every
+        resize, so the content is wrapped to stop advertising one.
+        """
+        dock = sandbox._sensor_dock
+        sandbox.resizeDocks([dock], [90], Qt.Orientation.Vertical)
+        QApplication.processEvents()
+        assert dock.height() <= 120, f"dock stayed at {dock.height()}px"

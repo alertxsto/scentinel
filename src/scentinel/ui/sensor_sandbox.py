@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -36,6 +37,28 @@ def _scrollable(page: QWidget) -> QScrollArea:
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     area.setWidget(page)
     return area
+
+
+class _ShrinkableDock(QDockWidget):
+    """A dock whose floor is the title bar, not its content.
+
+    ``QDockWidget`` takes its minimum from ``minimumSizeHint``, which for a tab
+    widget is the tab bar plus one row of content. ``QMainWindowLayout``
+    re-applies that floor on every resize, so clearing ``minimumHeight`` is not
+    enough — the content itself has to stop advertising a minimum. Wrapping the
+    tabs in a container with an ignored vertical size policy does that. Every
+    page inside is a scroll area, so nothing becomes unreachable.
+    """
+
+    def set_content(self, content: QWidget) -> None:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(content)
+        container.setMinimumSize(0, 0)
+        container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
+        self.setWidget(container)
 
 
 class SensorSandbox(MainWindow):
@@ -67,7 +90,7 @@ class SensorSandbox(MainWindow):
         self.set_lab_visible(False)
 
     def _build_sensor_lab(self) -> None:
-        dock = QDockWidget("Virtual Sensor Lab", self)
+        dock = _ShrinkableDock("Virtual Sensor Lab", self)
         dock.setAllowedAreas(
             Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
@@ -79,7 +102,7 @@ class SensorSandbox(MainWindow):
         tabs.addTab(_scrollable(self._build_telemetry_tab()), "Telemetry")
         tabs.addTab(_scrollable(self._build_evaluation_tab()), "Evaluation")
         tabs.setMinimumHeight(0)
-        dock.setWidget(tabs)
+        dock.set_content(tabs)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
         dock.setMinimumHeight(0)
         dock.setMinimumWidth(0)
@@ -97,11 +120,6 @@ class SensorSandbox(MainWindow):
         self._sensor_dock.setVisible(visible)
         self._sandbox_toolbar.setVisible(visible)
         self.results_panel().set_sandbox_mode(visible)
-        if visible:
-            # Showing the dock makes Qt adopt its minimumSizeHint (the tab bar
-            # plus one row of content) as a hard minimum, which then persists
-            # even after hiding. Re-assert zero so the dock can be dragged shut.
-            self._sensor_dock.setMinimumHeight(0)
 
     def lab_visible(self) -> bool:
         return getattr(self, "_lab_mode", False)
