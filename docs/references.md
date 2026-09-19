@@ -48,8 +48,16 @@ terdiri dari ~55% CH4, 40% CO2, dan 5% N2. EPA LMOP menggunakan angka umum
 | Toluene (no/unknown co-disposal) | 39 ppmv | AP-42 Table 2.4-2 | A |
 | Toluene (co-disposal) | 170 ppmv | AP-42 Table 2.4-2 | D |
 
+> **Catatan CO:** AP-42 memuat dua nilai untuk karbon monoksida — **105 ppmv**
+> di Final Factors dan **110 ppmv** di Tabel 2.4-1. Scentinel memakai **105**,
+> karena Final Factors adalah tabel yang direvisi Agustus 2024 dan yang dipakai
+> untuk perhitungan emisi; nilai 110 tetap ada di `AP42_TRACE_COMPOUNDS` sebagai
+> bagian dari ekstraksi tabel mentah, bukan sebagai default yang dipakai.
+
 Rating EPA (A–E) menunjukkan kualitas data: A = excellent, E = poor.
 Lihat AP-42 Table 2.4-1 dan 2.4-2 untuk daftar lengkap ~45 komponen trace.
+Seluruh 47 gas yang dapat dipilih sudah tercakup; setiap entri membawa nilai,
+rating, dan string sitasi yang dibaca langsung dari workbook AP-42.
 
 **Catatan co-disposal:** hanya benzene, NMOC, dan toluene yang dipecah AP-42
 menurut riwayat co-disposal. Gas lain — termasuk semua baris Table 2.4-1 —

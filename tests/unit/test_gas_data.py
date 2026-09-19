@@ -4,11 +4,14 @@ import pytest
 
 from scentinel.core.gas_data import (
     DEFAULT_SOURCE_GASES,
+    GAS_FAMILIES,
+    HEADLINE_GASES,
     available_gases,
     citation,
     default_sources,
     get_gas,
     regime_concentration,
+    short_label,
     source_concentration,
 )
 
@@ -79,9 +82,17 @@ def test_diffusivities_are_physically_distinct_and_match_the_fsg_anchors():
     assert get_gas("VOC").diffusivity_m2_s == pytest.approx(7.4e-6, rel=0.05)
 
     values = {key: get_gas(key).diffusivity_m2_s for key in DEFAULT_SOURCE_GASES}
-    assert len(set(values.values())) == len(values), values
-    # Heavier molecules diffuse more slowly, so the spread must be real.
+    # Isomers share a formula and therefore a diffusion volume, so their values
+    # legitimately coincide (1,1- and 1,2-dichloroethane, the dichlorobenzenes).
+    # What must hold is that the correlation produces a real spread, not that
+    # every one of 47 gases is numerically unique.
+    assert len(set(values.values())) >= 35, values
+    # Heavier molecules diffuse more slowly, so the ordering must be real.
     assert values["ETHANE"] > values["BENZENE"] > values["VOC"]
+    # Every gas must have a physically plausible diffusivity in air at 25 C:
+    # roughly 5e-6 (heavy halocarbons) to 3e-5 (light gases) m^2/s.
+    for key, value in values.items():
+        assert 5e-6 <= value <= 3e-5, (key, value)
 
 
 def test_get_gas_carries_properties_and_provenance():
@@ -122,3 +133,71 @@ def test_unknown_gas_raises():
 def test_unknown_regime_raises():
     with pytest.raises(ValueError):
         source_concentration("CO", regime="whatever")
+
+
+# -- full AP-42 catalogue ------------------------------------------------------
+
+
+def test_the_whole_cited_catalogue_is_selectable():
+    """Every Table 2.4-1 species with a usable value, plus the Table 2.4-2 splits."""
+    assert len(DEFAULT_SOURCE_GASES) == 47
+    assert len(set(DEFAULT_SOURCE_GASES)) == 47, "duplicate gas key"
+
+
+def test_every_selectable_gas_resolves_completely():
+    """A gas in the list that cannot be read would break the UI at selection time."""
+    for key in DEFAULT_SOURCE_GASES:
+        spec = get_gas(key)
+        assert spec.name, key
+        assert spec.mw_g_mol > 0, key
+        assert spec.diffusivity_m2_s > 0, key
+        assert spec.default_conc_ppmv > 0, key
+        assert spec.basis, key
+        assert "AP-42" in spec.basis or "LMOP" in spec.basis, (key, spec.basis)
+
+
+def test_footnote_marked_cells_parse_instead_of_raising():
+    """The cells that a bare float() rejected, now that all 47 are selectable."""
+    assert get_gas("CHLOROFORM").default_conc_ppmv == pytest.approx(0.03)
+    assert get_gas("CARBON_TETRACHLORIDE").default_conc_ppmv == pytest.approx(0.004)
+    assert get_gas("ETHYLENE_DIBROMIDE").default_conc_ppmv == pytest.approx(0.001)
+
+
+def test_gas_families_cover_the_catalogue_without_gaps_or_duplicates():
+    flat = [gas for family in GAS_FAMILIES.values() for gas in family]
+    assert len(flat) == len(set(flat)), "a gas appears in two families"
+    assert set(flat) == set(DEFAULT_SOURCE_GASES)
+
+
+def test_every_gas_has_a_short_label():
+    """The UI shows these in dense rows; a missing one falls back to the full name."""
+    for key in DEFAULT_SOURCE_GASES:
+        assert short_label(key), key
+
+
+def test_short_labels_are_actually_shorter_or_equal():
+    for key in DEFAULT_SOURCE_GASES:
+        assert len(short_label(key)) <= max(len(get_gas(key).name), 12), key
+
+
+def test_the_headline_gases_come_first():
+    assert DEFAULT_SOURCE_GASES[:4] == HEADLINE_GASES
+
+
+def test_a_gas_without_a_co_disposal_alternate_still_resolves():
+    """Only benzene/NMOC/toluene carry a cited alternate; the rest must fall back."""
+    for key in ("ETHANE", "CHLOROFORM", "PROPANE"):
+        assert get_gas(key).alternate_conc_ppmv is None
+        # The strict lookup refuses; the resolving one falls back to the base
+        # default, which is what the scenario path uses.
+        with pytest.raises(KeyError):
+            source_concentration(key, regime="co-disposal")
+        assert regime_concentration(key, regime="co-disposal") == pytest.approx(
+            get_gas(key).default_conc_ppmv
+        )
+
+
+def test_the_splits_that_do_have_alternates_keep_them():
+    assert get_gas("BENZENE").alternate_conc_ppmv == pytest.approx(11.0)
+    assert get_gas("TOLUENE").alternate_conc_ppmv == pytest.approx(170.0)
+    assert get_gas("VOC").alternate_conc_ppmv == pytest.approx(2400.0)

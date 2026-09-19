@@ -11,17 +11,62 @@ REGIMES = ("msw-only", "co-disposal")
 #: Gas keys offered as scenario sources, in display order: the AP-42 headline
 #: gases first, then the added trace species grouped by chemical family
 #: (hydrocarbon, aromatics, chlorinated, sulfur).
-DEFAULT_SOURCE_GASES = (
-    "CO",
-    "CH4",
-    "VOC",
-    "H2S",
-    "ETHANE",
-    "BENZENE",
-    "TOLUENE",
-    "VINYL_CHLORIDE",
-    "METHYL_MERCAPTAN",
-    "DIMETHYL_SULFIDE",
+#: Headline gases, shown first and selected by default on a new project.
+HEADLINE_GASES = ("CO", "CH4", "VOC", "H2S")
+
+#: The full cited catalogue from AP-42 Tables 2.4-1 and 2.4-2, grouped by
+#: chemical family. Every entry carries a value, a rating, and a basis string
+#: read out of the workbook by ``scripts/build_gas_data.py``; none is estimated.
+#: Grouping exists so a 47-item list stays navigable in the UI.
+GAS_FAMILIES: dict[str, tuple[str, ...]] = {
+    "headline": HEADLINE_GASES,
+    "sulfur": (
+        "METHYL_MERCAPTAN",
+        "ETHYL_MERCAPTAN",
+        "DIMETHYL_SULFIDE",
+        "CARBON_DISULFIDE",
+        "CARBONYL_SULFIDE",
+    ),
+    "aromatic": ("BENZENE", "TOLUENE", "ETHYLBENZENE", "XYLENES", "CHLOROBENZENE", "DICHLOROBENZENE"),
+    "alkane": ("ETHANE", "PROPANE", "BUTANE", "PENTANE", "HEXANE"),
+    "oxygenate": (
+        "ACETONE",
+        "METHYL_ETHYL_KETONE",
+        "METHYL_ISOBUTYL_KETONE",
+        "ETHANOL",
+        "PROPANOL_2",
+    ),
+    "chlorinated": (
+        "VINYL_CHLORIDE",
+        "DICHLOROMETHANE",
+        "CHLOROFORM",
+        "CARBON_TETRACHLORIDE",
+        "TRICHLOROETHANE_111",
+        "TRICHLOROETHYLENE",
+        "PERCHLOROETHYLENE",
+        "TETRACHLOROETHANE_1122",
+        "DICHLOROETHANE_11",
+        "DICHLOROETHANE_12",
+        "DICHLOROETHENE_11",
+        "T_DICHLOROETHENE_12",
+        "DICHLOROPROPANE_12",
+        "CHLOROMETHANE",
+        "CHLOROETHANE",
+        "BROMODICHLOROMETHANE",
+        "ETHYLENE_DIBROMIDE",
+    ),
+    "halocarbon": (
+        "DICHLORODIFLUOROMETHANE",
+        "DICHLOROFLUOROMETHANE",
+        "CHLORODIFLUOROMETHANE",
+        "FLUOROTRICHLOROMETHANE",
+    ),
+    "other": ("ACRYLONITRILE",),
+}
+
+#: Every selectable gas, headline first, then by family in the order above.
+DEFAULT_SOURCE_GASES = tuple(
+    dict.fromkeys(gas for family in GAS_FAMILIES.values() for gas in family)
 )
 
 #: Compact labels for dense rows such as the source list, where the full
@@ -39,6 +84,43 @@ SHORT_LABELS = {
     "VINYL_CHLORIDE": "Vinyl chloride",
     "METHYL_MERCAPTAN": "Methyl mercaptan",
     "DIMETHYL_SULFIDE": "Dimethyl sulfide",
+    "ETHYL_MERCAPTAN": "Ethyl mercaptan",
+    "CARBON_DISULFIDE": "Carbon disulfide",
+    "CARBONYL_SULFIDE": "Carbonyl sulfide",
+    "ETHYLBENZENE": "Ethylbenzene",
+    "XYLENES": "Xylenes",
+    "CHLOROBENZENE": "Chlorobenzene",
+    "DICHLOROBENZENE": "Dichlorobenzene",
+    "PROPANE": "Propane",
+    "BUTANE": "Butane",
+    "PENTANE": "Pentane",
+    "HEXANE": "Hexane",
+    "ACETONE": "Acetone",
+    "METHYL_ETHYL_KETONE": "MEK",
+    "METHYL_ISOBUTYL_KETONE": "MIBK",
+    "ETHANOL": "Ethanol",
+    "PROPANOL_2": "2-Propanol",
+    "DICHLOROMETHANE": "Dichloromethane",
+    "CHLOROFORM": "Chloroform",
+    "CARBON_TETRACHLORIDE": "Carbon tetrachloride",
+    "TRICHLOROETHANE_111": "1,1,1-TCA",
+    "TRICHLOROETHYLENE": "Trichloroethylene",
+    "PERCHLOROETHYLENE": "Perchloroethylene",
+    "TETRACHLOROETHANE_1122": "1,1,2,2-TeCA",
+    "DICHLOROETHANE_11": "1,1-DCA",
+    "DICHLOROETHANE_12": "1,2-DCA",
+    "DICHLOROETHENE_11": "1,1-DCE",
+    "T_DICHLOROETHENE_12": "t-1,2-DCE",
+    "DICHLOROPROPANE_12": "1,2-DCP",
+    "CHLOROMETHANE": "Chloromethane",
+    "CHLOROETHANE": "Chloroethane",
+    "BROMODICHLOROMETHANE": "Bromodichloromethane",
+    "ETHYLENE_DIBROMIDE": "Ethylene dibromide",
+    "DICHLORODIFLUOROMETHANE": "CFC-12",
+    "DICHLOROFLUOROMETHANE": "HCFC-21",
+    "CHLORODIFLUOROMETHANE": "HCFC-22",
+    "FLUOROTRICHLOROMETHANE": "CFC-11",
+    "ACRYLONITRILE": "Acrylonitrile",
 }
 
 
@@ -64,8 +146,37 @@ class GasSpec:
     alternate_basis: str = ""
 
 
+
+def _concentration(value: object, key: str) -> float:
+    """Parse an AP-42 concentration cell into ppmv.
+
+    The published cells are not all plain numbers. Some are scientific notation
+    written the EPA's way (``"4.0x10-3"``, ``"3.0x10-2"``) and some are a plain
+    value with a footnote letter attached (``"110e"``). A bare ``float()``
+    rejects both forms, which would silently restrict the catalogue to whichever
+    gases happened to be stored numerically.
+
+    Raises ``KeyError`` rather than returning a guess: an unreadable cell means
+    the gas has no usable cited value, and inventing one is not an option.
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().lower().replace(" ", "")
+        for marker in ("x10", "\u00d710"):
+            text = text.replace(marker, "e")
+        while text and text[-1].isalpha():
+            text = text[:-1]
+        try:
+            return float(text)
+        except ValueError:
+            pass
+    raise KeyError(f"unreadable AP-42 concentration for {key}: {value!r}")
+
+
 def available_gases() -> list[str]:
-    return list(GAS_PROPERTIES)
+    """Every gas with a cited AP-42 value, in display order."""
+    return [gas for gas in DEFAULT_SOURCE_GASES if gas in GAS_PROPERTIES]
 
 
 def get_gas(key: str) -> GasSpec:
@@ -74,7 +185,7 @@ def get_gas(key: str) -> GasSpec:
     props = GAS_PROPERTIES[key]
     defaults = SOURCE_DEFAULTS.get(key, {})
     if "conc_ppmv" in defaults:
-        default_conc = float(defaults["conc_ppmv"])
+        default_conc = _concentration(defaults["conc_ppmv"], key)
     elif "fraction_by_volume" in defaults:
         default_conc = float(defaults["fraction_by_volume"]) * 1_000_000.0
     else:
@@ -82,6 +193,8 @@ def get_gas(key: str) -> GasSpec:
     alternate = defaults.get("alternate_conc_ppmv")
     if alternate is None and "alternate_fraction" in defaults:
         alternate = float(defaults["alternate_fraction"]) * 1_000_000.0
+    elif alternate is not None:
+        alternate = _concentration(alternate, key)
     return GasSpec(
         key=key,
         name=props["name"],
