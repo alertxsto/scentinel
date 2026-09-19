@@ -18,9 +18,9 @@ def test_home_routes_to_both_working_modes(qapp, translator):
 def test_sandbox_generates_virtual_telemetry(qapp, translator):
     window = HomeWindow(translator)
     sandbox = window._sandbox
-    sandbox.viewport.add_sensor(3.0, 2.0)
+    sandbox.viewport().add_sensor(3.0, 2.0)
     sandbox.truth.setValue(50)
     sandbox.advance()
-    assert "truth=" in sandbox.log.toPlainText()
+    assert sandbox._telemetry.item(0, 3).text().endswith(" ppm")
     assert sandbox._values["S1"] > 0
     window.deleteLater()
