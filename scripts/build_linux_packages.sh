@@ -53,6 +53,7 @@ PY
 install -m 0755 "${ROOT}/packaging/scentinel.wrapper" "${STAGE}/usr/bin/scentinel"
 install -m 0644 "${ROOT}/packaging/scentinel.desktop" "${STAGE}/usr/share/applications/scentinel.desktop"
 install -m 0644 "${ROOT}/LICENSE" "${STAGE}/usr/share/doc/scentinel/LICENSE"
+install -m 0644 "${ROOT}/CHANGELOG.md" "${STAGE}/usr/share/doc/scentinel/CHANGELOG.md"
 sed "s/^pkgver=.*/pkgver=${VERSION}/" "${ROOT}/packaging/arch/PKGBUILD" > "${OUT}/PKGBUILD"
 
 tar -C "${STAGE}" -czf "${OUT}/scentinel-${VERSION}-x86_64.tar.gz" opt usr
@@ -88,6 +89,8 @@ contents:
     dst: /usr/share/applications/scentinel.desktop
   - src: ${STAGE}/usr/share/doc/scentinel/LICENSE
     dst: /usr/share/doc/scentinel/LICENSE
+  - src: ${STAGE}/usr/share/doc/scentinel/CHANGELOG.md
+    dst: /usr/share/doc/scentinel/CHANGELOG.md
 EOF
 
 "${ROOT}/build/nfpm" package -f "${ROOT}/build/nfpm.yaml" -p deb -t "${OUT}"

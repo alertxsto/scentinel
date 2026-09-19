@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > /tmp/notes.md <<'EOF'
+          cat > /tmp/generated-notes.md <<'EOF'
           Desktop packages for Scentinel.
 
           | File | Platform |
@@ -74,6 +74,20 @@ jobs:
           sudo tar -C / -xzf scentinel-*-x86_64.tar.gz
           ```
           EOF
+          # Prefer the curated changelog section for this version; fall back to
+          # the generated notes when the tag has no entry yet.
+          version="${GITHUB_REF_NAME#v}"
+          if grep -q "^## \\[${version}\\]" CHANGELOG.md; then
+            awk -v v="${version}" '
+              $0 ~ "^## \\[" v "\\]" {found=1; next}
+              found && /^## \\[/ {exit}
+              found {print}
+            ' CHANGELOG.md > /tmp/notes.md
+            printf '\n---\n\n' >> /tmp/notes.md
+            cat /tmp/generated-notes.md >> /tmp/notes.md
+          else
+            cp /tmp/generated-notes.md /tmp/notes.md
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             artifacts/linux-packages/* \
             artifacts/windows-exe/* \
