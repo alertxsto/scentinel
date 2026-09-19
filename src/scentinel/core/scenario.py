@@ -1,52 +1,80 @@
-"""Scenario parameters: wind, waste stream, ventilation, and per-gas sources."""
+"""Scenario parameters: wind, waste stream, ventilation, and per-gas sources.
+
+The waste stream is described by a :class:`~scentinel.core.composition.WasteComposition`
+and a holding time. Gases that the decomposition model produces — methane and
+carbon dioxide — take their source strength from that model, so a fresh load
+carries no methane and an aged one carries the cited steady-state fraction. Trace
+species keep their AP-42 Table 2.4-1 defaults because the decomposition model does
+not describe them.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from scentinel.core import composition as comp
+from scentinel.core import generation as gen
 from scentinel.core.gas_data import regime_concentration
 
 WIND_DIRECTIONS = ("left-to-right", "right-to-left")
 
 WIND_SIGN = {"left-to-right": 1.0, "right-to-left": -1.0}
 
-#: AP-42 Table 2.4-2 MSW-only is the organic-fraction baseline. Auto CH₄/VOC/H₂S
-#: for an ``msw-only`` stream scale linearly with ``organic_fraction / 0.50``.
-#: Co-disposal keeps the cited alternate concentrations unscaled.
-ORGANIC_REFERENCE = 0.50
-ORGANIC_SCALE_GASES = frozenset({"CH4", "VOC", "H2S"})
+#: Streams the UI offers. These name a preset composition; they are no longer the
+#: thing that scales the source strength.
+WASTE_TYPES = comp.LEGACY_WASTE_TYPES
 
-WASTE_TYPES = (
-    "mixed-msw",
-    "co-disposal",
-    "organic-rich",
-    "green-waste",
-    "rdf-feedstock",
-    "dry-recyclables",
-)
+#: Gases whose source strength comes from the decomposition model rather than
+#: from a table: they are products of decay, so their concentration follows from
+#: the composition, the age, and the moisture.
+GENERATED_GASES = frozenset({"CH4", "CO2"})
+
+#: Volume fractions of the generated gas mixture, for the two products. The
+#: composition model reports these directly; these constants exist so the
+#: conversion is stated once.
+PPMV_PER_FRACTION = 1_000_000.0
 
 
 @dataclass(frozen=True)
 class WasteSpec:
-    """One truck-load stream: cited AP-42 regime plus composition defaults."""
+    """One truck-load stream: its preset composition and moisture."""
 
     key: str
     regime: str
     default_gases: tuple[str, ...]
-    organic_fraction: float
+    composition: comp.WasteComposition
     moisture_fraction: float
 
+    #: Kept for callers that read the old scalar fields. ``organic_fraction`` is
+    #: now derived from the composition rather than driving anything: it is the
+    #: degradable share, not a scaling factor.
+    @property
+    def organic_fraction(self) -> float:
+        return self.composition.degradable_fraction()
 
-WASTE_SPECS: dict[str, WasteSpec] = {
-    "mixed-msw": WasteSpec("mixed-msw", "msw-only", ("CO", "CH4", "VOC", "H2S"), 0.50, 0.40),
-    "co-disposal": WasteSpec(
-        "co-disposal", "co-disposal", ("CO", "CH4", "VOC", "H2S"), 0.45, 0.35
-    ),
-    "organic-rich": WasteSpec("organic-rich", "msw-only", ("CH4", "VOC", "H2S"), 0.80, 0.60),
-    "green-waste": WasteSpec("green-waste", "msw-only", ("CH4", "VOC"), 0.85, 0.55),
-    "rdf-feedstock": WasteSpec("rdf-feedstock", "msw-only", ("CO", "VOC"), 0.25, 0.15),
-    "dry-recyclables": WasteSpec("dry-recyclables", "msw-only", ("VOC",), 0.10, 0.10),
-}
+
+def _spec(key: str) -> WasteSpec:
+    composition, moisture = comp.preset(key)
+    regime = "co-disposal" if key == "co-disposal" else "msw-only"
+    gases = ("CO", "CH4", "VOC", "H2S")
+    if key == "organic-rich":
+        gases = ("CH4", "VOC", "H2S")
+    elif key == "green-waste":
+        gases = ("CH4", "VOC")
+    elif key == "rdf-feedstock":
+        gases = ("CO", "VOC")
+    elif key == "dry-recyclables":
+        gases = ("VOC",)
+    return WasteSpec(
+        key=key,
+        regime=regime,
+        default_gases=gases,
+        composition=composition,
+        moisture_fraction=moisture,
+    )
+
+
+WASTE_SPECS: dict[str, WasteSpec] = {key: _spec(key) for key in WASTE_TYPES}
 
 
 def waste_spec(key: str) -> WasteSpec:
@@ -55,39 +83,62 @@ def waste_spec(key: str) -> WasteSpec:
     return WASTE_SPECS[key]
 
 
-def auto_concentration_ppmv(scenario: Scenario, gas: str) -> float:
-    """Cited AP-42 default for ``gas``, scaled by waste stream when applicable.
+def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
+    """Source concentration of a decomposition product, in ppmv.
 
-    A co-disposal stream uses the cited alternate when the gas has one. Not
-    every gas does — AP-42 Table 2.4-1 is a single default concentration with no
-    co-disposal split, and Table 2.4-2 only splits benzene and NMOC — so the
-    regime lookup falls back to the base default instead of raising. That keeps
-    every gas in :data:`~scentinel.core.gas_data.DEFAULT_SOURCE_GASES` selectable
-    under every waste stream.
+    The gas phase above the waste is the mixture the decomposition model reports,
+    so the source strength of a product is its volume share of that mixture:
+    methane is 0 ppmv in a fresh load and 550 000 ppmv at the cited steady state,
+    and nothing in between is invented.
     """
-    spec = waste_spec(scenario.waste_type)
-    ppmv = regime_concentration(gas, regime=spec.regime)
-    if spec.regime == "msw-only" and gas in ORGANIC_SCALE_GASES:
-        ppmv *= scenario.organic_fraction / ORGANIC_REFERENCE
-    return ppmv
+    if gas not in GENERATED_GASES:
+        raise ValueError(f"{gas!r} is not a decomposition product")
+
+    result = gen.generate(
+        scenario.composition,
+        tonnage_t=1.0,
+        age_h=scenario.age_h,
+        moisture=scenario.moisture_fraction,
+    )
+    if gas == "CH4":
+        return result.methane_fraction * PPMV_PER_FRACTION
+    # CO2 share of the same mixture.
+    molar = gen.MOLAR_MASS_G_PER_MOL
+    moles_ch4 = result.ch4_kg / (molar["CH4"] / 1000.0)
+    moles_co2 = result.co2_kg / (molar["CO2"] / 1000.0)
+    moles_n2 = result.n2_kg / (molar["N2"] / 1000.0)
+    total = moles_ch4 + moles_co2 + moles_n2
+    if total <= 0.0:
+        return 0.0
+    return (moles_co2 / total) * PPMV_PER_FRACTION
+
+
+def auto_concentration_ppmv(scenario: Scenario, gas: str) -> float:
+    """Cited default source concentration for ``gas``, in ppmv.
+
+    Decomposition products are computed from the waste; trace species come from
+    AP-42 Table 2.4-1, falling back to the base default when the stream is
+    co-disposal and the species has no cited co-disposal value.
+    """
+    if gas in GENERATED_GASES:
+        return generated_source_ppmv(scenario, gas)
+    return regime_concentration(gas, regime=scenario.regime)
 
 
 @dataclass
 class Scenario:
     """One simulation configuration.
 
-    ``gas_sources`` maps a gas key (see :mod:`scentinel.core.gas_data`) to
-    either the source concentration at the waste surface in ppmv, or the string
-    ``"auto"`` to take the cited AP-42 default for the selected waste stream.
-    ``"auto"`` is resolved by :func:`scentinel.core.casegen.resolve_sources`
-    when the case is written.
+    ``gas_sources`` maps a gas key to either an explicit ppmv value or the string
+    ``"auto"``, which resolves through :func:`auto_concentration_ppmv` when the
+    case is written.
     """
 
     wind_speed_m_s: float = 1.0
     wind_direction: str = "left-to-right"
     ventilation_on: bool = False
     waste_type: str = "mixed-msw"
-    organic_fraction: float = 0.50
+    age_h: float = 8.0
     moisture_fraction: float = 0.40
     gas_sources: dict[str, float | str] = field(default_factory=dict)
 
@@ -98,8 +149,8 @@ class Scenario:
             raise ValueError(f"wind_direction must be one of {WIND_DIRECTIONS}")
         if self.waste_type not in WASTE_SPECS:
             raise ValueError(f"waste_type must be one of {WASTE_TYPES}")
-        if not 0.0 < self.organic_fraction <= 1.0:
-            raise ValueError("organic_fraction must be in (0, 1]")
+        if self.age_h < 0.0:
+            raise ValueError("age_h must not be negative")
         if not 0.0 <= self.moisture_fraction <= 1.0:
             raise ValueError("moisture_fraction must be in [0, 1]")
         resolved: dict[str, float | str] = {}
@@ -120,3 +171,29 @@ class Scenario:
     @property
     def waste(self) -> WasteSpec:
         return waste_spec(self.waste_type)
+
+    @property
+    def composition(self) -> comp.WasteComposition:
+        return self.waste.composition
+
+    @property
+    def regime(self) -> str:
+        return self.waste.regime
+
+    @property
+    def phase(self) -> str:
+        return comp.phase_for(self.age_h)
+
+    @property
+    def organic_fraction(self) -> float:
+        """Degradable share of the load, derived from the composition.
+
+        Retained because manifests and the UI read it; it no longer scales any
+        source strength, which is what the removed linear rule did.
+        """
+        return self.composition.degradable_fraction()
+
+    @property
+    def generated_gases(self) -> tuple[str, ...]:
+        """Gases the current phase can produce, in a stable order."""
+        return comp.PHASE_GASES[self.phase]

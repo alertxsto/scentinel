@@ -4,7 +4,12 @@ import pytest
 
 from scentinel.core.casegen import resolve_sources
 from scentinel.core.gas_data import source_concentration
-from scentinel.core.scenario import Scenario, auto_concentration_ppmv, waste_spec
+from scentinel.core.scenario import (
+    WASTE_TYPES,
+    Scenario,
+    auto_concentration_ppmv,
+    waste_spec,
+)
 
 
 def test_default_mixed_msw_auto_matches_cited_ap42():
@@ -14,34 +19,69 @@ def test_default_mixed_msw_auto_matches_cited_ap42():
     assert auto_concentration_ppmv(scenario, "H2S") == pytest.approx(36.0)
 
 
-def test_co_disposal_uses_cited_alternate_voc_unscaled():
-    scenario = Scenario(
-        waste_type="co-disposal",
-        organic_fraction=0.45,
-        gas_sources={"VOC": "auto", "CH4": "auto"},
-    )
+def test_co_disposal_uses_cited_alternate_voc():
+    """Trace species keep their cited table values; only decay products are computed."""
+    scenario = Scenario(waste_type="co-disposal", gas_sources={"VOC": "auto"})
     assert auto_concentration_ppmv(scenario, "VOC") == pytest.approx(
         source_concentration("VOC", regime="co-disposal")
     )
-    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(
-        source_concentration("CH4", regime="co-disposal")
+
+
+def test_trace_species_do_not_scale_with_organic_fraction():
+    """The removed rule multiplied VOC/H2S by organic/0.50 and had no citation.
+
+    Trace concentrations now come straight from the cited table. The organic
+    fraction is still exposed (it is derived from the composition) but it no
+    longer scales anything, which is what this asserts.
+    """
+    organic = Scenario(waste_type="organic-rich", gas_sources={"VOC": "auto"})
+    mixed = Scenario(waste_type="mixed-msw", gas_sources={"VOC": "auto"})
+    assert auto_concentration_ppmv(organic, "VOC") == pytest.approx(
+        source_concentration("VOC", regime="msw-only")
     )
+    assert auto_concentration_ppmv(organic, "VOC") == auto_concentration_ppmv(mixed, "VOC")
 
 
-def test_organic_rich_scales_msw_voc_from_the_50_percent_baseline():
-    scenario = Scenario(
-        waste_type="organic-rich",
-        organic_fraction=0.80,
-        gas_sources={"VOC": "auto", "CO": "auto"},
-    )
-    assert auto_concentration_ppmv(scenario, "VOC") == pytest.approx(550.0 * 0.80 / 0.50)
-    assert auto_concentration_ppmv(scenario, "CO") == pytest.approx(105.0)
+def test_a_fresh_load_has_no_methane_source():
+    """The defect the composition model fixed: CH4 for waste loaded hours ago."""
+    scenario = Scenario(waste_type="mixed-msw", age_h=8.0, gas_sources={"CH4": "auto"})
+    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(0.0)
+    assert "CH4" not in scenario.generated_gases
 
 
-def test_resolve_sources_applies_the_waste_scale_as_volume_fraction():
-    scenario = Scenario(waste_type="rdf-feedstock", organic_fraction=0.25, gas_sources={"VOC": "auto"})
+def test_an_aged_load_reaches_the_cited_steady_state_methane():
+    scenario = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 30, gas_sources={"CH4": "auto"})
+    assert auto_concentration_ppmv(scenario, "CH4") == pytest.approx(550_000.0, rel=1e-6)
+
+
+def test_generated_methane_never_exceeds_the_ap42_ceiling():
+    from scentinel.core.composition import STEADY_STATE_METHANE_CEILING
+
+    for waste_type in WASTE_TYPES:
+        for age_h in (8.0, 24 * 100, 24 * 365 * 50):
+            scenario = Scenario(waste_type=waste_type, age_h=age_h)
+            ppmv = auto_concentration_ppmv(scenario, "CH4")
+            assert ppmv <= STEADY_STATE_METHANE_CEILING * 1e6 + 1.0, (waste_type, age_h)
+
+
+def test_resolve_sources_carries_the_generated_value_as_a_volume_fraction():
+    scenario = Scenario(waste_type="mixed-msw", age_h=24.0 * 365 * 30, gas_sources={"CH4": "auto"})
     resolved = resolve_sources(scenario)
-    assert resolved["VOC"] == pytest.approx((550.0 * 0.25 / 0.50) * 1e-6)
+    assert resolved["CH4"] == pytest.approx(0.55, rel=1e-6)
+
+
+def test_moisture_changes_the_generated_source():
+    """The input that used to be dead now moves the result."""
+    dry = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.10)
+    wet = Scenario(waste_type="mixed-msw", age_h=24.0 * 365, moisture_fraction=0.60)
+    assert auto_concentration_ppmv(wet, "CH4") > auto_concentration_ppmv(dry, "CH4")
+
+
+def test_age_and_moisture_are_validated():
+    with pytest.raises(ValueError, match="age_h"):
+        Scenario(age_h=-1.0)
+    with pytest.raises(ValueError, match="moisture_fraction"):
+        Scenario(moisture_fraction=1.5)
 
 
 def test_unknown_waste_type_is_rejected():

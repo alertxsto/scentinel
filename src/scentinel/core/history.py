@@ -188,6 +188,7 @@ _SCENARIO_KEYS = (
     "ventilation",
     "gas_sources",
     "waste_type",
+    "age_h",
     "organic_fraction",
     "moisture_fraction",
 )
@@ -305,6 +306,7 @@ class ScenarioRecord:
     ventilation: VentilationRecord
     gas_sources: dict[str, GasSourceRecord]
     waste_type: str
+    age_h: float
     organic_fraction: float
     moisture_fraction: float
 
@@ -483,7 +485,7 @@ def snapshot_project(project: Project) -> Project:
             wind_direction=project.scenario.wind_direction,
             ventilation_on=project.scenario.ventilation_on,
             waste_type=project.scenario.waste_type,
-            organic_fraction=project.scenario.organic_fraction,
+            age_h=project.scenario.age_h,
             moisture_fraction=project.scenario.moisture_fraction,
             gas_sources=dict(project.scenario.gas_sources),
         ),
@@ -806,6 +808,7 @@ def _snapshot_project(project: Project) -> ProjectRecord:
             ),
             gas_sources=sources,
             waste_type=scenario.waste_type,
+            age_h=scenario.age_h,
             organic_fraction=scenario.organic_fraction,
             moisture_fraction=scenario.moisture_fraction,
         ),
@@ -1098,6 +1101,7 @@ def _payload(record: RunRecord) -> dict[str, object]:
                     for key, source in scenario.gas_sources.items()
                 },
                 "waste_type": scenario.waste_type,
+                "age_h": scenario.age_h,
                 "organic_fraction": scenario.organic_fraction,
                 "moisture_fraction": scenario.moisture_fraction,
             },
@@ -1333,6 +1337,9 @@ def _decode_scenario(payload: object, where: str) -> ScenarioRecord:
         ventilation=ventilation,
         gas_sources=sources,
         waste_type=_waste_type(mapping["waste_type"], where),
+        age_h=_number(
+            mapping["age_h"], "project.scenario.age_h", where, minimum=0.0
+        ),
         organic_fraction=_number(
             mapping["organic_fraction"],
             "project.scenario.organic_fraction",

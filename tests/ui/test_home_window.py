@@ -107,7 +107,7 @@ def test_home_reopens_a_saved_project(qapp, translator, tmp_path):
         Project(
             name="bin",
             geometry=BinGeometry(length_m=7.0),
-            scenario=Scenario(waste_type="organic-rich", organic_fraction=0.8, gas_sources={"VOC": "auto"}),
+            scenario=Scenario(waste_type="organic-rich", age_h=12.0, gas_sources={"VOC": "auto"}),
             sensors=[Sensor(sensor_id="S1", x=1.0, y=2.0)],
         ),
         path,

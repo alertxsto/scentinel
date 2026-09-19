@@ -14,7 +14,7 @@ from scentinel.core.history import HistoryError
 from scentinel.core.mesh import PATCHES
 from scentinel.core.post import SensorReading
 from scentinel.core.project import Project, Sensor
-from scentinel.core.scenario import Scenario
+from scentinel.core.scenario import WASTE_SPECS, Scenario
 
 STARTED = datetime(2026, 9, 19, 12, 34, 56, tzinfo=timezone.utc)
 FINISHED = datetime(2026, 9, 19, 12, 36, 12, tzinfo=timezone.utc)
@@ -107,8 +107,13 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert scenario["wind_direction"] == "left-to-right"
     assert scenario["ventilation"] == {"requested_on": False, "modelled": False}
     assert scenario["waste_type"] == "mixed-msw"
-    assert scenario["organic_fraction"] == 0.5
-    assert scenario["moisture_fraction"] == 0.4
+    # The organic fraction is derived from the composition (degradable share),
+    # not an independent input; the manifest records what the model used.
+    assert scenario["organic_fraction"] == pytest.approx(
+        WASTE_SPECS["mixed-msw"].composition.degradable_fraction()
+    )
+    assert scenario["moisture_fraction"] == pytest.approx(0.4)
+    assert scenario["age_h"] == pytest.approx(8.0)
     assert payload["project"]["sensors"] == [{"sensor_id": "S1", "x_m": 1.2, "y_m": 2.1}]
 
     execution = payload["execution"]
@@ -1096,7 +1101,10 @@ def test_source_and_probe_ppmv_values_follow_the_documented_recipe(tmp_path):
 
     sources = record.project.scenario.gas_sources
     assert sources["CO"].resolved_ppmv == pytest.approx(105.0)
-    assert sources["CH4"].resolved_ppmv == pytest.approx(500000.0)
+    # The default project is a fresh load (8 h), so the decomposition model
+    # reports no methane. The value is computed, not read from the old
+    # AP-42 landfill default of 500 000 ppmv, which described aged waste.
+    assert sources["CH4"].resolved_ppmv == pytest.approx(0.0)
     assert sources["VOC"].resolved_ppmv == pytest.approx(12.5)
     assert sources["VOC"].requested_ppmv == pytest.approx(12.5)
     assert sources["VOC"].provenance == "user input"

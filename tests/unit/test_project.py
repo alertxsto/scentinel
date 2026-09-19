@@ -4,7 +4,7 @@ import pytest
 
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.project import Project, Sensor, load_project, save_project
-from scentinel.core.scenario import Scenario
+from scentinel.core.scenario import WASTE_SPECS, Scenario
 
 
 def _sample() -> Project:
@@ -62,7 +62,7 @@ def test_waste_stream_and_sensor_lab_round_trip(tmp_path):
         geometry=BinGeometry(),
         scenario=Scenario(
             waste_type="organic-rich",
-            organic_fraction=0.8,
+            age_h=12.0,
             moisture_fraction=0.6,
             gas_sources={"VOC": "auto"},
         ),
@@ -99,5 +99,9 @@ def test_legacy_project_without_waste_or_lab_still_loads(tmp_path):
     )
     loaded = load_project(path)
     assert loaded.scenario.waste_type == "mixed-msw"
-    assert loaded.scenario.organic_fraction == pytest.approx(0.50)
+    # Derived from the default preset, not a stored scalar.
+    assert loaded.scenario.organic_fraction == pytest.approx(
+        WASTE_SPECS["mixed-msw"].composition.degradable_fraction()
+    )
+    assert loaded.scenario.age_h == pytest.approx(8.0)
     assert loaded.sensor_lab.family == "PID"

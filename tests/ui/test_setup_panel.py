@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from scentinel.core.geometry import BinGeometry
+from scentinel.core.scenario import WASTE_SPECS
 from scentinel.ui.i18n import Translator
 from scentinel.ui.setup_panel import SetupPanel
 
@@ -126,24 +127,42 @@ def test_selecting_a_waste_type_applies_default_gases_and_fractions(panel):
     panel._waste_type.setCurrentIndex(panel._waste_type.findData("organic-rich"))
     scenario = panel.scenario()
     assert scenario.waste_type == "organic-rich"
-    assert scenario.organic_fraction == pytest.approx(0.80)
+    # The organic fraction is derived from the preset composition now, so it is
+    # the degradable share rather than an independently entered number.
+    assert scenario.organic_fraction == pytest.approx(
+        WASTE_SPECS["organic-rich"].composition.degradable_fraction()
+    )
     assert scenario.moisture_fraction == pytest.approx(0.60)
     assert scenario.gas_sources == {"CH4": "auto", "VOC": "auto", "H2S": "auto"}
 
 
-def test_set_values_restores_waste_without_resetting_gases(panel):
+def test_set_values_restores_waste_age_without_resetting_gases(panel):
     from scentinel.core.scenario import Scenario
 
     panel.set_values(
         BinGeometry(),
         Scenario(
             waste_type="rdf-feedstock",
-            organic_fraction=0.30,
+            age_h=30.0,
             moisture_fraction=0.12,
             gas_sources={"VOC": 100.0},
         ),
     )
     scenario = panel.scenario()
     assert scenario.waste_type == "rdf-feedstock"
-    assert scenario.organic_fraction == pytest.approx(0.30)
+    assert scenario.age_h == pytest.approx(30.0)
     assert scenario.gas_sources == {"VOC": 100.0}
+
+
+def test_the_derived_readout_reports_the_phase_and_whether_methane_exists(panel):
+    """The simulation-driven part: inputs imply the phase, before any run."""
+    panel._waste_type.setCurrentIndex(panel._waste_type.findData("mixed-msw"))
+    panel._age_h.setValue(8.0)
+    fresh = panel._derived_label.text()
+    assert "I" in fresh
+    assert "not yet produced" in fresh
+
+    panel._age_h.setValue(24.0 * 365 * 5)
+    aged = panel._derived_label.text()
+    assert "IV" in aged
+    assert "produced" in aged and "not yet" not in aged
