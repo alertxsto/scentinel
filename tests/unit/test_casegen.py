@@ -11,13 +11,15 @@ from scentinel.core.casegen import (
     WALL_PATCHES,
     applied_physics,
     case_input_digest,
+    emission_flux_kg_per_m2_s,
+    emission_rate_kg_per_s,
     patch_roles,
     resolve_sources,
     scalar_diffusivity,
     wind_speed_at,
     write_case,
 )
-from scentinel.core.geometry import BinGeometry
+from scentinel.core.geometry import BinGeometry, emission_area_m2
 from scentinel.core.mesh import PATCHES, MeshResult
 from scentinel.core.scenario import Scenario
 
@@ -34,6 +36,83 @@ def test_auto_sources_use_the_cited_ap42_defaults():
     resolved = resolve_sources(scenario)
     assert resolved["CO"] == pytest.approx(105e-6)
     assert resolved["H2S"] == pytest.approx(36e-6)
+
+
+def test_the_flux_is_the_rate_over_the_emitting_area():
+    scenario = Scenario(
+        gas_sources={"CH4": "auto"}, tonnage_t=10.0, age_h=24.0 * 365 * 3
+    )
+    geom = BinGeometry(width_m=2.0)
+    rate = emission_rate_kg_per_s(scenario, "CH4")
+    flux = emission_flux_kg_per_m2_s(scenario, geom, "CH4")
+    assert rate > 0.0
+    assert flux == pytest.approx(rate / emission_area_m2(geom))
+
+
+def test_tonnage_scales_the_flux_and_age_changes_it():
+    """The point of the rework: tonnage and age must move the CFD source.
+
+    A first-order decay peaks at placement, so for a fixed batch the *rate* (and
+    therefore the flux) is highest when the load is fresh and falls with age;
+    the cumulative mass is what grows. Both are the same curve, which is what
+    Phase 2 established.
+    """
+    geom = BinGeometry()
+    light = Scenario(gas_sources={"CH4": "auto"}, tonnage_t=1.0, age_h=24.0 * 365 * 3)
+    heavy = Scenario(gas_sources={"CH4": "auto"}, tonnage_t=10.0, age_h=24.0 * 365 * 3)
+    assert emission_flux_kg_per_m2_s(heavy, geom, "CH4") == pytest.approx(
+        10.0 * emission_flux_kg_per_m2_s(light, geom, "CH4")
+    )
+
+    fresh = Scenario(gas_sources={"CH4": "auto"}, tonnage_t=10.0, age_h=8.0)
+    aged = Scenario(gas_sources={"CH4": "auto"}, tonnage_t=10.0, age_h=24.0 * 365 * 3)
+    assert emission_flux_kg_per_m2_s(fresh, geom, "CH4") != pytest.approx(
+        emission_flux_kg_per_m2_s(aged, geom, "CH4")
+    )
+    assert emission_flux_kg_per_m2_s(fresh, geom, "CH4") > emission_flux_kg_per_m2_s(
+        aged, geom, "CH4"
+    )
+
+
+def test_a_wider_bin_dilutes_the_flux():
+    scenario = Scenario(gas_sources={"CH4": "auto"}, tonnage_t=10.0, age_h=24.0 * 365 * 3)
+    narrow = BinGeometry(width_m=1.0)
+    wide = BinGeometry(width_m=4.0)
+    assert emission_flux_kg_per_m2_s(scenario, wide, "CH4") == pytest.approx(
+        emission_flux_kg_per_m2_s(scenario, narrow, "CH4") / 4.0
+    )
+
+
+def test_a_trace_gas_flux_scales_with_its_cited_share():
+    """A trace gas carries its AP-42 volume share of the batch's gas molar rate."""
+    scenario = Scenario(
+        gas_sources={"CH4": "auto", "H2S": "auto"},
+        tonnage_t=10.0,
+        age_h=24.0 * 365 * 3,
+    )
+    geom = BinGeometry()
+    h2s = emission_flux_kg_per_m2_s(scenario, geom, "H2S")
+    assert h2s > 0.0
+    # H2S's mass rate is its molar share (36 ppmv) of the bulk gas molar rate,
+    # times its molecular weight. Doubling the batch doubles it.
+    doubled = Scenario(
+        gas_sources={"CH4": "auto", "H2S": "auto"},
+        tonnage_t=20.0,
+        age_h=24.0 * 365 * 3,
+    )
+    assert emission_rate_kg_per_s(doubled, "H2S") == pytest.approx(
+        2.0 * emission_rate_kg_per_s(scenario, "H2S")
+    )
+
+
+def test_a_manual_source_overrides_the_generated_flux():
+    auto = Scenario(gas_sources={"CO": "auto"})
+    manual = Scenario(gas_sources={"CO": 50.0})
+    geom = BinGeometry()
+    assert emission_flux_kg_per_m2_s(auto, geom, "CO") != pytest.approx(
+        emission_flux_kg_per_m2_s(manual, geom, "CO")
+    )
+    assert emission_flux_kg_per_m2_s(manual, geom, "CO") > 0.0
 
 
 def test_explicit_sources_are_kept_as_given():

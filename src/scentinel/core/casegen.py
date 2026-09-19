@@ -33,7 +33,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from scentinel.core import gas_data
-from scentinel.core.geometry import BinGeometry
+from scentinel.core import generation as gen
+from scentinel.core.geometry import BinGeometry, emission_area_m2
 from scentinel.core.scenario import Scenario, auto_concentration_ppmv
 
 if TYPE_CHECKING:
@@ -268,6 +269,80 @@ def resolve_sources(scenario: Scenario) -> dict[str, float]:
             ppmv = float(value)
         resolved[gas] = ppmv * PPM_SCALE
     return resolved
+
+
+#: Reference conditions for converting between a mass flux and a volume-fraction
+#: flux. 25 C, 1 atm, matching the FSG diffusivity table's reference state.
+REFERENCE_TEMPERATURE_K = 298.15
+REFERENCE_PRESSURE_PA = 101325.0
+MOLAR_VOLUME_M3_PER_MOL = 8.314462618 * REFERENCE_TEMPERATURE_K / REFERENCE_PRESSURE_PA
+
+
+def _gas_mixture(scenario: Scenario) -> gen.Generation:
+    """The generation model's output for this scenario's batch."""
+    return gen.generate(
+        scenario.composition,
+        tonnage_t=scenario.tonnage_t,
+        age_h=scenario.age_h,
+        moisture=scenario.moisture_fraction,
+    )
+
+
+def emission_rate_kg_per_s(scenario: Scenario, gas: str) -> float:
+    """Mass emission rate of ``gas`` from the batch, in kg/s.
+
+    The batch's gas is the generation model's mixture. A generated gas (CH4,
+    CO2) takes its molar share of that mixture from the F = 0.5 split; a trace
+    gas takes its cited (or manual) volume share of the mixture's molar flow.
+    The bulk molar flow is the CH4 + CO2 rate divided by their molar masses, so
+    every gas is tied to the same generation curve rather than to its own guess.
+    """
+    result = _gas_mixture(scenario)
+    molar_mass = gas_data.get_gas(gas).mw_g_mol / 1000.0  # kg/mol
+
+    # Bulk molar flow from the generated gases (the ones the model computes).
+    moles_ch4 = result.ch4_rate_kg_per_h / (gen.METHANE_MOLAR_MASS / 1000.0)
+    moles_co2 = result.co2_rate_kg_per_h / (gen.CO2_MOLAR_MASS / 1000.0)
+    bulk_mol_per_h = moles_ch4 + moles_co2
+
+    if gas in ("CH4", "CO2"):
+        moles = moles_ch4 if gas == "CH4" else moles_co2
+    else:
+        # ``resolve_sources`` already chooses the manual value or the cited
+        # ``auto`` default, so a hand-set concentration is honoured here too.
+        fraction = resolve_sources(scenario).get(gas, 0.0)
+        moles = bulk_mol_per_h * fraction
+    kg_per_h = moles * molar_mass
+    return kg_per_h / 3600.0
+
+
+def emission_flux_kg_per_m2_s(
+    scenario: Scenario, geom: BinGeometry, gas: str
+) -> float:
+    """Emission mass flux of ``gas`` over the waste surface, in kg/m^2/s.
+
+    The batch's rate is spread over the emitting area (the mound profile
+    extruded by the bin width). This is the quantity the CFD source boundary
+    imposes, and it is what makes tonnage, age, and bin width move the field.
+    """
+    return emission_rate_kg_per_s(scenario, gas) / emission_area_m2(geom)
+
+
+def source_gradient_ppmv_per_m(
+    scenario: Scenario, geom: BinGeometry, gas: str
+) -> float:
+    """The ``fixedGradient`` value that imposes ``gas``'s flux, in ppmv/m.
+
+    The transported field is a volume fraction (ppmv-equivalent), and the
+    transport equation is linear, so a mass flux ``J`` becomes a fraction flux
+    ``J * (Vm / MW) * 1e6``. The boundary imposes ``gradient = J_C / D``, which
+    is independent of the first cell height — the fix for the mesh dependence
+    the surface-concentration boundary caused.
+    """
+    flux = emission_flux_kg_per_m2_s(scenario, geom, gas)
+    mw = gas_data.get_gas(gas).mw_g_mol / 1000.0  # kg/mol
+    fraction_flux = flux * (MOLAR_VOLUME_M3_PER_MOL / mw) * 1.0e6
+    return fraction_flux / scalar_diffusivity(gas)
 
 
 def patch_roles(scenario: Scenario) -> dict[str, PatchRole]:
