@@ -1,0 +1,16 @@
+# Maintainer: Scentinel <https://github.com/alertxsto/scentinel>
+pkgname=scentinel
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="CFD simulation studio for gas sensor placement in waste collection vehicles"
+arch=('x86_64')
+url="https://github.com/alertxsto/scentinel"
+license=('MIT')
+depends=('podman')
+source=("${pkgname}-${pkgver}-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cp -a "${srcdir}/opt" "${pkgdir}/"
+  cp -a "${srcdir}/usr" "${pkgdir}/"
+}

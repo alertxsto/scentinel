@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build rpm, deb, and Arch tarball
+        env:
+          PYTHON: python3
+        run: ./scripts/build_linux_packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: dist/packages/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build exe
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/packages/*.exe
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > /tmp/notes.md <<'EOF'
+          Desktop packages for Scentinel.
+
+          | File | Platform |
+          |---|---|
+          | `scentinel_*-amd64.deb` | Debian / Ubuntu |
+          | `scentinel-*.x86_64.rpm` | Fedora / RHEL |
+          | `scentinel-*-x86_64.tar.gz` | Arch (extract at `/`, or use bundled `PKGBUILD`) |
+          | `Scentinel-*.exe` | Windows |
+
+          Runtime still needs **Podman** and the OpenFOAM container (`./scripts/setup_container.sh`) to run a solve. The GUI launches without them.
+
+          ```bash
+          # Debian / Ubuntu
+          sudo apt install ./scentinel_*-amd64.deb
+
+          # Fedora
+          sudo dnf install ./scentinel-*.x86_64.rpm
+
+          # Arch prefix tarball
+          sudo tar -C / -xzf scentinel-*-x86_64.tar.gz
+          ```
+          EOF
+          gh release create "${GITHUB_REF_NAME}" \
+            artifacts/linux-packages/* \
+            artifacts/windows-exe/* \
+            --title "Scentinel ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md

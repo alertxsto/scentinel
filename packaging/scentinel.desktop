@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Scentinel
+Comment=CFD simulation studio for gas sensor placement
+Exec=scentinel
+Terminal=false
+Categories=Science;Education;Qt;
+StartupNotify=true

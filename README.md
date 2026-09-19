@@ -67,6 +67,11 @@ calibrated values. The cause and the fix are in
 - Python 3.12+
 - Podman, for the OpenFOAM solver container
 
+## Releases
+
+GitHub Releases ship `.deb`, `.rpm`, an Arch prefix `.tar.gz`, and a Windows `.exe`.
+A solve still needs Podman and `./scripts/setup_container.sh`.
+
 ## Setup
 
 ```bash
