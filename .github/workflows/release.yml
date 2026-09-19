@@ -75,12 +75,15 @@ jobs:
           ```
           EOF
           # Prefer the curated changelog section for this version; fall back to
-          # the generated notes when the tag has no entry yet.
+          # the generated notes when the tag has no entry yet. The section is
+          # delimited by the version heading and the next heading of the same
+          # level, matched without bracket escaping so the pattern stays readable.
           version="${GITHUB_REF_NAME#v}"
-          if grep -q "^## \\[${version}\\]" CHANGELOG.md; then
-            awk -v v="${version}" '
-              $0 ~ "^## \\[" v "\\]" {found=1; next}
-              found && /^## \\[/ {exit}
+          heading="## [${version}]"
+          if grep -qF "${heading}" CHANGELOG.md; then
+            awk -v start="${heading}" '
+              index($0, start) == 1 {found=1; next}
+              found && index($0, "## [") == 1 {exit}
               found {print}
             ' CHANGELOG.md > /tmp/notes.md
             printf '\n---\n\n' >> /tmp/notes.md
