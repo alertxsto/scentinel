@@ -57,9 +57,10 @@ sed "s/^pkgver=.*/pkgver=${VERSION}/" "${ROOT}/packaging/arch/PKGBUILD" > "${OUT
 
 tar -C "${STAGE}" -czf "${OUT}/scentinel-${VERSION}-x86_64.tar.gz" opt usr
 
-NFPM_VERSION="2.41.3"
-curl -sL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_linux_amd64.tar.gz" \
+NFPM_VERSION="2.47.0"
+curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" \
   -o "${ROOT}/build/nfpm.tgz"
+gzip -t "${ROOT}/build/nfpm.tgz"
 tar -C "${ROOT}/build" -xzf "${ROOT}/build/nfpm.tgz" nfpm
 
 cat > "${ROOT}/build/nfpm.yaml" <<EOF
