@@ -202,8 +202,11 @@ class SolverWorker(QObject):
             self.log_message.emit(f"Sampling {len(project.sensors)} sensor(s) ...")
             outcome.readings = post.sample_sensors(case_dir, project.sensors)
             for reading in outcome.readings:
+                # Display-only ppmv: same factor as the table and the manifest,
+                # so a log line can never disagree with either.
                 summary = ", ".join(
-                    f"{gas}={value * 1e6:.3f} ppmv" for gas, value in reading.values.items()
+                    f"{gas}={value / casegen.PPM_SCALE:.3f} ppmv"
+                    for gas, value in reading.values.items()
                 )
                 self.log_message.emit(f"  {reading.sensor_id}: {summary or 'no scalar fields'}")
 

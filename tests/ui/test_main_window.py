@@ -192,6 +192,7 @@ def test_start_run_reserves_a_record_before_the_worker_is_constructed(
         seen["run_dir"] = self._run_dir
         seen["mesh_size_m"] = self._mesh_size_m
         seen["end_time"] = self._end_time
+        seen["project"] = self._project
         return _success_outcome(self._run_dir)
 
     monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
@@ -206,7 +207,63 @@ def test_start_run_reserves_a_record_before_the_worker_is_constructed(
     # The manifest records the same explicit execution settings the worker got.
     record = history.get_run(tmp_path / "runs", "run-001")
     assert record.execution.mesh_size_m == seen["mesh_size_m"]
-    assert record.execution.end_iteration == seen["end_time"]
+    assert record.execution.requested_end_iteration == seen["end_time"]
+
+    # MB-3: the worker got a *copy*, not the live editor model.
+    assert seen["project"] is not run_window.project()
+
+
+def test_the_worker_receives_a_frozen_snapshot_that_mutation_cannot_reach(
+    run_window, tmp_path, monkeypatch
+):
+    """MB-3: mutating the live project mid-run must not change what is sampled.
+
+    The viewport is disabled while a run is in flight, but that is UX defence,
+    not the correctness mechanism: the worker holds an independent copy, so a
+    sensor added between reservation and sampling can neither move a probe nor
+    invalidate the record.
+    """
+    seen: dict[str, object] = {}
+
+    def pipeline(self):
+        # Adversarially mutate the live model while the pipeline is "running".
+        run_window.viewport().add_sensor(3.0, 2.0)
+        seen["sensors_during_run"] = list(self._project.sensors)
+        return _success_outcome(self._run_dir)
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    # The live project gained a sensor; the worker's frozen copy did not.
+    assert [s.sensor_id for s in run_window.project().sensors] == ["S1", "S2"]
+    assert [s.sensor_id for s in seen["sensors_during_run"]] == ["S1"]
+
+    # The record stores the frozen sensor set and its matching reading.
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.execution_status == "succeeded"
+    assert [s.sensor_id for s in record.project.sensors] == ["S1"]
+    assert [r.sensor_id for r in record.results.sensor_readings] == ["S1"]
+
+
+def test_the_editing_surfaces_are_disabled_while_a_run_is_in_flight(
+    run_window, tmp_path, monkeypatch
+):
+    seen: dict[str, object] = {}
+
+    def pipeline(self):
+        seen["viewport_enabled"] = run_window.viewport().isEnabled()
+        seen["setup_enabled"] = run_window.setup_panel().isEnabled()
+        return _success_outcome(self._run_dir)
+
+    monkeypatch.setattr("scentinel.ui.solver_worker.SolverWorker._run_pipeline", pipeline)
+
+    assert run_window.start_run() is True
+
+    assert seen["viewport_enabled"] is False
+    assert seen["setup_enabled"] is False
+    # ... and restored afterwards.
+    assert run_window.viewport().isEnabled() is True
 
 
 def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
@@ -220,7 +277,7 @@ def test_a_successful_run_finalizes_once_and_the_table_matches_the_manifest(
     assert run_window.start_run() is True
 
     record = history.get_run(tmp_path / "runs", "run-001")
-    assert record.status == "succeeded"
+    assert record.execution_status == "succeeded"
     assert record.finished_at_utc is not None
 
     displayed = run_window.results_panel().readings()
@@ -247,7 +304,7 @@ def test_a_failed_run_is_finalized_as_failed(run_window, tmp_path, monkeypatch):
     assert run_window.start_run() is True
 
     record = history.get_run(tmp_path / "runs", "run-001")
-    assert record.status == "failed"
+    assert record.execution_status == "failed"
     assert record.execution.failed_stage == "solve"
     assert record.results.sensor_readings == ()
 
@@ -261,7 +318,7 @@ def test_a_cancelled_run_is_finalized_as_cancelled(run_window, tmp_path, monkeyp
     assert run_window.start_run() is True
 
     record = history.get_run(tmp_path / "runs", "run-001")
-    assert record.status == "cancelled"
+    assert record.execution_status == "cancelled"
     assert record.execution.exit_code == -2
     assert record.finished_at_utc is not None
 
@@ -320,9 +377,31 @@ def test_a_solve_without_readings_is_recorded_as_failed_not_a_success(
     assert run_window.start_run() is True
 
     record = history.get_run(tmp_path / "runs", "run-001")
-    assert record.status == "failed"
+    assert record.execution_status == "failed"
+    # The failure is auditable, not an opaque exit-0 record.
+    assert record.execution.error == history.NO_READINGS_ERROR
     assert record.results.sensor_readings == ()
     assert run_window._status_label.text() == run_window._t.t("status.error")
+
+
+def test_a_successful_run_still_reports_every_scientific_gate_as_not_passing(
+    run_window, tmp_path, monkeypatch
+):
+    """MB-4: a green run must not be renderable as converged or verified."""
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.execution_status == "succeeded"
+    assert record.quality.classification == "screening_estimate"
+    assert record.quality.convergence == "not_evaluated"
+    assert record.quality.mesh_independence == "not_run"
+    assert record.quality.mass_balance == "not_run"
+    assert record.quality.experimental_validation == "not_run"
 
 
 def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
@@ -342,4 +421,4 @@ def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
     # The solver outcome survives, but the run is not claimed as recorded.
     assert [reading.sensor_id for reading in run_window.results_panel().readings()] == ["S1"]
     assert run_window._status_label.text() == run_window._t.t("status.done_history_failed")
-    assert history.load_run(tmp_path / "runs" / "run-001").status == "incomplete"
+    assert history.load_run(tmp_path / "runs" / "run-001").execution_status == "incomplete"

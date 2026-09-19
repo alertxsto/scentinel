@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from scentinel import __version__
 from scentinel.core import history
+from scentinel.core.casegen import PPM_SCALE
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError, RunRecord
 from scentinel.core.project import FILE_FILTER, SUFFIX, Project, load_project, save_project
@@ -318,10 +319,14 @@ class MainWindow(QMainWindow):
             return False
 
         self._results_panel.clear()
+        # One deep snapshot feeds both the manifest and the worker, so the
+        # sensors the record freezes are the sensors the pipeline samples.
+        # Editing continues to act on ``self._project``, never on this copy.
+        frozen = history.snapshot_project(self._project)
         try:
             record = history.begin_run(
                 _runs_root(self._path),
-                self._project,
+                frozen,
                 mesh_size_m=DEFAULT_MESH_SIZE_M,
                 end_iteration=DEFAULT_END_ITERATION,
             )
@@ -344,7 +349,7 @@ class MainWindow(QMainWindow):
         self._status_flash("status.running")
 
         worker = SolverWorker(
-            self._project,
+            frozen,
             record.run_dir,
             mesh_size_m=DEFAULT_MESH_SIZE_M,
             end_time=DEFAULT_END_ITERATION,
@@ -432,6 +437,11 @@ class MainWindow(QMainWindow):
     def _set_running_ui(self, running: bool) -> None:
         self._action_run.setEnabled(not running)
         self._setup_panel.setEnabled(not running)
+        # The viewport is disabled too: it is the only other way to mutate the
+        # project while a run is in flight. Correctness does not depend on it —
+        # the worker holds a frozen snapshot — but leaving it live would let a
+        # click change what the *next* run captures mid-flight.
+        self._viewport.setEnabled(not running)
         self._results_panel.set_running(running)
 
     # -- signals from the editing surfaces -----------------------------------
@@ -582,6 +592,11 @@ def _default_project() -> Project:
 def _ppmv_readings(readings: list) -> list[SensorReading]:
     """Convert raw volume fractions to ppmv, exactly once.
 
+    ``post.SensorReading.values`` are dimensionless volume fractions; the
+    manifest and the table are ppmv. The factor is ``casegen.PPM_SCALE``'s
+    reciprocal rather than a literal ``1e6``, so the case writer's ppm-to-
+    fraction convention and this conversion cannot drift apart.
+
     The converted list is what the results table shows *and* what the manifest
     persists, so the displayed and recorded values cannot drift apart.
     """
@@ -590,20 +605,23 @@ def _ppmv_readings(readings: list) -> list[SensorReading]:
             sensor_id=reading.sensor_id,
             x=reading.x,
             y=reading.y,
-            values={gas: value * 1e6 for gas, value in reading.values.items()},
+            values={gas: value / PPM_SCALE for gas, value in reading.values.items()},
         )
         for reading in readings
     ]
 
 
 def _terminal_status(outcome: RunOutcome, record: RunRecord) -> str:
-    """Map a worker outcome onto a manifest status.
+    """Map a worker outcome onto a manifest execution status.
 
     ``-2`` is the runner's cancellation sentinel and is checked first: a
-    cancelled solve exits non-zero but is not a failure. A solve that exited
-    cleanly but produced no readings for a project that has sensors did not
-    succeed — an empty table must never be recorded as a successful empty
-    result, so it is finalized as ``failed``.
+    cancelled solve exits non-zero but is not a failure.
+
+    A solve that exited cleanly but produced no readings for a project with
+    sensors did not succeed — an empty table must never be recorded as a
+    successful empty result, so it is finalized as ``failed``.
+    ``history.finish_run()`` attaches the audit reason and re-checks the
+    readings against the frozen snapshot.
     """
     if outcome.exit_code == -2:
         return "cancelled"
