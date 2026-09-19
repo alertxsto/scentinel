@@ -88,7 +88,10 @@ from scentinel.core.scenario import (
 #: 6 — records the phase interpretation: the phase label is a model assumption
 #:     whose applicability (e.g. the anaerobic HH-1 model extrapolated into the
 #:     aerobic phase I) and uncertainty travel with the record.
-RUN_FORMAT_VERSION = 6
+#: 7 — records the emission source as a mass flux over an emitting area rather
+#:     than a surface concentration. A version 6 record cannot say what flux the
+#:     case imposed.
+RUN_FORMAT_VERSION = 7
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -247,6 +250,8 @@ _APPLIED_PHYSICS_KEYS = (
     "wind_reference_height_m",
     "nu_m2_s",
     "scalar_diffusivity_m2_s",
+    "emitting_area_m2",
+    "emission_flux_kg_per_m2_s",
     "linear_solver_settings",
     "residual_targets",
     "relaxation_factors",
@@ -424,6 +429,8 @@ class AppliedPhysicsRecord:
     wind_reference_height_m: float
     nu_m2_s: float
     scalar_diffusivity_m2_s: dict[str, float]
+    emitting_area_m2: float
+    emission_flux_kg_per_m2_s: dict[str, float]
     linear_solver_settings: tuple[dict[str, object], ...]
     residual_targets: dict[str, float]
     relaxation_factors: dict[str, float]
@@ -946,6 +953,11 @@ def _applied_physics(
             gas: float(value)
             for gas, value in dict(applied["scalar_diffusivity_m2_s"]).items()
         },
+        emitting_area_m2=float(applied["emitting_area_m2"]),
+        emission_flux_kg_per_m2_s={
+            gas: float(value)
+            for gas, value in dict(applied["emission_flux_kg_per_m2_s"]).items()
+        },
         linear_solver_settings=tuple(
             dict(entry) for entry in applied["linear_solver_settings"]  # type: ignore[union-attr]
         ),
@@ -1241,6 +1253,8 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "wind_reference_height_m": applied.wind_reference_height_m,
             "nu_m2_s": applied.nu_m2_s,
             "scalar_diffusivity_m2_s": dict(applied.scalar_diffusivity_m2_s),
+            "emitting_area_m2": applied.emitting_area_m2,
+            "emission_flux_kg_per_m2_s": dict(applied.emission_flux_kg_per_m2_s),
             "linear_solver_settings": [
                 dict(entry) for entry in applied.linear_solver_settings
             ],
@@ -1701,6 +1715,14 @@ def _decode_applied_physics(payload: object, where: str) -> AppliedPhysicsRecord
         nu_m2_s=_number(mapping["nu_m2_s"], f"{field}.nu_m2_s", where, minimum=0.0),
         scalar_diffusivity_m2_s=_number_mapping(
             mapping["scalar_diffusivity_m2_s"], f"{field}.scalar_diffusivity_m2_s", where
+        ),
+        emitting_area_m2=_number(
+            mapping["emitting_area_m2"], f"{field}.emitting_area_m2", where, minimum=0.0
+        ),
+        emission_flux_kg_per_m2_s=_number_mapping(
+            mapping["emission_flux_kg_per_m2_s"],
+            f"{field}.emission_flux_kg_per_m2_s",
+            where,
         ),
         linear_solver_settings=tuple(
             _decode_linear_solver(entry, where)

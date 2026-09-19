@@ -15,6 +15,15 @@ def panel(qapp, translator):
     widget.deleteLater()
 
 
+def test_the_source_strength_readout_names_the_flux(panel):
+    """The applied source is a mass flux; the panel must show it, not a ppmv value."""
+    panel._waste_type.setCurrentIndex(panel._waste_type.findData("mixed-msw"))
+    panel._age_h.setValue(24.0 * 365 * 3)
+    text = panel.derived_tooltip()
+    assert "kg/m" in text
+    assert "emission" in text.lower() or "flux" in text.lower()
+
+
 def test_defaults_match_the_default_project(panel):
     geom = panel.geometry()
     assert (geom.length_m, geom.height_m, geom.mound_shape) == (6.0, 2.5, "flat")

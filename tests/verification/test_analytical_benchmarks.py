@@ -330,9 +330,13 @@ def test_axial_diffusion_reproduces_the_exponential_profile(tmp_path):
 def test_bin_probe_is_inside_the_source_bound_and_positive(tmp_path):
     """The bin case has no closed form, so only bounds can be asserted.
 
-    A probe cannot exceed the source concentration it is fed from, and a probe
-    near the waste must read above zero. Both are physical invariants that a
-    wrong sign, a broken patch, or a sampling bug would violate.
+    A probe near the waste must read above zero, and every probe must read a
+    finite, non-negative value. The old upper bound — "a probe cannot exceed the
+    source concentration" — no longer holds: the source is now a mass flux
+    (``fixedGradient``), not a fixed surface concentration, so the near-wall
+    value is set by the flux and the diffusion balance rather than capped at the
+    nominal ppmv. A wrong sign, a broken patch, or a sampling bug still shows up
+    as a negative or absurd value.
     """
     _requires_solver()
     from scentinel.core.geometry import BinGeometry
@@ -350,12 +354,10 @@ def test_bin_probe_is_inside_the_source_bound_and_positive(tmp_path):
     )
     _solve(case, script=runner.SOLVER_SCRIPT)
 
-    source = casegen.resolve_sources(scenario)["CO"]
     sensors = [Sensor("near", 3.0, 2.6), Sensor("far", 5.5, 2.6), Sensor("floor", 0.5, 0.2)]
     readings = post.sample_sensors(case, sensors)
     for reading in readings:
         value = reading.values["CO"]
-        assert 0.0 <= value <= source, (
-            f"{reading.sensor_id} read {value}, outside [0, {source}]"
-        )
+        assert value >= 0.0, f"{reading.sensor_id} read a negative {value}"
+        assert value < 1.0, f"{reading.sensor_id} read an absurd volume fraction {value}"
     assert readings[0].values["CO"] > 0.0, "a probe above the mound must see some gas"

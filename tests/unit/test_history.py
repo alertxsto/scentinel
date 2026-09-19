@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 6
+    assert payload["format_version"] == 7
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -187,13 +187,28 @@ def test_the_manifest_records_the_composition_and_its_derived_chemistry(tmp_path
     assert history.load_run(record.run_dir).project.scenario.tonnage_t == pytest.approx(7.5)
 
 
-def test_a_version_5_manifest_is_rejected_naming_both_versions(tmp_path):
-    """A version 5 record cannot state how far its phase model reaches."""
+def test_a_version_6_manifest_is_rejected_naming_both_versions(tmp_path):
+    """A version 6 record cannot say the source was a mass flux."""
     record = _begin(tmp_path)
-    _rewrite(record, lambda payload: payload.__setitem__("format_version", 5))
+    _rewrite(record, lambda payload: payload.__setitem__("format_version", 6))
 
-    with pytest.raises(HistoryError, match="5"):
+    with pytest.raises(HistoryError, match="6"):
         history.load_run(record.run_dir)
+
+
+def test_the_manifest_records_the_emission_flux_and_area(tmp_path):
+    """The applied source is a mass flux over an area, and the record says so."""
+    project = _project(
+        scenario=Scenario(
+            gas_sources={"CH4": "auto"},
+            tonnage_t=10.0,
+            age_h=24.0 * 365 * 3,
+        )
+    )
+    record = _begin(tmp_path, project)
+    applied = _manifest(record)["applied_physics"]
+    assert applied["emitting_area_m2"] > 0.0
+    assert applied["emission_flux_kg_per_m2_s"]["CH4"] > 0.0
 
 
 def test_the_manifest_records_the_phase_interpretation(tmp_path):

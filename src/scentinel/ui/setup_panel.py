@@ -356,6 +356,10 @@ class SetupPanel(QScrollArea):
     def age_h(self) -> float:
         return self._age_h.value()
 
+    def derived_tooltip(self) -> str:
+        """The derived readout's tooltip: the phase's gases and the emission flux."""
+        return self._derived_label.toolTip()
+
     def moisture_fraction(self) -> float:
         return self._moisture.value()
 
@@ -514,6 +518,7 @@ class SetupPanel(QScrollArea):
 
         This is the simulation-driven part: the phase and the degradable carbon
         follow from the inputs, and a load old enough to produce methane says so.
+        The tooltip also states the emission mass flux the case will impose.
         """
         composition = WASTE_SPECS[self._waste_type.currentData()].composition
         phase = phase_for(self._age_h.value())
@@ -528,7 +533,24 @@ class SetupPanel(QScrollArea):
                 methane=self._t.t("field.methane_yes" if methane else "field.methane_no"),
             )
         )
-        self._derived_label.setToolTip(", ".join(gases))
+        self._derived_label.setToolTip(self._flux_tooltip(gases))
+
+    def _flux_tooltip(self, gases: tuple[str, ...]) -> str:
+        """The gas list plus the emission flux the case will impose, per gas.
+
+        The flux is derived from the batch's generation rate over the emitting
+        area; it is what makes tonnage and age move the CFD, so the panel states
+        it rather than leaving it implicit.
+        """
+        from scentinel.core.casegen import emission_flux_kg_per_m2_s
+
+        scenario = self.scenario()
+        geom = self.geometry()
+        lines = [", ".join(gases), self._t.t("field.source_flux_header")]
+        for gas in scenario.gas_sources:
+            flux = emission_flux_kg_per_m2_s(scenario, geom, gas)
+            lines.append(f"  {gas}: {flux:.3e} kg/m2/s")
+        return "\n".join(lines)
 
 
 def _spin(

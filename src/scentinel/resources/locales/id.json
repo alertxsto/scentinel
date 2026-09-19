@@ -34,6 +34,7 @@
   "field.waste_type": "Jenis sampah",
   "field.age_hours": "Lama penampungan",
   "field.derived_readout": "Fasa {phase} · DOC {doc} · CH4 {methane}",
+  "field.source_flux_header": "Fluks massa emisi pada permukaan sampah:",
   "field.methane_yes": "terbentuk",
   "field.methane_no": "belum terbentuk",
   "field.moisture_fraction": "Fraksi kelembapan",

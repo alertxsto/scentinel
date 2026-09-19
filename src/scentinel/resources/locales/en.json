@@ -34,6 +34,7 @@
   "field.waste_type": "Waste type",
   "field.age_hours": "Holding time",
   "field.derived_readout": "Phase {phase} · DOC {doc} · CH4 {methane}",
+  "field.source_flux_header": "Emission mass flux imposed on the waste surface:",
   "field.methane_yes": "produced",
   "field.methane_no": "not yet produced",
   "field.moisture_fraction": "Moisture fraction",

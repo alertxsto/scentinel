@@ -417,7 +417,7 @@ def write_case(
     _write(out_dir / "0" / "k", _field_k(roles, inlet_speed))
     _write(out_dir / "0" / "epsilon", _field_epsilon(roles, inlet_speed))
     _write(out_dir / "0" / "nut", _field_nut(roles))
-    for gas, fraction in sources.items():
+    for gas in sources:
         _write(
             out_dir / "0" / gas,
             _field_scalar(gas, roles, source_gradient_ppmv_per_m(scenario, geom, gas)),
