@@ -1,10 +1,17 @@
 # Scentinel — Roadmap
 
-**Version:** 0.2.1 · **Last updated:** 2026-09-19
+**Version:** 0.2.2 · **Last updated:** 2026-09-19
 
 Phase plan, current position, and what each remaining phase has to prove. Task
 detail lives in [TASKS.md](TASKS.md); design rationale in
 [ARCHITECTURE.md](ARCHITECTURE.md).
+
+> **Active program (2026-09-19):** [superpowers/plans/2026-09-19-hardening-program.md](superpowers/plans/2026-09-19-hardening-program.md)
+> — 20 phases, T-200…T-294, that harden the chain *waste → gas → CFD → sensor →
+> quality → recommendation* before any 3D, transient, or UI-redesign work.
+> Scope is frozen at baseline tag `v0.2.2-audit`; the phase table below remains
+> the long-range view. Each phase gets its own bite-sized execution plan at
+> kickoff.
 
 ---
 

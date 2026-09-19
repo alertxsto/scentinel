@@ -5,7 +5,27 @@
 Every task with its status, the files it touches, and its acceptance test. Phase
 context is in [ROADMAP.md](ROADMAP.md).
 
+> **Active program:** the 20-phase hardening program in
+> [superpowers/plans/2026-09-19-hardening-program.md](superpowers/plans/2026-09-19-hardening-program.md)
+> (tasks T-200…T-294) is the work queue. Its tasks absorb T-122 (→ T-212/T-250),
+> T-141 (→ T-292), T-143 (→ T-291/T-292), and rework T-020/T-021/T-022/T-120/
+> T-121/T-130/T-131/T-132/T-142/T-106/T-107. Status of each program task is
+> tracked here as it lands; the entries below remain the detailed record of what
+> shipped in 0.2.x.
+
 Legend: **DONE** · **TODO** · **BLOCKED**
+
+---
+
+## Program tasks (2026-09-19 hardening program)
+
+#### T-200 Baseline freeze · DONE — 2026-09-19
+Files: `docs/ROADMAP.md`, `docs/TASKS.md`, `docs/superpowers/plans/2026-09-19-hardening-program.md`
+Acceptance met: the program plan exists with every task contract; the docs
+describe the repository as it is (no stale status or number); tag
+`v0.2.2-audit` marks the baseline commit.
+Note: scope is frozen — new work enters only through an explicit edit to the
+program plan.
 
 ---
 

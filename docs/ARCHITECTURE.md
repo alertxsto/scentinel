@@ -1,6 +1,6 @@
 # Scentinel — Architecture
 
-**Version:** 0.2.1 · **Last updated:** 2026-09-19
+**Version:** 0.2.2 · **Last updated:** 2026-09-19
 
 How the application is put together: what each module owns, how data flows from
 a click in the viewport to a concentration in the results table, and which

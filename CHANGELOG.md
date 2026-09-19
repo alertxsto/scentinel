@@ -15,6 +15,15 @@ Two things are worth knowing before reading:
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- 20-phase hardening program
+  (`docs/superpowers/plans/2026-09-19-hardening-program.md`, tasks
+  T-200…T-294) with the baseline tag `v0.2.2-audit`. Scope is frozen until the
+  program completes; each phase gets a bite-sized execution plan at kickoff.
+
 ## [0.2.2] — 2026-09-19
 
 Audit fixes: each item below was reproduced before it was fixed, and each fix
