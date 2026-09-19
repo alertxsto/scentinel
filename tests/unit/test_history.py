@@ -10,6 +10,7 @@ import pytest
 from scentinel.core import casegen, gas_data, history
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError
+from scentinel.core.mesh import PATCHES
 from scentinel.core.post import SensorReading
 from scentinel.core.project import Project, Sensor
 from scentinel.core.scenario import Scenario
@@ -82,13 +83,13 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     record = _begin(tmp_path, project)
 
     assert record.run_id == "run-001"
-    assert record.status == "incomplete"
+    assert record.execution_status == "incomplete"
     assert record.run_dir == tmp_path / "runs" / "run-001"
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 1
-    assert payload["status"] == "incomplete"
+    assert payload["format_version"] == 2
+    assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
     assert payload["application"] == {"name": "scentinel", "version": "0.1.0"}
@@ -103,16 +104,17 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     scenario = payload["project"]["scenario"]
     assert scenario["wind_speed_m_s"] == 2.0
     assert scenario["wind_direction"] == "left-to-right"
-    assert scenario["ventilation_on"] is False
+    assert scenario["ventilation"] == {"requested_on": False, "modelled": False}
     assert payload["project"]["sensors"] == [{"sensor_id": "S1", "x_m": 1.2, "y_m": 2.1}]
 
     execution = payload["execution"]
     assert execution["mesh_size_m"] == 0.25
-    assert execution["end_iteration"] == 500
+    assert execution["requested_end_iteration"] == 500
     assert execution["solver"] == casegen.SOLVER
     assert execution["container_image"] == casegen.IMAGE
     assert execution["case_dir"] is None
     assert execution["exit_code"] is None
+    assert execution["solver_termination"] == "not_evaluated"
 
     assert payload["results"] == {"concentration_unit": "ppmv", "sensor_readings": []}
     assert payload["quality"]["classification"] == "screening_estimate"
@@ -252,7 +254,7 @@ def test_finish_run_records_a_success(tmp_path):
     record = _begin(tmp_path)
     finished = _finish(record)
 
-    assert finished.status == "succeeded"
+    assert finished.execution_status == "succeeded"
     assert finished.finished_at_utc == "2026-09-19T12:36:12Z"
     assert finished.execution.case_dir == "case"
     assert finished.execution.mesh_cells == 7248
@@ -284,7 +286,7 @@ def test_finish_run_records_a_failure_with_the_metadata_it_has(tmp_path):
         readings_ppmv=[],
     )
 
-    assert finished.status == "failed"
+    assert finished.execution_status == "failed"
     assert finished.execution.failed_stage == "solve"
     assert finished.execution.error == "FOAM FATAL ERROR"
     assert finished.execution.mesh_cells == 7100
@@ -305,7 +307,7 @@ def test_finish_run_records_a_cancellation_without_fabricating_outputs(tmp_path)
         readings_ppmv=[],
     )
 
-    assert finished.status == "cancelled"
+    assert finished.execution_status == "cancelled"
     assert finished.execution.case_dir is None
     assert finished.execution.exit_code == -2
     assert finished.results.sensor_readings == ()
@@ -326,18 +328,27 @@ def test_finish_run_rejects_an_incomplete_status(tmp_path):
         _finish(record, status="incomplete")
 
 
-def test_a_success_with_sensors_but_no_readings_is_not_a_success(tmp_path):
-    record = _begin(tmp_path)
+def test_a_success_with_sensors_but_no_readings_is_recorded_as_failed_with_a_reason(tmp_path):
+    """A clean exit whose readings are missing is an auditable failure.
 
-    with pytest.raises(HistoryError, match="must carry its readings"):
-        _finish(record, readings_ppmv=[])
+    The status flips to ``failed`` *and* the reason is persisted, so the record
+    is not an opaque exit-0 failure that a reader has to reconstruct.
+    """
+    record = _begin(tmp_path)
+    finished = _finish(record, readings_ppmv=[])
+
+    assert finished.execution_status == "failed"
+    assert finished.execution.exit_code == 0
+    assert finished.execution.error == history.NO_READINGS_ERROR
+    assert finished.results.sensor_readings == ()
+    assert history.load_run(record.run_dir).execution.error == history.NO_READINGS_ERROR
 
 
 def test_finish_run_accepts_a_project_without_sensors_and_no_readings(tmp_path):
     record = _begin(tmp_path, _project(sensors=[]))
     finished = _finish(record, readings_ppmv=[])
 
-    assert finished.status == "succeeded"
+    assert finished.execution_status == "succeeded"
     assert finished.results.sensor_readings == ()
 
 
@@ -359,7 +370,7 @@ def test_a_case_dir_outside_the_run_directory_is_rejected(tmp_path):
         _finish(record, case_dir=Path("../case"))
 
     # The reservation is untouched by a rejected finalization.
-    assert history.load_run(record.run_dir).status == "incomplete"
+    assert history.load_run(record.run_dir).execution_status == "incomplete"
 
 
 # 7 ---------------------------------------------------------------------------
@@ -431,11 +442,11 @@ def test_a_missing_manifest_is_rejected(tmp_path):
         history.load_run(root / "run-001")
 
 
-def test_an_invalid_status_is_rejected(tmp_path):
+def test_an_invalid_execution_status_is_rejected(tmp_path):
     record = _begin(tmp_path)
-    _rewrite(record, lambda payload: payload.__setitem__("status", "ok"))
+    _rewrite(record, lambda payload: payload.__setitem__("execution_status", "ok"))
 
-    with pytest.raises(HistoryError, match="status 'ok'"):
+    with pytest.raises(HistoryError, match="execution_status 'ok'"):
         history.load_run(record.run_dir)
 
 
@@ -591,7 +602,7 @@ def test_a_failed_replacement_leaves_the_prior_incomplete_manifest_readable(tmp_
         _finish(record)
 
     reloaded = history.load_run(record.run_dir)
-    assert reloaded.status == "incomplete"
+    assert reloaded.execution_status == "incomplete"
     assert reloaded.finished_at_utc is None
     assert reloaded.results.sensor_readings == ()
     assert not (record.run_dir / f".{history.MANIFEST_NAME}.tmp").exists()
@@ -646,6 +657,481 @@ def test_load_run_rejects_a_directory_that_is_not_a_run(tmp_path):
         history.load_run(tmp_path / "nope")
 
 
+# 11 -- applied physics (MB-1) -------------------------------------------------
+
+
+def _write_case_into(record, project: Project | None = None) -> Path:
+    """Write a real generated case into the run directory.
+
+    Used to prove the digest is computed from the actual case files rather than
+    from the requested inputs.
+    """
+    from scentinel.core.mesh import MeshResult
+
+    project = project or _project()
+    case_dir = record.run_dir / "case"
+    msh = record.run_dir / "mesh.msh"
+    msh.write_text("$MeshFormat\n2.2 0 8\n$EndMeshFormat\n")
+    mesh = MeshResult(msh_path=msh, patches={name: i for i, name in enumerate(PATCHES, 1)})
+    casegen.write_case(
+        project.scenario, mesh, case_dir, geom=project.geometry, end_time=500
+    )
+    return case_dir
+
+
+def test_the_manifest_records_the_applied_experiment_not_only_the_request(tmp_path):
+    """MB-1: requested wind speed and applied inlet speed are different numbers.
+
+    The reported speed is scaled by the power-law profile before it reaches the
+    inlet boundary, so persisting only the request would let two records with
+    identical manifests describe different boundary conditions.
+    """
+    project = _project(
+        geometry=BinGeometry(length_m=6.0, height_m=2.5),
+        scenario=Scenario(wind_speed_m_s=2.0, gas_sources={"CO": "auto"}),
+    )
+    record = _begin(tmp_path, project)
+    applied = record.applied_physics
+
+    assert applied.wind_speed_reported_m_s == 2.0
+    assert applied.inlet_speed_at_rim_m_s == pytest.approx(casegen.wind_speed_at(project.scenario, 2.5))
+    assert applied.inlet_speed_at_rim_m_s != applied.wind_speed_reported_m_s
+    assert applied.wind_profile == casegen.WIND_PROFILE
+    assert applied.wind_profile_exponent == pytest.approx(casegen.WIND_PROFILE_EXPONENT)
+    assert applied.wind_reference_height_m == casegen.WIND_REFERENCE_HEIGHT_M
+    assert applied.nu_m2_s == casegen.NU_AIR
+
+    # The case applies one diffusivity to every gas; the unused per-gas table in
+    # gas_data is not what the solver used, so it must not be recorded here.
+    # VOC's table value (8.7e-06) differs, which is exactly why recording the
+    # table instead of the applied constant would misdescribe the case.
+    assert applied.scalar_diffusivity_m2_s == {"CO": casegen.SCALAR_DIFFUSIVITY_M2_S}
+    assert casegen.SCALAR_DIFFUSIVITY_M2_S != gas_data.get_gas("VOC").diffusivity_m2_s
+
+    # An incomplete run has no case, so it cannot yet claim a digest.
+    assert applied.case_input_digest is None
+
+
+def test_the_case_digest_is_recorded_once_the_case_exists(tmp_path):
+    record = _begin(tmp_path)
+    case_dir = _write_case_into(record)
+    finished = _finish(record, case_dir=case_dir)
+
+    digest = finished.applied_physics.case_input_digest
+    assert digest is not None and digest.startswith("sha256:")
+    assert digest == casegen.case_input_digest(case_dir, ["CO"])
+    assert _manifest(finished)["applied_physics"]["case_input_digest"] == digest
+
+
+def test_an_incomplete_manifest_may_not_claim_a_case_digest(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(
+        record,
+        lambda payload: payload["applied_physics"].__setitem__(
+            "case_input_digest", "sha256:" + "0" * 64
+        ),
+    )
+
+    with pytest.raises(HistoryError, match="must not carry a case_input_digest"):
+        history.load_run(record.run_dir)
+
+
+def test_a_malformed_case_digest_is_rejected(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(
+        record,
+        lambda payload: payload["applied_physics"].__setitem__("case_input_digest", "deadbeef"),
+    )
+
+    with pytest.raises(HistoryError, match="must look like sha256"):
+        history.load_run(record.run_dir)
+
+
+def test_a_failed_run_without_a_case_records_no_digest(tmp_path):
+    record = _begin(tmp_path)
+    finished = _finish(record, status="failed", case_dir=None, exit_code=13, readings_ppmv=[])
+
+    assert finished.applied_physics.case_input_digest is None
+
+
+def test_a_partially_generated_case_records_no_digest(tmp_path):
+    """A digest over a partial case would understate what was applied."""
+    record = _begin(tmp_path)
+    case_dir = record.run_dir / "case"
+    (case_dir / "system").mkdir(parents=True)
+    (case_dir / "system" / "controlDict").write_text("partial")
+
+    finished = _finish(record, status="failed", case_dir=case_dir, exit_code=13, readings_ppmv=[])
+
+    assert finished.applied_physics.case_input_digest is None
+
+
+def test_the_case_digest_survives_solver_output_in_the_same_tree(tmp_path):
+    """The container writes into the case tree; none of it may enter the digest.
+
+    This is the reason the digest covers a *declared* input set rather than a
+    directory walk. If solver output were included, an identical case would
+    digest differently depending on whether it had been solved, and a run that
+    failed before the solve could never match one that succeeded.
+    """
+    record = _begin(tmp_path)
+    case_dir = _write_case_into(record)
+    before = casegen.case_input_digest(case_dir, ["CO"])
+
+    (case_dir / "constant" / "polyMesh").mkdir(parents=True)
+    (case_dir / "constant" / "polyMesh" / "points").write_text("solver output")
+    (case_dir / "VTK").mkdir()
+    (case_dir / "VTK" / "internal.vtu").write_text("vtk")
+    (case_dir / "log.simpleFoam").write_text("solver log")
+    (case_dir / "500").mkdir()
+    (case_dir / "500" / "CO").write_text("field output")
+
+    assert casegen.case_input_digest(case_dir, ["CO"]) == before
+    finished = _finish(record, case_dir=case_dir)
+    assert finished.applied_physics.case_input_digest == before
+
+
+def test_a_changed_applied_constant_changes_the_recorded_digest(tmp_path, monkeypatch):
+    """Identical UI inputs plus a changed applied constant must not collide."""
+    first = _begin(tmp_path)
+    first_case = _write_case_into(first)
+    first_done = _finish(first, case_dir=first_case)
+
+    monkeypatch.setattr(casegen, "SCALAR_DIFFUSIVITY_M2_S", 3.0e-05)
+    second = history.begin_run(
+        tmp_path / "runs", _project(), mesh_size_m=0.25, end_iteration=500, started_at=STARTED
+    )
+    second_case = _write_case_into(second)
+    second_done = _finish(second, case_dir=second_case)
+
+    assert first_done.applied_physics.case_input_digest != second_done.applied_physics.case_input_digest
+
+
+def test_missing_applied_physics_fields_are_rejected(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(record, lambda payload: payload["applied_physics"].pop("nu_m2_s"))
+
+    with pytest.raises(HistoryError, match="missing nu_m2_s"):
+        history.load_run(record.run_dir)
+
+
+def test_the_requested_end_iteration_is_not_reported_as_achieved(tmp_path):
+    """``endTime`` is a requested control index, never evidence of convergence."""
+    finished = _finish(_begin(tmp_path))
+
+    assert finished.execution.requested_end_iteration == 500
+    assert finished.execution.solver_termination == "not_evaluated"
+    assert finished.quality.convergence == "not_evaluated"
+
+
+# 12 -- ventilation is a request, not modelled physics (MB-2) ------------------
+
+
+def test_a_ventilation_request_is_preserved_but_recorded_as_unmodelled(tmp_path):
+    """MB-2: the case ignores the flag, so no record may imply it was modelled."""
+    project = _project(scenario=Scenario(ventilation_on=True, gas_sources={"CO": "auto"}))
+    record = _begin(tmp_path, project)
+
+    assert record.project.scenario.ventilation.requested_on is True
+    assert record.project.scenario.ventilation.modelled is False
+    assert _manifest(record)["project"]["scenario"]["ventilation"] == {
+        "requested_on": True,
+        "modelled": False,
+    }
+
+
+def test_ventilation_cannot_be_recorded_as_modelled(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(
+        record,
+        lambda payload: payload["project"]["scenario"]["ventilation"].__setitem__("modelled", True),
+    )
+
+    with pytest.raises(HistoryError, match="modelled must be false"):
+        history.load_run(record.run_dir)
+
+
+def test_ventilation_off_is_recorded_the_same_way(tmp_path):
+    record = _begin(tmp_path, _project(scenario=Scenario(gas_sources={"CO": "auto"})))
+
+    assert record.project.scenario.ventilation.requested_on is False
+    assert record.project.scenario.ventilation.modelled is False
+
+
+# 13 -- readings must match the frozen sensors (MB-3) --------------------------
+
+
+def test_a_reading_for_a_different_sensor_is_rejected(tmp_path):
+    """A record may not claim inputs for S1 while storing S2's result."""
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match=history.NO_READINGS_ERROR):
+        _finish(record, readings_ppmv=[SensorReading(sensor_id="S2", x=1.2, y=2.1, values={"CO": 1.0})])
+
+    assert history.load_run(record.run_dir).execution_status == "incomplete"
+
+
+def test_a_reading_at_moved_coordinates_is_rejected(tmp_path):
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match="moved from"):
+        _finish(record, readings_ppmv=[SensorReading(sensor_id="S1", x=4.0, y=1.0, values={"CO": 1.0})])
+
+
+def test_a_reading_for_an_unselected_gas_is_rejected(tmp_path):
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match="carries gases"):
+        _finish(record, readings_ppmv=[SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"VOC": 1.0})])
+
+
+def test_extra_readings_are_rejected(tmp_path):
+    """More readings than frozen sensors is a mismatch, not a success."""
+    record = _begin(tmp_path)
+    extra = [
+        SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"CO": 1.0}),
+        SensorReading(sensor_id="S2", x=2.0, y=2.0, values={"CO": 1.0}),
+    ]
+
+    with pytest.raises(HistoryError, match="expected 1 reading"):
+        _finish(record, readings_ppmv=extra)
+
+    # The rejected finalization left the reservation untouched.
+    assert history.load_run(record.run_dir).execution_status == "incomplete"
+
+
+def test_missing_readings_finalize_as_an_audited_failure(tmp_path):
+    """Fewer readings than frozen sensors is recorded, with its reason."""
+    record = _begin(tmp_path)
+    finished = _finish(record, readings_ppmv=[])
+
+    assert finished.execution_status == "failed"
+    assert finished.execution.error == history.NO_READINGS_ERROR
+
+
+def test_readings_for_a_project_without_sensors_are_rejected(tmp_path):
+    record = _begin(tmp_path, _project(sensors=[]))
+
+    with pytest.raises(HistoryError, match="captured without sensors"):
+        _finish(record, readings_ppmv=[SensorReading(sensor_id="S1", x=1.0, y=1.0, values={"CO": 1.0})])
+
+
+def test_a_manifest_with_readings_for_the_wrong_sensors_is_rejected_on_load(tmp_path):
+    """A hand-edited or foreign manifest cannot smuggle in foreign readings."""
+    record = _finish(_begin(tmp_path))
+    _rewrite(
+        record,
+        lambda payload: payload["results"]["sensor_readings"][0].__setitem__("sensor_id", "S9"),
+    )
+
+    with pytest.raises(HistoryError, match=history.NO_READINGS_ERROR):
+        history.load_run(record.run_dir)
+
+
+def test_reading_gas_order_follows_the_frozen_scenario(tmp_path):
+    """Gas *order* is a post-processor detail; the manifest must be deterministic.
+
+    ``post.sample_sensors`` reads scalar names out of the VTK file, so the order
+    it returns is whatever the writer emitted. Persisting that verbatim would
+    make two identical runs differ textually and couple the manifest to a VTK
+    implementation detail, so readings are re-keyed into scenario order.
+    """
+    project = _project(scenario=Scenario(gas_sources={"CO": "auto", "CH4": "auto", "VOC": 12.5}))
+    record = _begin(tmp_path, project)
+    finished = _finish(
+        record,
+        readings_ppmv=[
+            SensorReading(
+                sensor_id="S1",
+                x=1.2,
+                y=2.1,
+                # Deliberately not the scenario order.
+                values={"VOC": 0.05, "CO": 0.465, "CH4": 2217.75},
+            )
+        ],
+    )
+
+    assert list(finished.results.sensor_readings[0].values_ppmv) == ["CO", "CH4", "VOC"]
+    assert list(history.load_run(record.run_dir).results.sensor_readings[0].values_ppmv) == [
+        "CO",
+        "CH4",
+        "VOC",
+    ]
+    # The values themselves are untouched by the re-keying.
+    assert finished.results.sensor_readings[0].values_ppmv["CH4"] == pytest.approx(2217.75)
+
+
+def test_a_gas_subset_is_still_rejected_after_ordering(tmp_path):
+    """Re-keying must not soften the membership check into a subset match."""
+    record = _begin(tmp_path)
+
+    with pytest.raises(HistoryError, match="carries gases"):
+        _finish(
+            record,
+            readings_ppmv=[SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"VOC": 1.0})],
+        )
+
+
+def test_multi_sensor_order_is_preserved_and_enforced(tmp_path):
+    project = _project(
+        sensors=[Sensor("S1", 1.2, 2.1), Sensor("S2", 3.0, 2.2), Sensor("S3", 5.5, 1.0)]
+    )
+    record = _begin(tmp_path, project)
+    readings = [
+        SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"CO": 0.465}),
+        SensorReading(sensor_id="S2", x=3.0, y=2.2, values={"CO": 0.310}),
+        SensorReading(sensor_id="S3", x=5.5, y=1.0, values={"CO": 0.120}),
+    ]
+    finished = _finish(record, readings_ppmv=readings)
+
+    assert [r.sensor_id for r in finished.results.sensor_readings] == ["S1", "S2", "S3"]
+    assert [r.sensor_id for r in history.load_run(record.run_dir).results.sensor_readings] == [
+        "S1",
+        "S2",
+        "S3",
+    ]
+
+    swapped = [
+        SensorReading(sensor_id="S2", x=3.0, y=2.2, values={"CO": 0.310}),
+        SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"CO": 0.465}),
+        SensorReading(sensor_id="S3", x=5.5, y=1.0, values={"CO": 0.120}),
+    ]
+    other = _begin(tmp_path, project)
+    with pytest.raises(HistoryError, match=history.NO_READINGS_ERROR):
+        _finish(other, readings_ppmv=swapped)
+
+
+# 14 -- scientific gates are stated, never inferred (MB-4) --------------------
+
+
+def test_a_clean_exit_leaves_every_scientific_gate_non_passing(tmp_path):
+    """MB-4: process success must not read as convergence or verification."""
+    finished = _finish(_begin(tmp_path))
+
+    assert finished.execution_status == "succeeded"
+    assert finished.execution.exit_code == 0
+    assert finished.quality.convergence == "not_evaluated"
+    assert finished.quality.mesh_independence == "not_run"
+    assert finished.quality.mass_balance == "not_run"
+    assert finished.quality.experimental_validation == "not_run"
+    assert finished.quality.classification == "screening_estimate"
+    assert finished.quality.verification_metrics == ()
+    assert finished.quality.validation_metrics == ()
+
+    payload = _manifest(finished)["quality"]
+    assert payload["convergence"] == "not_evaluated"
+    assert payload["mesh_independence"] == "not_run"
+    assert payload["mass_balance"] == "not_run"
+    assert payload["experimental_validation"] == "not_run"
+
+    # The repository's documented 76.5% mesh-independence failure is a project
+    # fact, not this run's measurement; it must not appear on an ordinary run.
+    assert "0.765" not in (finished.run_dir / history.MANIFEST_NAME).read_text()
+    assert "76.5" not in (finished.run_dir / history.MANIFEST_NAME).read_text()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("convergence", "converged"),
+        ("mesh_independence", "probably fine"),
+        ("mass_balance", "PASS"),
+        ("experimental_validation", "yes"),
+    ],
+)
+def test_a_gate_state_outside_its_closed_set_is_rejected(tmp_path, field, value):
+    record = _begin(tmp_path)
+    _rewrite(record, lambda payload: payload["quality"].__setitem__(field, value))
+
+    with pytest.raises(HistoryError, match=f"quality.{field}"):
+        history.load_run(record.run_dir)
+
+
+def test_a_solver_termination_outside_its_closed_set_is_rejected(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(record, lambda payload: payload["execution"].__setitem__("solver_termination", "ok"))
+
+    with pytest.raises(HistoryError, match="solver_termination"):
+        history.load_run(record.run_dir)
+
+
+def test_a_metric_entry_can_still_be_recorded_when_one_is_really_produced(tmp_path):
+    """The gate states must not block a genuine, traceable metric."""
+    record = _begin(tmp_path)
+    finished = _finish(record)
+    payload = _manifest(finished)
+    payload["quality"]["verification_metrics"] = [
+        {
+            "name": "mesh independence",
+            "value": 0.765,
+            "unit": "1",
+            "target": "<0.10",
+            "status": "failed",
+            "provenance": "tests/verification/test_mesh_independence.py",
+        }
+    ]
+    (record.run_dir / history.MANIFEST_NAME).write_text(json.dumps(payload), encoding="utf-8")
+
+    reloaded = history.load_run(record.run_dir)
+    assert len(reloaded.quality.verification_metrics) == 1
+    assert reloaded.quality.verification_metrics[0].value == pytest.approx(0.765)
+    assert reloaded.quality.validation_metrics == ()
+
+
+# 15 -- ppmv recipes (B1) ------------------------------------------------------
+
+
+def test_source_and_probe_ppmv_values_follow_the_documented_recipe(tmp_path):
+    """B1: auto uses the cited ppmv directly; manual is already ppmv; probes ×1e6.
+
+    Pins the concrete numbers the review smoke inspection produced, so a future
+    refactor of the conversion path cannot silently change what is persisted.
+    """
+    project = _project(
+        scenario=Scenario(gas_sources={"CO": "auto", "CH4": "auto", "VOC": 12.5}),
+    )
+    record = _begin(tmp_path, project)
+
+    sources = record.project.scenario.gas_sources
+    assert sources["CO"].resolved_ppmv == pytest.approx(105.0)
+    assert sources["CH4"].resolved_ppmv == pytest.approx(500000.0)
+    assert sources["VOC"].resolved_ppmv == pytest.approx(12.5)
+    assert sources["VOC"].requested_ppmv == pytest.approx(12.5)
+    assert sources["VOC"].provenance == "user input"
+
+    # ``source_concentration`` is already ppmv, and equals the resolved volume
+    # fraction scaled back up — the two paths must agree.
+    assert sources["CO"].resolved_ppmv == pytest.approx(
+        casegen.resolve_sources(project.scenario)["CO"] / casegen.PPM_SCALE
+    )
+
+    # A raw volume fraction becomes ppmv by exactly one ×1e6 — performed by the
+    # caller, never here, so finish_run stores the ppmv value it is given.
+    raw_volume_fraction = 0.465e-6
+    assert raw_volume_fraction * (1.0 / casegen.PPM_SCALE) == pytest.approx(0.465)
+    finished = _finish(
+        record,
+        readings_ppmv=[
+            SensorReading(sensor_id="S1", x=1.2, y=2.1, values={"CO": 0.465, "CH4": 1.0, "VOC": 2.0})
+        ],
+    )
+    assert finished.results.sensor_readings[0].values_ppmv["CO"] == pytest.approx(0.465)
+
+    # Immutability: the project's own scenario is untouched by snapshotting.
+    assert project.scenario.gas_sources == {"CO": "auto", "CH4": "auto", "VOC": 12.5}
+
+
+def test_the_auto_source_value_does_not_follow_a_later_default_change(tmp_path, monkeypatch):
+    """A resolved value is frozen; editing the cited default cannot rewrite it."""
+    record = _begin(tmp_path)
+    assert record.project.scenario.gas_sources["CO"].resolved_ppmv == pytest.approx(105.0)
+
+    monkeypatch.setattr(gas_data, "source_concentration", lambda gas, regime="msw-only": 999.0)
+    reloaded = history.load_run(record.run_dir)
+
+    assert reloaded.project.scenario.gas_sources["CO"].resolved_ppmv == pytest.approx(105.0)
+
+
 def test_importing_the_history_module_does_not_pull_in_qt():
     """The core history API must stay usable without a GUI toolkit."""
     import subprocess
@@ -665,3 +1151,67 @@ def test_importing_the_history_module_does_not_pull_in_qt():
     )
 
     assert result.stdout.strip() == "False False"
+
+
+def test_importing_the_history_module_does_not_require_the_cfd_extra():
+    """The history read API must work without the optional ``cfd`` extra.
+
+    ``history`` imports ``casegen``, which used to import ``mesh`` and therefore
+    ``gmsh``. README advertises ``list_runs()``/``get_run()`` as a read API, and
+    history performs no meshing, so a machine without gmsh must still be able to
+    read a manifest. Both optional imports are blocked here.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys, builtins\n"
+        "real = builtins.__import__\n"
+        "def blocked(name, *args, **kwargs):\n"
+        "    if name.split('.')[0] in ('gmsh', 'PySide6'):\n"
+        "        raise ImportError(f'blocked: {name}')\n"
+        "    return real(name, *args, **kwargs)\n"
+        "builtins.__import__ = blocked\n"
+        "import scentinel.core.history as h\n"
+        "print(h.RUN_FORMAT_VERSION)\n"
+    )
+    src_root = Path(history.__file__).parents[2]
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONPATH": str(src_root)},
+    )
+
+    assert result.stdout.strip() == str(history.RUN_FORMAT_VERSION)
+
+
+def test_a_history_read_api_call_works_without_the_cfd_extra(tmp_path):
+    """The documented read path, not just the import, survives a gmsh-free env."""
+    import subprocess
+    import sys
+
+    record = _finish(_begin(tmp_path))
+    probe = (
+        "import sys, builtins\n"
+        "real = builtins.__import__\n"
+        "def blocked(name, *args, **kwargs):\n"
+        "    if name.split('.')[0] in ('gmsh', 'PySide6'):\n"
+        "        raise ImportError(f'blocked: {name}')\n"
+        "    return real(name, *args, **kwargs)\n"
+        "builtins.__import__ = blocked\n"
+        "from scentinel.core.history import get_run\n"
+        f"run = get_run({str(tmp_path / 'runs')!r}, 'run-001')\n"
+        "print(run.run_id, run.execution_status)\n"
+    )
+    src_root = Path(history.__file__).parents[2]
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONPATH": str(src_root)},
+    )
+
+    assert result.stdout.strip() == f"{record.run_id} succeeded"

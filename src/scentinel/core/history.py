@@ -20,6 +20,21 @@ metres, metres per second, and ppmv. Scenario gas inputs entered in the UI are
 ppmv; the OpenFOAM scalar fields and :attr:`post.SensorReading.values` are
 dimensionless volume fractions. ``finish_run()`` takes readings that have
 *already* been converted to ppmv, exactly once, by the caller.
+
+A manifest separates four things that are easy to conflate:
+
+* **requested inputs** (``project``) — what the user asked for;
+* **applied physics** (``applied_physics``) — the numerical settings the
+  generated case actually used, read from the same constants the case writer
+  renders into the OpenFOAM dictionaries, plus a SHA-256 digest of the
+  generated case inputs;
+* **execution outcome** (``execution_status`` and ``execution``) — whether the
+  container pipeline exited cleanly. ``succeeded`` means the process exited 0
+  and the probes were sampled; it is **not** a claim of convergence,
+  verification, or validation; and
+* **evidence quality** (``quality``) — the screening classification plus
+  closed-enum gate states and the separate verification/validation metric
+  arrays.
 """
 
 from __future__ import annotations
@@ -28,20 +43,27 @@ import json
 import math
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from scentinel import __version__
 from scentinel.core import casegen, gas_data
-from scentinel.core.geometry import MOUND_SHAPES
-from scentinel.core.project import Project
-from scentinel.core.scenario import WIND_DIRECTIONS
+from scentinel.core.geometry import MOUND_SHAPES, BinGeometry
+from scentinel.core.project import Project, Sensor
+from scentinel.core.scenario import WIND_DIRECTIONS, Scenario
 
 #: Version of the manifest schema. Any change to the serialized shape or its
 #: meaning bumps this and is rejected by older readers.
-RUN_FORMAT_VERSION = 1
+#:
+#: 1 — initial schema: requested inputs, execution outcome, results, quality.
+#: 2 — adds ``applied_physics`` (applied constants and the case-input digest),
+#:     qualifies ventilation as request-plus-modelled, renames the outcome to
+#:     ``execution_status``, names the requested iteration count explicitly,
+#:     and adds closed-enum scientific gate states. Version 1 manifests are
+#:     rejected rather than misread: they cannot describe what they applied.
+RUN_FORMAT_VERSION = 2
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -51,17 +73,20 @@ MANIFEST_NAME = "run.json"
 #: corrupt, so an id is never handed out twice.
 RUN_DIR_PATTERN = re.compile(r"^run-(?P<index>\d{3,})$")
 
-#: Terminal and in-progress states a manifest can carry.
-RunStatus = Literal["incomplete", "succeeded", "failed", "cancelled"]
+#: Lifecycle/execution states a manifest can carry. ``succeeded`` is strictly a
+#: process outcome: the container pipeline exited 0 and every frozen sensor was
+#: sampled. It says nothing about convergence, mesh independence, mass balance,
+#: or experimental validation — those live in ``quality`` as their own gates.
+ExecutionStatus = Literal["incomplete", "succeeded", "failed", "cancelled"]
 
-RUN_STATUSES: tuple[str, ...] = ("incomplete", "succeeded", "failed", "cancelled")
+EXECUTION_STATUSES: tuple[str, ...] = ("incomplete", "succeeded", "failed", "cancelled")
 
 #: The application that wrote the manifest.
 APPLICATION_NAME = "scentinel"
 
 #: Unit of every persisted concentration. ``post.SensorReading.values`` are
-#: volume fractions; callers convert with the existing ``casegen.PPM_SCALE``
-#: reciprocal (``1e6``) before calling :func:`finish_run`.
+#: volume fractions; callers convert with ``casegen.PPM_SCALE`` (dividing by
+#: ``1e-6``) before calling :func:`finish_run`.
 CONCENTRATION_UNIT = "ppmv"
 
 #: Source modes. ``auto`` means "the cited AP-42 default, resolved at run
@@ -82,20 +107,64 @@ QUALITY_UNCERTAINTY = (
     "Absolute concentrations are not mesh-converged; use results for relative screening only."
 )
 
+#: Closed value sets for the per-run scientific gates. Absence of evidence must
+#: be *stated*, not inferred from a successful process exit: a consumer that
+#: filters on ``execution_status == "succeeded"`` and nothing else would
+#: otherwise render an unverified run as if the gates had passed.
+GATE_NOT_EVALUATED = "not_evaluated"
+GATE_NOT_RUN = "not_run"
+
+#: ``quality.convergence``. ``endTime`` is reached by counting iterations, so
+#: reaching it proves nothing about the residual targets in ``fvSolution``.
+#: Nothing in an ordinary run parses the achieved residuals, so an ordinary run
+#: records ``not_evaluated`` and never ``converged``.
+CONVERGENCE_STATES: tuple[str, ...] = (
+    GATE_NOT_EVALUATED,
+    "residual_targets_met",
+    "residual_targets_not_met",
+)
+
+#: ``quality.mesh_independence``. The repository's own verification gate fails
+#: today (see ``docs/ROADMAP.md``); an ordinary run never measures it.
+MESH_INDEPENDENCE_STATES: tuple[str, ...] = (GATE_NOT_RUN, "passed", "failed")
+
+#: ``quality.mass_balance``. ``post.mass_balance_error()`` exists but is not
+#: wired into the run pipeline, so an ordinary run records ``not_run``.
+MASS_BALANCE_STATES: tuple[str, ...] = (GATE_NOT_RUN, "passed", "failed")
+
+#: ``quality.experimental_validation``. No measurement set exists.
+VALIDATION_STATES: tuple[str, ...] = (GATE_NOT_RUN, "passed", "failed")
+
+#: ``execution.solver_termination``. ``stopAt endTime`` is a requested control
+#: action, not a termination reason the pipeline parses. ``not_evaluated`` is
+#: the honest record until residual/termination parsing exists; inferring
+#: "converged" from exit code 0 would be a fabricated scientific claim.
+SOLVER_TERMINATION_STATES: tuple[str, ...] = (
+    GATE_NOT_EVALUATED,
+    "end_time_reached",
+    "residual_targets_met",
+    "solver_error",
+)
+
+#: Why a run that exited cleanly is nonetheless recorded as failed.
+NO_READINGS_ERROR = "sensor readings do not match captured run inputs"
+
 #: Name of the temporary sibling used to replace a manifest atomically.
 _TEMP_MANIFEST_NAME = f".{MANIFEST_NAME}.tmp"
 
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 _TOP_LEVEL_KEYS = (
     "format_version",
     "run_id",
-    "status",
+    "execution_status",
     "started_at_utc",
     "finished_at_utc",
     "application",
     "project",
+    "applied_physics",
     "execution",
     "results",
     "quality",
@@ -103,12 +172,35 @@ _TOP_LEVEL_KEYS = (
 _APPLICATION_KEYS = ("name", "version")
 _PROJECT_KEYS = ("name", "geometry", "scenario", "sensors")
 _GEOMETRY_KEYS = ("length_m", "height_m", "mound_shape", "mound_fill_fraction")
-_SCENARIO_KEYS = ("wind_speed_m_s", "wind_direction", "ventilation_on", "gas_sources")
+_SCENARIO_KEYS = ("wind_speed_m_s", "wind_direction", "ventilation", "gas_sources")
+_VENTILATION_KEYS = ("requested_on", "modelled")
 _GAS_SOURCE_KEYS = ("mode", "requested_ppmv", "resolved_ppmv", "provenance")
 _SENSOR_KEYS = ("sensor_id", "x_m", "y_m")
+_APPLIED_PHYSICS_KEYS = (
+    "wind_speed_reported_m_s",
+    "inlet_speed_at_rim_m_s",
+    "wind_profile",
+    "wind_profile_exponent",
+    "wind_reference_height_m",
+    "nu_m2_s",
+    "scalar_diffusivity_m2_s",
+    "linear_solver_settings",
+    "residual_targets",
+    "relaxation_factors",
+    "non_orthogonal_correctors",
+    "case_input_digest",
+)
+_LINEAR_SOLVER_KEYS = (
+    "fields",
+    "solver",
+    "tolerance",
+    "relTol",
+    "smoother",
+    "preconditioner",
+)
 _EXECUTION_KEYS = (
     "mesh_size_m",
-    "end_iteration",
+    "requested_end_iteration",
     "solver",
     "container_image",
     "case_dir",
@@ -117,10 +209,20 @@ _EXECUTION_KEYS = (
     "exit_code",
     "failed_stage",
     "error",
+    "solver_termination",
 )
 _RESULTS_KEYS = ("concentration_unit", "sensor_readings")
 _READING_KEYS = ("sensor_id", "x_m", "y_m", "values_ppmv")
-_QUALITY_KEYS = ("classification", "uncertainty", "verification_metrics", "validation_metrics")
+_QUALITY_KEYS = (
+    "classification",
+    "uncertainty",
+    "convergence",
+    "mesh_independence",
+    "mass_balance",
+    "experimental_validation",
+    "verification_metrics",
+    "validation_metrics",
+)
 _METRIC_KEYS = ("name", "value", "unit", "target", "status", "provenance")
 
 
@@ -162,12 +264,27 @@ class GasSourceRecord:
 
 
 @dataclass(frozen=True)
+class VentilationRecord:
+    """Ventilation as requested by the user and as actually modelled.
+
+    ``modelled`` is ``False`` until the case generator reads the flag: today
+    ``casegen.write_case()`` ignores it entirely. Recording a bare ``True``
+    would let a comparison consumer group runs by ventilation and conclude the
+    factor has no effect, when in fact it was never simulated. No comparison
+    consumer may group or difference by an unmodelled factor.
+    """
+
+    requested_on: bool
+    modelled: bool
+
+
+@dataclass(frozen=True)
 class ScenarioRecord:
-    """Wind, ventilation flag, and per-gas sources, in captured order."""
+    """Wind, the qualified ventilation request, and per-gas sources, in order."""
 
     wind_speed_m_s: float
     wind_direction: str
-    ventilation_on: bool
+    ventilation: VentilationRecord
     gas_sources: dict[str, GasSourceRecord]
 
 
@@ -191,11 +308,48 @@ class ProjectRecord:
 
 
 @dataclass(frozen=True)
+class AppliedPhysicsRecord:
+    """The numerical experiment the generated case actually ran.
+
+    Distinct from :class:`ProjectRecord`, which holds the *requested* inputs. A
+    reported wind speed of 2 m/s becomes a different inlet velocity after the
+    power-law scaling, and the case applies a single hard-coded scalar
+    diffusivity rather than the per-gas table in ``gas_data``. Recording only
+    the request would let two manifests look identical while the generated
+    cases differ.
+
+    ``case_input_digest`` is the authoritative guard: it is a SHA-256 over the
+    generated case inputs (see :func:`casegen.case_input_digest`), so any change
+    to an applied constant changes the digest even when every UI input matches.
+    """
+
+    wind_speed_reported_m_s: float
+    inlet_speed_at_rim_m_s: float
+    wind_profile: str
+    wind_profile_exponent: float
+    wind_reference_height_m: float
+    nu_m2_s: float
+    scalar_diffusivity_m2_s: dict[str, float]
+    linear_solver_settings: tuple[dict[str, object], ...]
+    residual_targets: dict[str, float]
+    relaxation_factors: dict[str, float]
+    non_orthogonal_correctors: int
+    case_input_digest: str | None
+
+
+@dataclass(frozen=True)
 class ExecutionRecord:
-    """Numerical settings, solver identity, and whatever the run produced."""
+    """Requested numerical controls, solver identity, and produced metadata.
+
+    ``requested_end_iteration`` is the ``controlDict.endTime`` the case asked
+    for — an iteration index, not elapsed physical seconds, and not evidence
+    that the run stopped there or that ``residualControl`` was satisfied.
+    ``solver_termination`` records how the run actually ended, from a closed
+    set; ``not_evaluated`` is the honest value until the pipeline parses it.
+    """
 
     mesh_size_m: float
-    end_iteration: int
+    requested_end_iteration: int
     solver: str
     container_image: str
     case_dir: str | None
@@ -204,6 +358,7 @@ class ExecutionRecord:
     exit_code: int | None
     failed_stage: str | None
     error: str | None
+    solver_termination: str
 
 
 @dataclass(frozen=True)
@@ -243,10 +398,20 @@ class MetricRecord:
 
 @dataclass(frozen=True)
 class QualityRecord:
-    """Result-quality classification and the separate metric arrays."""
+    """Result-quality classification, closed-enum gate states, and metrics.
+
+    The gate states are separate from the execution outcome on purpose. A run
+    can exit 0 and still have ``mesh_independence == "not_run"``; the manifest
+    states that rather than leaving a consumer to infer it from absence. Every
+    state is drawn from a closed set, so no free-text value can imply a pass.
+    """
 
     classification: str
     uncertainty: str
+    convergence: str
+    mesh_independence: str
+    mass_balance: str
+    experimental_validation: str
     verification_metrics: tuple[MetricRecord, ...]
     validation_metrics: tuple[MetricRecord, ...]
 
@@ -261,11 +426,12 @@ class RunRecord:
 
     format_version: int
     run_id: str
-    status: RunStatus
+    execution_status: ExecutionStatus
     started_at_utc: str
     finished_at_utc: str | None
     application: ApplicationRecord
     project: ProjectRecord
+    applied_physics: AppliedPhysicsRecord
     execution: ExecutionRecord
     results: ResultsRecord
     quality: QualityRecord
@@ -273,6 +439,35 @@ class RunRecord:
 
 
 # -- public API --------------------------------------------------------------
+
+
+def snapshot_project(project: Project) -> Project:
+    """A deep, independent copy of ``project`` suitable for handing to a worker.
+
+    The manifest's immutable-input promise only holds if the pipeline samples
+    the *same* sensors the record froze. Passing the live editor model to the
+    worker leaves a window — viewport clicks are not disabled by every path —
+    in which the sensor list changes between reservation and sampling, and a
+    succeeded record would then claim inputs it never used.
+
+    Callers take one snapshot, pass it to :func:`begin_run` and to the worker,
+    and keep editing their own model. Disabling the editing surface while a run
+    is in flight is good UX defence but is not the correctness mechanism.
+    """
+    return Project(
+        name=project.name,
+        geometry=replace(project.geometry),
+        scenario=Scenario(
+            wind_speed_m_s=project.scenario.wind_speed_m_s,
+            wind_direction=project.scenario.wind_direction,
+            ventilation_on=project.scenario.ventilation_on,
+            gas_sources=dict(project.scenario.gas_sources),
+        ),
+        sensors=[
+            Sensor(sensor_id=sensor.sensor_id, x=sensor.x, y=sensor.y)
+            for sensor in project.sensors
+        ],
+    )
 
 
 def begin_run(
@@ -290,10 +485,15 @@ def begin_run(
     without leaving a directory behind. If the manifest itself cannot be
     written, the just-reserved directory is removed again only if it is still
     empty, and the error propagates: no run may start without a durable record.
+
+    ``applied_physics`` is captured here, from the same constants the case
+    writer will render, and carries no digest yet: the digest can only be
+    computed once the case exists, and :func:`finish_run` fills it in.
     """
     root = Path(runs_root)
     started_text = _format_timestamp(started_at or datetime.now(timezone.utc))
     snapshot = _snapshot_project(project)
+    applied = _applied_physics(project.scenario, project.geometry, digest=None)
     execution = _execution_settings(mesh_size_m, end_iteration)
 
     run_dir = _reserve_run_dir(root)
@@ -301,11 +501,12 @@ def begin_run(
         record = RunRecord(
             format_version=RUN_FORMAT_VERSION,
             run_id=run_dir.name,
-            status="incomplete",
+            execution_status="incomplete",
             started_at_utc=started_text,
             finished_at_utc=None,
             application=ApplicationRecord(name=APPLICATION_NAME, version=__version__),
             project=snapshot,
+            applied_physics=applied,
             execution=execution,
             results=ResultsRecord(concentration_unit=CONCENTRATION_UNIT, sensor_readings=()),
             quality=_screening_quality(),
@@ -323,7 +524,7 @@ def begin_run(
 def finish_run(
     record: RunRecord,
     *,
-    status: RunStatus,
+    status: ExecutionStatus,
     case_dir: Path | str | None,
     mesh_cells: int | None,
     element_types: dict[str, int],
@@ -332,6 +533,7 @@ def finish_run(
     error: str | None,
     readings_ppmv: object,
     finished_at: datetime | None = None,
+    solver_termination: str = GATE_NOT_EVALUATED,
 ) -> RunRecord:
     """Atomically replace an incomplete manifest with its terminal outcome.
 
@@ -340,48 +542,88 @@ def finish_run(
     shape :func:`scentinel.core.post.sample_sensors` returns, already converted.
     Values are stored as given: there is no second conversion here.
 
+    Readings are checked against the *frozen* sensor snapshot, not the live
+    project: ids, coordinates, order, and gas keys must match exactly. A clean
+    process exit whose readings do not match did not succeed, so it is recorded
+    as ``failed`` with :data:`NO_READINGS_ERROR` rather than as an opaque
+    exit-0 failure. Readings that do not match are never persisted, for any
+    status, so a stored reading always describes the sensors the manifest froze.
+
     ``case_dir`` may be absolute (the pipeline's own path) or relative; either
     way only the validated path relative to the run directory is persisted, so a
-    manifest never carries a workstation path. ``record`` must still be
-    ``incomplete`` on disk, which makes finalization single-shot: an already
-    terminal manifest is never rewritten.
+    manifest never carries a workstation path. When the case exists, its
+    generated inputs are digested and stored, which is the authoritative record
+    of the applied numerical experiment. ``record`` must still be ``incomplete``
+    on disk, which makes finalization single-shot: an already terminal manifest
+    is never rewritten.
     """
-    terminal = _status(status, str(Path(record.run_dir) / MANIFEST_NAME))
+    where = str(Path(record.run_dir) / MANIFEST_NAME)
+    terminal = _execution_status(status, where)
     if terminal == "incomplete":
         raise HistoryError("finish_run() requires a terminal status, not 'incomplete'")
+    termination = _closed_enum(
+        solver_termination, SOLVER_TERMINATION_STATES, "solver_termination", where
+    )
 
     persisted = load_run(record.run_dir)
     where = str(persisted.run_dir / MANIFEST_NAME)
     if persisted.run_id != record.run_id:
         raise HistoryError(f"{where}: run id {record.run_id!r} does not match the persisted run")
-    if persisted.status != "incomplete":
+    if persisted.execution_status != "incomplete":
         raise HistoryError(
-            f"{where}: run {persisted.run_id} is already {persisted.status!r} and cannot be finalized again"
+            f"{where}: run {persisted.run_id} is already "
+            f"{persisted.execution_status!r} and cannot be finalized again"
         )
+
+    portable_case = _portable_case_dir(persisted.run_dir, case_dir)
+    readings = tuple(_reading_records(readings_ppmv))
+    if readings:
+        # Supplied readings must describe the frozen sensors. This is a hard
+        # error, not a status change: persisting foreign numbers under this
+        # run's inputs would break the manifest's central promise, so nothing
+        # is written and the caller sees why.
+        problem = _readings_problem(persisted.project, readings)
+        if problem is not None:
+            raise HistoryError(f"{where}: {problem}")
+        readings = _ordered_readings(readings, persisted.project)
+    elif persisted.project.sensors and exit_code == 0:
+        # A clean process exit that produced no readings for the sensors this
+        # run froze did not succeed. This is decided here, not left to the
+        # caller's status mapping, so the record always explains itself rather
+        # than being an opaque exit-0 failure.
+        if terminal == "succeeded":
+            terminal = "failed"
+        if not error:
+            error = NO_READINGS_ERROR
 
     finished = RunRecord(
         format_version=persisted.format_version,
         run_id=persisted.run_id,
-        status=terminal,
+        execution_status=terminal,
         started_at_utc=persisted.started_at_utc,
         finished_at_utc=_format_timestamp(finished_at or datetime.now(timezone.utc)),
         application=persisted.application,
         project=persisted.project,
+        applied_physics=replace(
+            persisted.applied_physics,
+            case_input_digest=_case_digest(persisted.run_dir, portable_case, persisted.project),
+        ),
         execution=ExecutionRecord(
             mesh_size_m=persisted.execution.mesh_size_m,
-            end_iteration=persisted.execution.end_iteration,
+            requested_end_iteration=persisted.execution.requested_end_iteration,
             solver=persisted.execution.solver,
             container_image=persisted.execution.container_image,
-            case_dir=_portable_case_dir(persisted.run_dir, case_dir),
+            case_dir=portable_case,
             mesh_cells=mesh_cells,
             element_types=dict(element_types or {}),
             exit_code=exit_code,
             failed_stage=failed_stage,
             error=error,
+            solver_termination=termination,
         ),
         results=ResultsRecord(
             concentration_unit=CONCENTRATION_UNIT,
-            sensor_readings=tuple(_reading_records(readings_ppmv)),
+            sensor_readings=readings,
         ),
         quality=persisted.quality,
         run_dir=persisted.run_dir,
@@ -529,7 +771,14 @@ def _snapshot_project(project: Project) -> ProjectRecord:
         scenario=ScenarioRecord(
             wind_speed_m_s=scenario.wind_speed_m_s,
             wind_direction=scenario.wind_direction,
-            ventilation_on=scenario.ventilation_on,
+            ventilation=VentilationRecord(
+                requested_on=scenario.ventilation_on,
+                # T-030 does not model ventilation and must not pretend to:
+                # ``casegen.write_case()`` never reads the flag. This stays
+                # False until the case generator changes, and no consumer may
+                # group or difference by an unmodelled factor.
+                modelled=False,
+            ),
             gas_sources=sources,
         ),
         sensors=tuple(
@@ -539,15 +788,79 @@ def _snapshot_project(project: Project) -> ProjectRecord:
     )
 
 
+def _applied_physics(
+    scenario: Scenario, geometry: BinGeometry, *, digest: str | None
+) -> AppliedPhysicsRecord:
+    """Freeze the numerical settings the generated case will apply.
+
+    The values come from :func:`casegen.applied_physics`, which reads the same
+    module constants the case writer renders into the OpenFOAM dictionaries, so
+    this block cannot drift from the generated case. ``digest`` is ``None``
+    until the case exists.
+    """
+    applied = casegen.applied_physics(scenario, geometry)
+    return AppliedPhysicsRecord(
+        wind_speed_reported_m_s=float(applied["wind_speed_reported_m_s"]),
+        inlet_speed_at_rim_m_s=float(applied["inlet_speed_at_rim_m_s"]),
+        wind_profile=str(applied["wind_profile"]),
+        wind_profile_exponent=float(applied["wind_profile_exponent"]),
+        wind_reference_height_m=float(applied["wind_reference_height_m"]),
+        nu_m2_s=float(applied["nu_m2_s"]),
+        scalar_diffusivity_m2_s={
+            gas: float(value)
+            for gas, value in dict(applied["scalar_diffusivity_m2_s"]).items()
+        },
+        linear_solver_settings=tuple(
+            dict(entry) for entry in applied["linear_solver_settings"]  # type: ignore[union-attr]
+        ),
+        residual_targets={
+            key: float(value) for key, value in dict(applied["residual_targets"]).items()
+        },
+        relaxation_factors={
+            key: float(value) for key, value in dict(applied["relaxation_factors"]).items()
+        },
+        non_orthogonal_correctors=int(applied["non_orthogonal_correctors"]),  # type: ignore[arg-type]
+        case_input_digest=digest,
+    )
+
+
+def _case_digest(
+    run_dir: Path, portable_case: str | None, project: ProjectRecord
+) -> str | None:
+    """SHA-256 of the generated case inputs, or ``None`` when there is no case.
+
+    ``None`` covers both "no case was generated" and "the case is incomplete":
+    a run cancelled or failed partway through case generation has no complete
+    input set to digest, and a digest over a partial case would understate what
+    was applied. A declared input that exists but cannot be read is a real
+    error and propagates — only *absence* is treated as incompleteness.
+
+    The gas names come from the frozen snapshot, not from the directory, so the
+    digest covers exactly the scalar fields this run declared.
+    """
+    if portable_case is None:
+        return None
+    case_dir = Path(run_dir) / portable_case
+    if not case_dir.is_dir():
+        return None
+    gases = list(project.scenario.gas_sources)
+    declared = [case_dir / relative for relative in casegen.case_input_paths(gases)]
+    if not all(path.is_file() for path in declared):
+        return None
+    return casegen.case_input_digest(case_dir, gases)
+
+
 def _execution_settings(mesh_size_m: float, end_iteration: int) -> ExecutionRecord:
     """The execution block of a run that has not produced anything yet.
 
-    ``end_iteration`` is the steady ``simpleFoam`` control index, not elapsed
-    physical seconds, so it is named for what it is.
+    ``requested_end_iteration`` is the steady ``simpleFoam`` control index the
+    case will ask for, not elapsed physical seconds. ``solver_termination``
+    stays ``not_evaluated``: exit code 0 means the process finished, not that
+    the residual targets were met.
     """
     return ExecutionRecord(
         mesh_size_m=mesh_size_m,
-        end_iteration=end_iteration,
+        requested_end_iteration=end_iteration,
         solver=casegen.SOLVER,
         container_image=casegen.IMAGE,
         case_dir=None,
@@ -556,16 +869,97 @@ def _execution_settings(mesh_size_m: float, end_iteration: int) -> ExecutionReco
         exit_code=None,
         failed_stage=None,
         error=None,
+        solver_termination=GATE_NOT_EVALUATED,
     )
 
 
 def _screening_quality() -> QualityRecord:
+    """Quality for a run whose scientific gates have not been evaluated.
+
+    Every gate is stated explicitly rather than left to inference, so a
+    successful process exit cannot be read as convergence, verification, or
+    validation. Nothing here copies the repository's documented 76.5%
+    mesh-independence failure onto an individual run.
+    """
     return QualityRecord(
         classification=QUALITY_CLASSIFICATION,
         uncertainty=QUALITY_UNCERTAINTY,
+        convergence=GATE_NOT_EVALUATED,
+        mesh_independence=GATE_NOT_RUN,
+        mass_balance=GATE_NOT_RUN,
+        experimental_validation=GATE_NOT_RUN,
         verification_metrics=(),
         validation_metrics=(),
     )
+
+
+def _readings_problem(
+    project: ProjectRecord, readings: tuple[ReadingRecord, ...]
+) -> str | None:
+    """Why these supplied readings cannot describe this run, or ``None``.
+
+    The manifest's central promise is that the sensors it froze are the sensors
+    that were sampled. Checking only "some readings exist" would let a run that
+    sampled a different sensor set, moved coordinates, or a different gas
+    selection be stored as a success. This validates against the frozen
+    snapshot, so a later mutation of the live project cannot launder a record.
+
+    Every rejection carries :data:`NO_READINGS_ERROR` as its prefix, so a
+    mismatch is auditable rather than an unexplained failure. Absence is not
+    judged here — a run may legitimately have no readings, and
+    :func:`finish_run` decides what a reading-less clean exit means.
+    """
+    frozen = project.sensors
+    if not frozen:
+        return f"{NO_READINGS_ERROR}: a project captured without sensors produced readings"
+
+    expected_gases = list(project.scenario.gas_sources)
+    if len(readings) != len(frozen):
+        return (
+            f"{NO_READINGS_ERROR}: expected {len(frozen)} reading(s) for the captured sensors, "
+            f"got {len(readings)}"
+        )
+    for expected, actual in zip(frozen, readings):
+        if actual.sensor_id != expected.sensor_id:
+            return (
+                f"{NO_READINGS_ERROR}: expected {expected.sensor_id!r}, got {actual.sensor_id!r}"
+            )
+        if actual.x_m != expected.x_m or actual.y_m != expected.y_m:
+            return (
+                f"{NO_READINGS_ERROR}: {expected.sensor_id} moved from "
+                f"({expected.x_m}, {expected.y_m}) to ({actual.x_m}, {actual.y_m})"
+            )
+        if set(actual.values_ppmv) != set(expected_gases):
+            return (
+                f"{NO_READINGS_ERROR}: {expected.sensor_id} carries gases "
+                f"{sorted(actual.values_ppmv)}, expected {sorted(expected_gases)}"
+            )
+    return None
+
+
+def _ordered_readings(
+    readings: tuple[ReadingRecord, ...], project: ProjectRecord
+) -> tuple[ReadingRecord, ...]:
+    """Re-key each reading's gases into the frozen scenario order.
+
+    The pipeline reads scalar fields out of the VTK file, so their order is
+    whatever the writer emitted — a property of the post-processor, not of the
+    run. Persisting that order verbatim would make two identical runs differ
+    textually and would couple the manifest to a VTK implementation detail.
+    Sorting by the frozen scenario order keeps the manifest deterministic and
+    reviewable while the gas *set* stays the thing that is validated.
+    """
+    order = list(project.scenario.gas_sources)
+    ordered: list[ReadingRecord] = []
+    for reading in readings:
+        values = reading.values_ppmv
+        ordered.append(
+            replace(
+                reading,
+                values_ppmv={gas: values[gas] for gas in order if gas in values},
+            )
+        )
+    return tuple(ordered)
 
 
 def _reading_records(readings_ppmv: object) -> list[ReadingRecord]:
@@ -639,11 +1033,12 @@ def _payload(record: RunRecord) -> dict[str, object]:
     """Serialize a record into the exact, stably ordered manifest schema."""
     project = record.project
     scenario = project.scenario
+    applied = record.applied_physics
     execution = record.execution
     return {
         "format_version": record.format_version,
         "run_id": record.run_id,
-        "status": record.status,
+        "execution_status": record.execution_status,
         "started_at_utc": record.started_at_utc,
         "finished_at_utc": record.finished_at_utc,
         "application": {
@@ -661,7 +1056,10 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "scenario": {
                 "wind_speed_m_s": scenario.wind_speed_m_s,
                 "wind_direction": scenario.wind_direction,
-                "ventilation_on": scenario.ventilation_on,
+                "ventilation": {
+                    "requested_on": scenario.ventilation.requested_on,
+                    "modelled": scenario.ventilation.modelled,
+                },
                 "gas_sources": {
                     key: {
                         "mode": source.mode,
@@ -677,9 +1075,25 @@ def _payload(record: RunRecord) -> dict[str, object]:
                 for sensor in project.sensors
             ],
         },
+        "applied_physics": {
+            "wind_speed_reported_m_s": applied.wind_speed_reported_m_s,
+            "inlet_speed_at_rim_m_s": applied.inlet_speed_at_rim_m_s,
+            "wind_profile": applied.wind_profile,
+            "wind_profile_exponent": applied.wind_profile_exponent,
+            "wind_reference_height_m": applied.wind_reference_height_m,
+            "nu_m2_s": applied.nu_m2_s,
+            "scalar_diffusivity_m2_s": dict(applied.scalar_diffusivity_m2_s),
+            "linear_solver_settings": [
+                dict(entry) for entry in applied.linear_solver_settings
+            ],
+            "residual_targets": dict(applied.residual_targets),
+            "relaxation_factors": dict(applied.relaxation_factors),
+            "non_orthogonal_correctors": applied.non_orthogonal_correctors,
+            "case_input_digest": applied.case_input_digest,
+        },
         "execution": {
             "mesh_size_m": execution.mesh_size_m,
-            "end_iteration": execution.end_iteration,
+            "requested_end_iteration": execution.requested_end_iteration,
             "solver": execution.solver,
             "container_image": execution.container_image,
             "case_dir": execution.case_dir,
@@ -688,6 +1102,7 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "exit_code": execution.exit_code,
             "failed_stage": execution.failed_stage,
             "error": execution.error,
+            "solver_termination": execution.solver_termination,
         },
         "results": {
             "concentration_unit": record.results.concentration_unit,
@@ -704,6 +1119,10 @@ def _payload(record: RunRecord) -> dict[str, object]:
         "quality": {
             "classification": record.quality.classification,
             "uncertainty": record.quality.uncertainty,
+            "convergence": record.quality.convergence,
+            "mesh_independence": record.quality.mesh_independence,
+            "mass_balance": record.quality.mass_balance,
+            "experimental_validation": record.quality.experimental_validation,
             "verification_metrics": [
                 _metric_payload(metric) for metric in record.quality.verification_metrics
             ],
@@ -751,17 +1170,18 @@ def _decode_manifest(payload: object, run_dir: Path) -> RunRecord:
             f"{where}: run_id {run_id!r} does not match its directory {run_dir.name!r}"
         )
 
-    status = _status(root["status"], where)
+    execution_status = _execution_status(root["execution_status"], where)
     started_at = _timestamp(root["started_at_utc"], "started_at_utc", where)
-    finished_at = _finished_timestamp(root["finished_at_utc"], status, where)
+    finished_at = _finished_timestamp(root["finished_at_utc"], execution_status, where)
 
     application = _decode_application(root["application"], where)
     project = _decode_project(root["project"], where)
+    applied_physics = _decode_applied_physics(root["applied_physics"], where)
     execution = _decode_execution(root["execution"], where)
     results = _decode_results(root["results"], where)
     quality = _decode_quality(root["quality"], where)
 
-    if status == "incomplete":
+    if execution_status == "incomplete":
         if finished_at is not None:
             raise HistoryError(f"{where}: an incomplete run must not have a finished_at_utc")
         if (
@@ -775,21 +1195,35 @@ def _decode_manifest(payload: object, run_dir: Path) -> RunRecord:
             raise HistoryError(f"{where}: an incomplete run must not carry execution outcome fields")
         if results.sensor_readings:
             raise HistoryError(f"{where}: an incomplete run must not carry results")
-    elif project.sensors and status == "succeeded" and not results.sensor_readings:
+        if applied_physics.case_input_digest is not None:
+            raise HistoryError(
+                f"{where}: an incomplete run must not carry a case_input_digest; "
+                "the digest is computed once the case exists"
+            )
+    elif project.sensors and execution_status == "succeeded" and not results.sensor_readings:
         # A project with sensors that produced no readings did not succeed; an
         # empty table must never be recorded as a successful empty result.
         raise HistoryError(
             f"{where}: a succeeded run for a project with sensors must carry its readings"
         )
 
+    # Readings must describe the frozen sensors. This is re-checked on load, not
+    # only at finalization, so a hand-edited or foreign manifest cannot smuggle
+    # in readings for sensors it never captured.
+    if results.sensor_readings:
+        problem = _readings_problem(project, results.sensor_readings)
+        if problem is not None:
+            raise HistoryError(f"{where}: {problem}")
+
     return RunRecord(
         format_version=version,
         run_id=run_id,
-        status=status,
+        execution_status=execution_status,
         started_at_utc=started_at,
         finished_at_utc=finished_at,
         application=application,
         project=project,
+        applied_physics=applied_physics,
         execution=execution,
         results=results,
         quality=quality,
@@ -852,6 +1286,7 @@ def _decode_scenario(payload: object, where: str) -> ScenarioRecord:
             f"{where}: project.scenario.wind_direction {direction!r} "
             f"must be one of {WIND_DIRECTIONS}"
         )
+    ventilation = _decode_ventilation(mapping["ventilation"], where)
     sources_payload = _mapping(
         mapping["gas_sources"], "project.scenario.gas_sources", where
     )
@@ -864,11 +1299,30 @@ def _decode_scenario(payload: object, where: str) -> ScenarioRecord:
             mapping["wind_speed_m_s"], "project.scenario.wind_speed_m_s", where, minimum=0.0
         ),
         wind_direction=direction,
-        ventilation_on=_boolean(
-            mapping["ventilation_on"], "project.scenario.ventilation_on", where
-        ),
+        ventilation=ventilation,
         gas_sources=sources,
     )
+
+
+def _decode_ventilation(payload: object, where: str) -> VentilationRecord:
+    """Decode the ventilation request, enforcing that it is not modelled yet.
+
+    ``modelled`` may only be ``False`` while the case generator ignores the
+    flag. If a future task models ventilation it must also change this
+    invariant deliberately, rather than letting a manifest imply physics that
+    was never solved.
+    """
+    field = "project.scenario.ventilation"
+    mapping = _mapping(payload, field, where)
+    _exact_keys(mapping, _VENTILATION_KEYS, field, where)
+    requested = _boolean(mapping["requested_on"], f"{field}.requested_on", where)
+    modelled = _boolean(mapping["modelled"], f"{field}.modelled", where)
+    if modelled:
+        raise HistoryError(
+            f"{where}: {field}.modelled must be false; casegen.write_case() does not model "
+            "ventilation, so no run may record it as applied physics"
+        )
+    return VentilationRecord(requested_on=requested, modelled=modelled)
 
 
 def _decode_gas_source(key: str, payload: object, where: str) -> GasSourceRecord:
@@ -916,6 +1370,80 @@ def _decode_sensor(payload: object, where: str) -> SensorRecord:
     )
 
 
+def _decode_applied_physics(payload: object, where: str) -> AppliedPhysicsRecord:
+    field = "applied_physics"
+    mapping = _mapping(payload, field, where)
+    _exact_keys(mapping, _APPLIED_PHYSICS_KEYS, field, where)
+
+    digest = mapping["case_input_digest"]
+    if digest is not None:
+        text = _text(digest, f"{field}.case_input_digest", where)
+        if not _DIGEST_RE.match(text):
+            raise HistoryError(
+                f"{where}: {field}.case_input_digest {text!r} must look like sha256:<64 hex digits>"
+            )
+        digest = text
+
+    exponent = _number(mapping["wind_profile_exponent"], f"{field}.wind_profile_exponent", where)
+    return AppliedPhysicsRecord(
+        wind_speed_reported_m_s=_number(
+            mapping["wind_speed_reported_m_s"], f"{field}.wind_speed_reported_m_s", where, minimum=0.0
+        ),
+        inlet_speed_at_rim_m_s=_number(
+            mapping["inlet_speed_at_rim_m_s"], f"{field}.inlet_speed_at_rim_m_s", where, minimum=0.0
+        ),
+        wind_profile=_text(mapping["wind_profile"], f"{field}.wind_profile", where),
+        wind_profile_exponent=exponent,
+        wind_reference_height_m=_number(
+            mapping["wind_reference_height_m"], f"{field}.wind_reference_height_m", where
+        ),
+        nu_m2_s=_number(mapping["nu_m2_s"], f"{field}.nu_m2_s", where, minimum=0.0),
+        scalar_diffusivity_m2_s=_number_mapping(
+            mapping["scalar_diffusivity_m2_s"], f"{field}.scalar_diffusivity_m2_s", where
+        ),
+        linear_solver_settings=tuple(
+            _decode_linear_solver(entry, where)
+            for entry in _list(
+                mapping["linear_solver_settings"], f"{field}.linear_solver_settings", where
+            )
+        ),
+        residual_targets=_number_mapping(
+            mapping["residual_targets"], f"{field}.residual_targets", where
+        ),
+        relaxation_factors=_number_mapping(
+            mapping["relaxation_factors"], f"{field}.relaxation_factors", where
+        ),
+        non_orthogonal_correctors=_integer(
+            mapping["non_orthogonal_correctors"], f"{field}.non_orthogonal_correctors", where, minimum=0
+        ),
+        case_input_digest=digest,
+    )
+
+
+def _decode_linear_solver(payload: object, where: str) -> dict[str, object]:
+    """One ``solvers`` entry: a field pattern plus its scalar settings."""
+    field = "applied_physics.linear_solver_settings[]"
+    mapping = _mapping(payload, field, where)
+    missing = [key for key in ("fields", "solver") if key not in mapping]
+    if missing:
+        raise HistoryError(f"{where}: {field} is missing {', '.join(missing)}")
+    unexpected = sorted(key for key in mapping if key not in _LINEAR_SOLVER_KEYS)
+    if unexpected:
+        raise HistoryError(f"{where}: {field} has unknown fields {', '.join(unexpected)}")
+
+    entry: dict[str, object] = {
+        "fields": _text(mapping["fields"], f"{field}.fields", where),
+        "solver": _text(mapping["solver"], f"{field}.solver", where),
+    }
+    for key in ("tolerance", "relTol"):
+        if key in mapping:
+            entry[key] = _number(mapping[key], f"{field}.{key}", where)
+    for key in ("smoother", "preconditioner"):
+        if key in mapping:
+            entry[key] = _text(mapping[key], f"{field}.{key}", where)
+    return entry
+
+
 def _decode_execution(payload: object, where: str) -> ExecutionRecord:
     mapping = _mapping(payload, "execution", where)
     _exact_keys(mapping, _EXECUTION_KEYS, "execution", where)
@@ -923,11 +1451,13 @@ def _decode_execution(payload: object, where: str) -> ExecutionRecord:
     mesh_size_m = _number(mapping["mesh_size_m"], "execution.mesh_size_m", where)
     if mesh_size_m <= 0.0:
         raise HistoryError(f"{where}: execution.mesh_size_m must be greater than zero")
-    end_iteration = _integer(mapping["end_iteration"], "execution.end_iteration", where, minimum=1)
+    requested_end_iteration = _integer(
+        mapping["requested_end_iteration"], "execution.requested_end_iteration", where, minimum=1
+    )
 
     return ExecutionRecord(
         mesh_size_m=mesh_size_m,
-        end_iteration=end_iteration,
+        requested_end_iteration=requested_end_iteration,
         solver=_text(mapping["solver"], "execution.solver", where),
         container_image=_text(mapping["container_image"], "execution.container_image", where),
         case_dir=_case_dir(mapping["case_dir"], where),
@@ -940,6 +1470,12 @@ def _decode_execution(payload: object, where: str) -> ExecutionRecord:
         exit_code=_optional_integer(mapping["exit_code"], "execution.exit_code", where),
         failed_stage=_optional_text(mapping["failed_stage"], "execution.failed_stage", where),
         error=_optional_text(mapping["error"], "execution.error", where),
+        solver_termination=_closed_enum(
+            mapping["solver_termination"],
+            SOLVER_TERMINATION_STATES,
+            "execution.solver_termination",
+            where,
+        ),
     )
 
 
@@ -995,6 +1531,21 @@ def _decode_quality(payload: object, where: str) -> QualityRecord:
     return QualityRecord(
         classification=classification,
         uncertainty=_text(mapping["uncertainty"], "quality.uncertainty", where),
+        convergence=_closed_enum(
+            mapping["convergence"], CONVERGENCE_STATES, "quality.convergence", where
+        ),
+        mesh_independence=_closed_enum(
+            mapping["mesh_independence"], MESH_INDEPENDENCE_STATES, "quality.mesh_independence", where
+        ),
+        mass_balance=_closed_enum(
+            mapping["mass_balance"], MASS_BALANCE_STATES, "quality.mass_balance", where
+        ),
+        experimental_validation=_closed_enum(
+            mapping["experimental_validation"],
+            VALIDATION_STATES,
+            "quality.experimental_validation",
+            where,
+        ),
         verification_metrics=tuple(
             _decode_metric(item, "quality.verification_metrics", where)
             for item in _list(
@@ -1115,10 +1666,18 @@ def _number_mapping(value: object, field: str, where: str) -> dict[str, float]:
     }
 
 
-def _status(value: object, where: str) -> RunStatus:
-    if value not in RUN_STATUSES:
-        raise HistoryError(f"{where}: status {value!r} must be one of {RUN_STATUSES}")
+def _execution_status(value: object, where: str) -> ExecutionStatus:
+    if value not in EXECUTION_STATUSES:
+        raise HistoryError(f"{where}: execution_status {value!r} must be one of {EXECUTION_STATUSES}")
     return value  # type: ignore[return-value]
+
+
+def _closed_enum(value: object, allowed: tuple[str, ...], field: str, where: str) -> str:
+    """A gate state drawn from its closed set; free text can never imply a pass."""
+    text = _text(value, field, where)
+    if text not in allowed:
+        raise HistoryError(f"{where}: {field} {text!r} must be one of {allowed}")
+    return text
 
 
 def _timestamp(value: object, field: str, where: str) -> str:
