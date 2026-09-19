@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -25,6 +26,16 @@ from scentinel.core.virtual_sensor import SENSOR_FAMILIES, VirtualSensorConfig, 
 from scentinel.ui.i18n import Translator
 from scentinel.ui.main_window import MainWindow
 from scentinel.ui.results_panel import SensorReading
+
+
+def _scrollable(page: QWidget) -> QScrollArea:
+    """Wrap a tab page so its content stays reachable at any dock height."""
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.Shape.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    area.setWidget(page)
+    return area
 
 
 class SensorSandbox(MainWindow):
@@ -57,14 +68,21 @@ class SensorSandbox(MainWindow):
 
     def _build_sensor_lab(self) -> None:
         dock = QDockWidget("Virtual Sensor Lab", self)
-        dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
+        dock.setAllowedAreas(
+            Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
         tabs = QTabWidget()
-        tabs.addTab(self._build_model_tab(), "Sensor models")
-        tabs.addTab(self._build_telemetry_tab(), "Telemetry")
-        tabs.addTab(self._build_evaluation_tab(), "Evaluation")
+        # Every page is scrollable: the model page alone needs ~630 px, and a
+        # fixed minimum on the dock would otherwise crop its lower fields with
+        # no way to reach them.
+        tabs.addTab(_scrollable(self._build_model_tab()), "Sensor models")
+        tabs.addTab(_scrollable(self._build_telemetry_tab()), "Telemetry")
+        tabs.addTab(_scrollable(self._build_evaluation_tab()), "Evaluation")
+        tabs.setMinimumHeight(0)
         dock.setWidget(tabs)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
-        dock.setMinimumHeight(280)
+        dock.setMinimumHeight(0)
+        dock.setMinimumWidth(0)
         toolbar = QToolBar("Sandbox tools", self)
         toolbar.setMovable(False)
         toolbar.addAction(dock.toggleViewAction())
@@ -72,13 +90,18 @@ class SensorSandbox(MainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
         self._sandbox_toolbar = toolbar
         self._sensor_dock = dock
-        self.resizeDocks([dock], [320], Qt.Orientation.Vertical)
+        self.resizeDocks([dock], [340], Qt.Orientation.Vertical)
 
     def set_lab_visible(self, visible: bool) -> None:
         self._lab_mode = visible
         self._sensor_dock.setVisible(visible)
         self._sandbox_toolbar.setVisible(visible)
         self.results_panel().set_sandbox_mode(visible)
+        if visible:
+            # Showing the dock makes Qt adopt its minimumSizeHint (the tab bar
+            # plus one row of content) as a hard minimum, which then persists
+            # even after hiding. Re-assert zero so the dock can be dragged shut.
+            self._sensor_dock.setMinimumHeight(0)
 
     def lab_visible(self) -> bool:
         return getattr(self, "_lab_mode", False)
@@ -158,6 +181,7 @@ class SensorSandbox(MainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         self._telemetry = QTableWidget(0, 8)
+        self._telemetry.setMinimumHeight(0)
         self._telemetry.setHorizontalHeaderLabels(
             [
                 "Sensor",

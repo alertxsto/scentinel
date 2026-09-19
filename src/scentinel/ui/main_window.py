@@ -139,23 +139,33 @@ class MainWindow(QMainWindow):
         self._viewport = ViewportWidget()
         self._results_panel = ResultsPanel(self._t)
 
+        # Both splitters stay collapsible and evenly stretchable: the user can
+        # drag either divider to any size, and neither pane can pin the other.
         workspace = QSplitter(Qt.Orientation.Vertical)
-        workspace.setChildrenCollapsible(False)
+        workspace.setChildrenCollapsible(True)
         workspace.addWidget(self._viewport)
         workspace.addWidget(self._results_panel)
-        workspace.setStretchFactor(0, 3)
-        workspace.setStretchFactor(1, 2)
-        workspace.setSizes([520, 380])
+        workspace.setStretchFactor(0, 1)
+        workspace.setStretchFactor(1, 1)
+        workspace.setSizes([560, 340])
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        splitter.setChildrenCollapsible(False)
+        splitter.setChildrenCollapsible(True)
         splitter.addWidget(self._setup_panel)
         splitter.addWidget(workspace)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([320, 1120])
+        splitter.setSizes([340, 1100])
+
+        # A floor on the whole window stops the panes from being squeezed below
+        # usability; within it, every divider moves.
+        self._setup_panel.setMinimumWidth(240)
+        self._viewport.setMinimumHeight(160)
+        self._results_panel.setMinimumHeight(140)
+        splitter.setMinimumWidth(760)
         self.setCentralWidget(splitter)
         self.resize(1440, 900)
+        self.setMinimumSize(760, 520)
 
         self._setup_panel.changed.connect(self._on_setup_changed)
         self._viewport.sensors_changed.connect(self._on_sensors_changed)

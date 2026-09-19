@@ -102,6 +102,7 @@ analysis and the ranked fix options are in
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase plan, current position, milestones, risks |
 | [docs/TASKS.md](docs/TASKS.md) | Every task with status, files, and acceptance test |
 | [docs/references.md](docs/references.md) | Data provenance: every gas default and its source |
+| [docs/gas-composition-basis.md](docs/gas-composition-basis.md) | Scientific basis for gas composition: why the current basis does not fit a fresh truck bin, and the cited model that replaces it |
 
 ## Requirements
 

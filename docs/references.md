@@ -3,6 +3,12 @@
 Semua data default di Scentinel berasal dari sumber publik yang terverifikasi.
 Dokumen ini mencatat setiap angka, asal-usulnya, dan tingkat kepercayaannya.
 
+> **Catatan basis:** dokumen ini mencatat nilai yang **sudah dipakai**. Untuk
+> dasar ilmiah pemilihan basis komposisi gas — termasuk temuan bahwa basis
+> AP-42 landfill tidak cocok untuk bak truk segar, dan model 40 CFR 98.343
+> HH-1 yang diusulkan sebagai gantinya — lihat
+> [gas-composition-basis.md](gas-composition-basis.md).
+
 Terakhir diperbarui: 2026-09-19
 
 ---

@@ -40,6 +40,15 @@ if TYPE_CHECKING:
     from scentinel.core.history import RunRecord
 
 
+def _scrollable(page: QWidget) -> QScrollArea:
+    """Wrap a tab page so its content stays reachable at any panel height."""
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.Shape.NoFrame)
+    area.setWidget(page)
+    return area
+
+
 @dataclass(frozen=True)
 class SensorReading:
     """One row of the results table: a sensor and its per-gas concentration."""
@@ -105,11 +114,16 @@ class ResultsPanel(QWidget):
         self._log.setReadOnly(True)
         self._log.setMaximumBlockCount(5000)
         self._log.setFont(QFont("monospace"))
+        self._log.setMinimumHeight(0)
         log_layout.addWidget(self._log)
 
+        # The Sensors and Log pages get scroll areas too, so no page can pin the
+        # panel: the tab widget sizes itself from its tallest page, and a tall
+        # page would otherwise starve the viewport above it.
+        self._tabs.setMinimumHeight(0)
         self._tabs.addTab(self._summary_tab, "")
-        self._tabs.addTab(self._stack, "")
-        self._tabs.addTab(log_tab, "")
+        self._tabs.addTab(_scrollable(self._stack), "")
+        self._tabs.addTab(_scrollable(log_tab), "")
         self._field_view = FieldResultView()
         self._tabs.addTab(self._field_view, "")
         layout.addWidget(self._tabs, 1)
