@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication
 from scentinel import __version__
 from scentinel.core.project import load_project
 from scentinel.ui.i18n import DEFAULT_LOCALE, Translator
-from scentinel.ui.main_window import MainWindow
+from scentinel.ui.home_window import HomeWindow
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
         if candidate.exists():
             project = load_project(candidate)
 
-    window = MainWindow(translator, project=project)
+    window = HomeWindow(translator, project=project)
     window.show()
     return app.exec()
 

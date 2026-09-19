@@ -3,6 +3,7 @@
   "app.subtitle": "Studio penempatan sensor gas untuk truk pengangkut sampah",
 
   "menu.file": "Berkas",
+  "menu.file.home": "Kembali ke Dashboard",
   "menu.file.new": "Proyek Baru",
   "menu.file.open": "Buka Proyek…",
   "menu.file.save": "Simpan Proyek",

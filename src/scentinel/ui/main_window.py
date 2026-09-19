@@ -93,6 +93,7 @@ QStatusBar QLabel { color: #4b5563; }
 class MainWindow(QMainWindow):
     """Scentinel main window."""
 
+    home_requested = Signal()
     run_requested = Signal(object)  # Project
     cancel_requested = Signal()
     locale_changed = Signal(str)
@@ -165,6 +166,8 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         file_menu = self.menuBar().addMenu("")
         self._file_menu = file_menu
+        self._action_home = _action(file_menu, "Alt+Left", self.home_requested.emit)
+        file_menu.addSeparator()
         self._action_new = _action(file_menu, QKeySequence.StandardKey.New, self.new_project)
         self._action_open = _action(file_menu, QKeySequence.StandardKey.Open, self.open_project)
         self._action_save = _action(file_menu, QKeySequence.StandardKey.Save, self.save_project)
@@ -550,6 +553,7 @@ class MainWindow(QMainWindow):
     def retranslate(self) -> None:
         t = self._t.t
         self._file_menu.setTitle(t("menu.file"))
+        self._action_home.setText(t("menu.file.home"))
         self._action_new.setText(t("menu.file.new"))
         self._action_open.setText(t("menu.file.open"))
         self._action_save.setText(t("menu.file.save"))

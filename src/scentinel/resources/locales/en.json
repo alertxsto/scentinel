@@ -3,6 +3,7 @@
   "app.subtitle": "Gas sensor placement studio for waste collection vehicles",
 
   "menu.file": "File",
+  "menu.file.home": "Back to Dashboard",
   "menu.file.new": "New Project",
   "menu.file.open": "Open Project…",
   "menu.file.save": "Save Project",
