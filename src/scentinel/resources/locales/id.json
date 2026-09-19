@@ -1,0 +1,100 @@
+{
+  "app.title": "Scentinel",
+  "app.subtitle": "Studio penempatan sensor gas untuk truk pengangkut sampah",
+
+  "menu.file": "Berkas",
+  "menu.file.new": "Proyek Baru",
+  "menu.file.open": "Buka Proyek…",
+  "menu.file.save": "Simpan Proyek",
+  "menu.file.save_as": "Simpan Proyek Sebagai…",
+  "menu.file.export_csv": "Ekspor CSV Sensor…",
+  "menu.file.quit": "Keluar",
+  "menu.view": "Tampilan",
+  "menu.view.language": "Bahasa",
+  "menu.view.fit": "Sesuaikan Jendela",
+  "menu.view.reset": "Reset Tampilan",
+  "menu.help": "Bantuan",
+  "menu.help.about": "Tentang Scentinel",
+  "menu.run": "Jalankan",
+
+  "panel.setup": "Pengaturan",
+  "panel.viewport": "Penampang bak",
+  "panel.results": "Hasil",
+  "panel.log": "Log solver",
+
+  "group.geometry": "Geometri bak",
+  "group.scenario": "Skenario",
+  "group.sensors": "Posisi sensor",
+  "group.gas_sources": "Sumber gas (ppmv)",
+
+  "field.length": "Panjang bak",
+  "field.height": "Tinggi bak",
+  "field.mound_shape": "Tumpukan sampah",
+  "field.fill": "Fraksi terisi",
+  "field.wind_speed": "Kecepatan angin",
+  "field.wind_direction": "Arah angin",
+  "field.ventilation": "Ventilasi",
+  "field.sensor_count": "Sensor terpasang",
+  "field.actual_fill": "Isian aktual",
+
+  "shape.flat": "Datar",
+  "shape.mounded": "Menggunung",
+  "shape.irregular": "Tidak beraturan",
+  "dir.left_to_right": "Kiri ke kanan",
+  "dir.right_to_left": "Kanan ke kiri",
+
+  "unit.m": "m",
+  "unit.m_s": "m/s",
+  "unit.ppmv": "ppmv",
+
+  "action.run": "Jalankan Simulasi",
+  "action.cancel": "Batal",
+  "action.export_csv": "Ekspor CSV",
+  "action.clear_sensors": "Hapus sensor",
+  "action.fit": "Sesuaikan",
+
+  "status.ready": "Siap",
+  "status.running": "Berjalan…",
+  "status.done": "Selesai",
+  "status.error": "Gagal",
+  "status.cancelled": "Dibatalkan",
+  "status.sensors": "{count} sensor",
+  "status.dirty": "Belum disimpan",
+
+  "viewport.hint": "Klik di dalam bak untuk menempatkan sensor.",
+  "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
+  "viewport.hint.outside": "Klik di dalam bak untuk menempatkan sensor.",
+
+  "results.empty": "Belum ada hasil. Jalankan simulasi untuk mengisi tabel ini.",
+  "results.sensor": "Sensor",
+  "results.busy": "Menunggu keluaran solver…",
+  "results.pending": "Belum dijalankan",
+
+  "log.empty": "Log akan muncul di sini saat solver berjalan.",
+
+  "validation.fill_range": "Fraksi terisi harus lebih dari 0 dan maksimum 1.",
+  "validation.positive": "Nilai harus lebih besar dari nol.",
+  "validation.wind_negative": "Kecepatan angin tidak boleh negatif.",
+
+  "run.podman_missing": "Podman belum terpasang — solver belum bisa dijalankan.",
+  "run.image_missing": "Image container OpenFOAM belum di-pull.",
+  "run.needs_gas": "Pilih minimal satu sumber gas sebelum menjalankan.",
+  "run.needs_sensor": "Tempatkan minimal satu sensor sebelum menjalankan.",
+  "run.blocked": "Simulasi belum tersedia pada build ini.",
+
+  "error.open_failed": "Gagal membuka proyek.",
+  "error.save_failed": "Gagal menyimpan proyek.",
+  "error.export_failed": "Gagal mengekspor laporan.",
+
+  "dialog.unsaved.title": "Perubahan belum disimpan",
+  "dialog.unsaved.text": "Simpan perubahan pada {name} sebelum melanjutkan?",
+  "dialog.overwrite.title": "Timpa berkas",
+  "dialog.overwrite.text": "{name} sudah ada. Timpa?",
+
+  "about.title": "Tentang Scentinel",
+  "about.text": "<b>Scentinel</b> {version}<br><br>Studio screening CFD untuk penempatan sensor gas pada bak truk pengangkut sampah.<br><br>Dwiky Candra · Gesang Hemas Bayu Sekti · Ezekiel Benedicte Felice<br>Teknik Lingkungan, President University<br><br>Data default gas dari EPA AP-42 Ch.2.4 dan EPA LMOP; lihat docs/references.md.",
+
+  "log.saved": "Tersimpan {path}",
+  "log.opened": "Terbuka {path}",
+  "log.exported": "Terekspor {path}"
+}

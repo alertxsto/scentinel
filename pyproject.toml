@@ -19,23 +19,30 @@ maintainers = [
 ]
 
 dependencies = [
-    "pyside6>=6.11",
+    "PySide6-Essentials>=6.11",
+]
+
+[project.optional-dependencies]
+# Meshing and field visualisation — required from F1/F2 onwards.
+cfd = [
+    "gmsh>=4.15",
     "pyvista>=0.49",
     "pyvistaqt>=0.13",
     "vtk>=9.5",
-    "gmsh>=4.15",
+]
+# Reporting and plotting extras.
+report = [
     "jinja2>=3.1",
     "numpy>=2.0",
     "pyqtgraph>=0.13",
     "matplotlib>=3.9",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-qt>=4.4",
     "openpyxl>=3.1",
     "scrapling[fetchers]>=0.4",
+    "weasyprint>=62",
 ]
 
 [project.gui-scripts]

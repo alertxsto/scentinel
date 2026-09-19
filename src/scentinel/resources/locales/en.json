@@ -1,0 +1,100 @@
+{
+  "app.title": "Scentinel",
+  "app.subtitle": "Gas sensor placement studio for waste collection vehicles",
+
+  "menu.file": "File",
+  "menu.file.new": "New Project",
+  "menu.file.open": "Open Project…",
+  "menu.file.save": "Save Project",
+  "menu.file.save_as": "Save Project As…",
+  "menu.file.export_csv": "Export Sensor CSV…",
+  "menu.file.quit": "Quit",
+  "menu.view": "View",
+  "menu.view.language": "Language",
+  "menu.view.fit": "Fit to Window",
+  "menu.view.reset": "Reset View",
+  "menu.help": "Help",
+  "menu.help.about": "About Scentinel",
+  "menu.run": "Run",
+
+  "panel.setup": "Setup",
+  "panel.viewport": "Bin cross-section",
+  "panel.results": "Results",
+  "panel.log": "Solver log",
+
+  "group.geometry": "Bin geometry",
+  "group.scenario": "Scenario",
+  "group.sensors": "Sensor positions",
+  "group.gas_sources": "Gas sources (ppmv)",
+
+  "field.length": "Bin length",
+  "field.height": "Bin height",
+  "field.mound_shape": "Waste mound",
+  "field.fill": "Fill fraction",
+  "field.wind_speed": "Wind speed",
+  "field.wind_direction": "Wind direction",
+  "field.ventilation": "Ventilation",
+  "field.sensor_count": "Placed sensors",
+  "field.actual_fill": "Actual fill",
+
+  "shape.flat": "Flat",
+  "shape.mounded": "Mounded",
+  "shape.irregular": "Irregular",
+  "dir.left_to_right": "Left to right",
+  "dir.right_to_left": "Right to left",
+
+  "unit.m": "m",
+  "unit.m_s": "m/s",
+  "unit.ppmv": "ppmv",
+
+  "action.run": "Run Simulation",
+  "action.cancel": "Cancel",
+  "action.export_csv": "Export CSV",
+  "action.clear_sensors": "Clear sensors",
+  "action.fit": "Fit",
+
+  "status.ready": "Ready",
+  "status.running": "Running…",
+  "status.done": "Finished",
+  "status.error": "Failed",
+  "status.cancelled": "Cancelled",
+  "status.sensors": "{count} sensor(s)",
+  "status.dirty": "Unsaved changes",
+
+  "viewport.hint": "Click inside the bin to place a sensor.",
+  "viewport.cursor": "x {x:.2f} m · y {y:.2f} m",
+  "viewport.hint.outside": "Click inside the bin to place a sensor.",
+
+  "results.empty": "No results yet. Run a simulation to fill this table.",
+  "results.sensor": "Sensor",
+  "results.busy": "Waiting for solver output…",
+  "results.pending": "Not run yet",
+
+  "log.empty": "Log output appears here while the solver runs.",
+
+  "validation.fill_range": "Fill fraction must be greater than 0 and at most 1.",
+  "validation.positive": "Value must be greater than zero.",
+  "validation.wind_negative": "Wind speed must not be negative.",
+
+  "run.podman_missing": "Podman is not installed — the solver cannot run yet.",
+  "run.image_missing": "OpenFOAM container image is not pulled yet.",
+  "run.needs_gas": "Select at least one gas source before running.",
+  "run.needs_sensor": "Place at least one sensor before running.",
+  "run.blocked": "Simulation is not available in this build.",
+
+  "error.open_failed": "Could not open project.",
+  "error.save_failed": "Could not save project.",
+  "error.export_failed": "Could not export the report.",
+
+  "dialog.unsaved.title": "Unsaved changes",
+  "dialog.unsaved.text": "Save changes to {name} before continuing?",
+  "dialog.overwrite.title": "Overwrite file",
+  "dialog.overwrite.text": "{name} already exists. Overwrite it?",
+
+  "about.title": "About Scentinel",
+  "about.text": "<b>Scentinel</b> {version}<br><br>CFD screening studio for gas sensor placement in waste collection vehicles.<br><br>Dwiky Candra · Gesang Hemas Bayu Sekti · Ezekiel Benedicte Felice<br>Environmental Engineering, President University<br><br>Gas defaults from EPA AP-42 Ch.2.4 and EPA LMOP; see docs/references.md.",
+
+  "log.saved": "Saved {path}",
+  "log.opened": "Opened {path}",
+  "log.exported": "Exported {path}"
+}

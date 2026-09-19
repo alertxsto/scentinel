@@ -23,5 +23,11 @@ env/
 
 # Local data / simulation output
 *.foam
-case/
-output/
+*.msh
+*.vtk
+*.vtu
+*-sensors.csv
+/runs/
+/case/
+/output/
+.podman/
