@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 8
+    assert payload["format_version"] == 9
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -1384,3 +1384,25 @@ def test_a_history_read_api_call_works_without_the_cfd_extra(tmp_path):
     )
 
     assert result.stdout.strip() == f"{record.run_id} succeeded"
+
+
+def test_finish_run_records_a_parsed_convergence_state(tmp_path):
+    record = _begin(tmp_path, _project())
+    finished = _finish(
+        record,
+        convergence="residual_targets_not_met",
+        convergence_reason="p initial residual 0.5 exceeds its target 0.001",
+    )
+    assert finished.quality.convergence == "residual_targets_not_met"
+    assert "p initial residual" in finished.quality.convergence_reason
+    assert finished.execution.solver_termination == "end_time_reached"
+
+
+def test_finish_run_records_met_targets_as_termination(tmp_path):
+    record = _begin(tmp_path, _project())
+    finished = _finish(
+        record,
+        convergence="residual_targets_met",
+        convergence_reason="every residual target met at the last iteration",
+    )
+    assert finished.execution.solver_termination == "residual_targets_met"

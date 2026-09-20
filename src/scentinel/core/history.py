@@ -94,7 +94,10 @@ from scentinel.core.scenario import (
 #: 8 — records the turbulent Schmidt number the scalar transport used. A version
 #:     7 record describes molecular-only transport and cannot say how much
 #:     turbulent dispersion it applied.
-RUN_FORMAT_VERSION = 8
+#: 9 — records the parsed convergence state and its reason. A version 8 record
+#:     can only say ``not_evaluated``: it never read the solver's residuals, so
+#:     it cannot distinguish a run that met its targets from one that did not.
+RUN_FORMAT_VERSION = 9
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -290,6 +293,7 @@ _QUALITY_KEYS = (
     "classification",
     "uncertainty",
     "convergence",
+    "convergence_reason",
     "mesh_independence",
     "mass_balance",
     "experimental_validation",
@@ -517,6 +521,7 @@ class QualityRecord:
     classification: str
     uncertainty: str
     convergence: str
+    convergence_reason: str
     mesh_independence: str
     mass_balance: str
     experimental_validation: str
@@ -652,6 +657,8 @@ def finish_run(
     readings_ppmv: object,
     finished_at: datetime | None = None,
     solver_termination: str = GATE_NOT_EVALUATED,
+    convergence: str = GATE_NOT_EVALUATED,
+    convergence_reason: str = "",
 ) -> RunRecord:
     """Atomically replace an incomplete manifest with its terminal outcome.
 
@@ -682,6 +689,15 @@ def finish_run(
     termination = _closed_enum(
         solver_termination, SOLVER_TERMINATION_STATES, "solver_termination", where
     )
+    convergence_state = _closed_enum(
+        convergence, CONVERGENCE_STATES, "convergence", where
+    )
+    # A parsed convergence state overrides the caller's termination hint: when
+    # the residuals were read, the termination is what the residuals say.
+    if convergence_state == "residual_targets_met":
+        termination = "residual_targets_met"
+    elif convergence_state == "residual_targets_not_met" and termination == GATE_NOT_EVALUATED:
+        termination = "end_time_reached"
 
     persisted = load_run(record.run_dir)
     where = str(persisted.run_dir / MANIFEST_NAME)
@@ -743,7 +759,11 @@ def finish_run(
             concentration_unit=CONCENTRATION_UNIT,
             sensor_readings=readings,
         ),
-        quality=persisted.quality,
+        quality=replace(
+            persisted.quality,
+            convergence=convergence_state,
+            convergence_reason=convergence_reason,
+        ),
         run_dir=persisted.run_dir,
     )
     payload = _payload(finished)
@@ -1042,6 +1062,7 @@ def _screening_quality() -> QualityRecord:
         classification=QUALITY_CLASSIFICATION,
         uncertainty=QUALITY_UNCERTAINTY,
         convergence=GATE_NOT_EVALUATED,
+        convergence_reason="",
         mesh_independence=GATE_NOT_RUN,
         mass_balance=GATE_NOT_RUN,
         experimental_validation=GATE_NOT_RUN,
@@ -1303,6 +1324,7 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "classification": record.quality.classification,
             "uncertainty": record.quality.uncertainty,
             "convergence": record.quality.convergence,
+            "convergence_reason": record.quality.convergence_reason,
             "mesh_independence": record.quality.mesh_independence,
             "mass_balance": record.quality.mass_balance,
             "experimental_validation": record.quality.experimental_validation,
@@ -1878,6 +1900,9 @@ def _decode_quality(payload: object, where: str) -> QualityRecord:
         uncertainty=_text(mapping["uncertainty"], "quality.uncertainty", where),
         convergence=_closed_enum(
             mapping["convergence"], CONVERGENCE_STATES, "quality.convergence", where
+        ),
+        convergence_reason=_string(
+            mapping.get("convergence_reason", ""), "quality.convergence_reason", where
         ),
         mesh_independence=_closed_enum(
             mapping["mesh_independence"], MESH_INDEPENDENCE_STATES, "quality.mesh_independence", where

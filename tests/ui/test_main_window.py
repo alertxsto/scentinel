@@ -698,3 +698,55 @@ def test_a_field_render_failure_still_finalizes_the_run(run_window, tmp_path, mo
     assert run_window._status_label.text() == run_window._t.t("status.done")
     log = run_window.results_panel()._log.toPlainText()
     assert "WARNING: field visual unavailable" in log
+
+
+def test_finalize_run_records_the_parsed_convergence_state(run_window, tmp_path, monkeypatch):
+    """_finalize_run reads solverInfo.dat and stores the residual verdict."""
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.solver_residuals",
+        lambda case_dir: {"p": [(100.0, 0.5)], "Ux": [(100.0, 1e-6)]},
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.quality.convergence == "residual_targets_not_met"
+    assert "p initial residual" in record.quality.convergence_reason
+    assert record.execution.solver_termination == "end_time_reached"
+
+
+def test_finalize_run_records_met_targets_when_residuals_are_small(run_window, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.solver_residuals",
+        lambda case_dir: {"p": [(100.0, 1e-9)], "Ux": [(100.0, 1e-9)]},
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.quality.convergence == "residual_targets_met"
+    assert record.execution.solver_termination == "residual_targets_met"
+
+
+def test_finalize_run_says_not_evaluated_when_solverinfo_is_absent(run_window, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.solver_residuals", lambda case_dir: {}
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.quality.convergence == "not_evaluated"
+    assert "no solverInfo.dat" in record.quality.convergence_reason

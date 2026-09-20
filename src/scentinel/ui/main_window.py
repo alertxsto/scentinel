@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
 )
 
 from scentinel import __version__
-from scentinel.core import container, history
-from scentinel.core.casegen import PPM_SCALE
+from scentinel.core import container, history, post
+from scentinel.core.casegen import PPM_SCALE, residual_targets
 from scentinel.core.gas_data import DEFAULT_SOURCE_GASES
 from scentinel.core.geometry import BinGeometry
 from scentinel.core.history import HistoryError, RunRecord
@@ -551,6 +551,7 @@ class MainWindow(DockedWorkspace):
         """Write and return the terminal manifest, or ``None`` on failure."""
         if record is None or status is None:
             return None
+        convergence, convergence_reason = self._parsed_convergence(record, outcome)
         try:
             return history.finish_run(
                 record,
@@ -562,10 +563,37 @@ class MainWindow(DockedWorkspace):
                 failed_stage=outcome.failed_stage,
                 error=outcome.error or None,
                 readings_ppmv=readings_ppmv,
+                convergence=convergence,
+                convergence_reason=convergence_reason,
             )
         except (HistoryError, OSError, ValueError) as error:
             self._results_panel.append_log(f"ERROR: run not recorded: {error}")
             return None
+
+    def _parsed_convergence(
+        self, record: RunRecord, outcome: RunOutcome
+    ) -> tuple[str, str]:
+        """Read the solver's own residuals and classify convergence.
+
+        Exit code 0 is never read as convergence: the verdict comes from the
+        ``solverInfo.dat`` the solver wrote, compared against the targets the
+        generated case asked for. When the file is absent or unreadable the
+        state stays ``not_evaluated`` with the reason recorded.
+        """
+        if outcome.case_dir is None:
+            return history.GATE_NOT_EVALUATED, "no case directory was recorded for this run"
+        try:
+            residuals = post.solver_residuals(outcome.case_dir)
+        except (OSError, ValueError) as error:
+            return history.GATE_NOT_EVALUATED, f"solverInfo.dat could not be parsed: {error}"
+        if not residuals:
+            return history.GATE_NOT_EVALUATED, "no solverInfo.dat was written for this run"
+        targets = residual_targets(
+            {gas: 0.0 for gas in record.project.scenario.gas_sources}
+        )
+        met, reason = post.residual_targets_met_from_residuals(residuals, targets)
+        state = "residual_targets_met" if met else "residual_targets_not_met"
+        return state, reason
 
     def _set_running_ui(self, running: bool) -> None:
         self._refresh_run_action(solving=running)
