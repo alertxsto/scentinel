@@ -62,6 +62,31 @@ def test_applied_physics_records_the_flux_and_area(tmp_path, mesh):
     assert applied["emission_flux_kg_per_m2_s"]["CO"] > 0.0
 
 
+def test_the_scalar_carries_turbulent_diffusivity(tmp_path, mesh):
+    """The scalar must use D + nut/Sc_t, not molecular D alone.
+
+    OpenFOAM's scalarTransport uses ``alphaD*nu + alphaDt*nut`` only when
+    neither its ``D`` nor its ``nut`` entry is written: ``D`` forces the
+    constant-molecular path, and ``nut`` makes it return ``nut`` alone. So the
+    case writes ``alphaD``/``alphaDt`` and omits both.
+    """
+    case = write_case(
+        Scenario(gas_sources={"CO": "auto"}), mesh, tmp_path / "case", geom=BinGeometry()
+    )
+    functions = (case / "system" / "functions").read_text()
+    block = functions.split("COTransport\n")[1]
+    assert "alphaD" in block
+    assert "alphaDt" in block
+    assert "\n    D " not in block
+    assert "\n    nut " not in block
+
+
+def test_the_schmidt_number_is_a_labelled_assumption():
+    assert 0.5 <= casegen.TURBULENT_SCHMIDT_NUMBER <= 1.0
+    assert casegen.TURBULENT_SCHMIDT_PROVENANCE == "model assumption"
+    assert casegen.TURBULENT_SCHMIDT_BASIS
+
+
 def test_auto_sources_use_the_cited_ap42_defaults():
     scenario = Scenario(gas_sources={"CO": "auto", "H2S": "auto"})
     resolved = resolve_sources(scenario)
@@ -299,15 +324,14 @@ def test_persisted_applied_physics_matches_the_generated_case(tmp_path, mesh):
 
     applied = applied_physics(scenario, geom)
 
-    # Each gas's own diffusivity reaches the case, and the persisted block
-    # reports exactly that number. Two gases in one case must differ, otherwise
-    # the per-gas transport is not actually applied.
+    # Each gas's own molecular diffusivity is still recorded, and now enters
+    # the case through the alphaD*nu term of the turbulent scalar transport.
     functions = (case / "system" / "functions").read_text()
     for gas in ("CO", "VOC"):
         expected = gas_data.get_gas(gas).diffusivity_m2_s
         assert applied["scalar_diffusivity_m2_s"][gas] == pytest.approx(expected)
         assert f"{gas}Transport" in functions
-        assert f"D               {expected:g};" in functions
+        assert "alphaDt" in functions.split(f"{gas}Transport\n")[1]
     assert (
         applied["scalar_diffusivity_m2_s"]["CO"]
         != applied["scalar_diffusivity_m2_s"]["VOC"]
@@ -372,15 +396,22 @@ def test_each_gas_writes_its_own_diffusivity_into_the_case(tmp_path, mesh):
     for gas in gases:
         block = functions.split(f"{gas}Transport\n")[1]
         assert f"    field           {gas};\n" in block
-        assert f"    D               {scalar_diffusivity(gas):g};\n" in block
+        # The turbulent path carries the per-gas molecular diffusivity through
+        # alphaD*nu; the case no longer writes a per-gas D (that would force
+        # the molecular-only branch and ignore nut).
+        assert "alphaDt" in block
         assert scalar_diffusivity(gas) == pytest.approx(
             gas_data.get_gas(gas).diffusivity_m2_s
         )
 
-    # The light gas must not carry the heavy gas's diffusivity.
-    assert f"D               {scalar_diffusivity('ETHANE'):g};" in functions
-    assert f"D               {scalar_diffusivity('BENZENE'):g};" in functions
+    # The molecular diffusivities still differ per gas; they now enter through
+    # the alphaD*nu term rather than a written D.
     assert scalar_diffusivity("ETHANE") != scalar_diffusivity("BENZENE")
+    assert applied_physics(scenario, BinGeometry())["scalar_diffusivity_m2_s"][
+        "ETHANE"
+    ] != applied_physics(scenario, BinGeometry())["scalar_diffusivity_m2_s"][
+        "BENZENE"
+    ]
 
 
 def test_an_added_gas_resolves_and_writes_under_a_co_disposal_stream(tmp_path, mesh):

@@ -129,6 +129,23 @@ RELAXATION_FACTORS = {"U": 0.9, '".*"': 0.9}
 #: Non-orthogonal correctors in the SIMPLE dictionary.
 NON_ORTHOGONAL_CORRECTORS = 0
 
+#: Turbulent Schmidt number, ``Sc_t = nu_t / D_t``. The scalar is carried with
+#: ``D_eff = D_molecular + nu_t / Sc_t``. This is a **model assumption**: the
+#: RANS literature uses 0.7-0.9 for atmospheric boundary-layer dispersion, and
+#: 0.7 is the common default. It is not measured for this geometry, so the
+#: output states the assumption rather than presenting it as cited.
+TURBULENT_SCHMIDT_NUMBER = 0.7
+TURBULENT_SCHMIDT_PROVENANCE = "model assumption"
+TURBULENT_SCHMIDT_BASIS = (
+    "RANS turbulent Schmidt number, standard range 0.7-0.9 for turbulent "
+    "scalar dispersion; 0.7 used. Not measured for this geometry."
+)
+
+#: ``alphaD`` is the molecular contribution weight in ``scalarTransport``; the
+#: turbulent weight ``alphaDt`` is ``1 / Sc_t``.
+ALPHA_D = 1.0
+ALPHA_DT = 1.0 / TURBULENT_SCHMIDT_NUMBER
+
 #: Patch roles. ``gmshToFoam`` names patches after the gmsh physical groups.
 WALL_PATCHES = ("wallLeft", "wallRight")
 OPEN_PATCHES = ("openLeft", "openRight")
@@ -781,13 +798,22 @@ def _foam_value(value: object) -> str:
 
 
 def _functions(sources: dict[str, float]) -> str:
+    """The residuals object and one ``scalarTransport`` per gas.
+
+    The scalar is carried with an effective diffusivity ``alphaD*nu +
+    alphaDt*nut = D + nu_t/Sc_t``. ``scalarTransport`` reaches that branch only
+    when *neither* ``D`` nor ``nut`` is written: ``D`` forces the
+    constant-molecular branch, and ``nut`` makes it return ``nut`` alone,
+    ignoring ``alphaD``/``alphaDt``. So the body writes ``alphaD`` and
+    ``alphaDt`` and deliberately omits both.
+    """
     body = "".join(
         f"{gas}Transport\n{{\n"
         f"    type            scalarTransport;\n"
         f"    libs            (solverFunctionObjects);\n"
         f"    field           {gas};\n"
-        f"    diffusivity     constant;\n"
-        f"    D               {scalar_diffusivity(gas):g};\n"
+        f"    alphaD          {ALPHA_D:g};\n"
+        f"    alphaDt         {ALPHA_DT:g};\n"
         f"    nCorr           1;\n"
         f"    resetOnStartup  false;\n"
         f"}}\n\n"
