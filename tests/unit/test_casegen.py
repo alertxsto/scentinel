@@ -337,6 +337,23 @@ def test_functions_uses_solverInfo_not_residuals(tmp_path, mesh):
     assert "type            residuals" not in text, "residuals is not valid in v2512"
 
 
+def test_functions_measure_each_gas_outlet_flux_with_weighted_sum(tmp_path, mesh):
+    case = write_case(
+        Scenario(gas_sources={"CO": "auto", "CH4": "auto"}),
+        mesh,
+        tmp_path / "case",
+        geom=BinGeometry(),
+    )
+    text = (case / "system" / "functions").read_text()
+    for gas in ("CO", "CH4"):
+        assert f"outletFluxLeft{gas}" in text
+        assert f"outletFluxRight{gas}" in text
+        assert f"weightField     {gas};" in text
+    assert text.count("operation       weightedSum;") == 4
+    assert text.count("writeFields     false;") == 4
+    assert "operation       sum;" not in text
+
+
 def test_scalar_field_imposes_the_source_flux(tmp_path, mesh):
     """The field's source patch carries a gradient, not a fixed concentration."""
     from scentinel.core.casegen import source_gradient

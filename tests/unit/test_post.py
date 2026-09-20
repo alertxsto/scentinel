@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 import pyvista as pv
 
 from scentinel.core import post
@@ -71,3 +72,41 @@ def test_a_contained_sensor_reads_its_cell():
     assert readings[0].contained is True
     assert readings[0].reason == ""
     assert readings[0].values["CO"] >= 0.0
+
+
+def _write_patch_flux(root: Path, name: str, value: float) -> None:
+    output = root / "postProcessing" / name / "0" / "surfaceFieldValue.dat"
+    output.parent.mkdir(parents=True)
+    output.write_text(f"# Region type : patch\n1\t{value}\n")
+
+
+def test_mass_balance_error_compares_signed_outlet_flux_to_analytic_source(tmp_path):
+    # The signed net boundary flux is -0.5 + 1.5 = the imposed source 1.0.
+    _write_patch_flux(tmp_path, "outletFluxLeftCO", -0.5)
+    _write_patch_flux(tmp_path, "outletFluxRightCO", 1.5)
+
+    error = post.mass_balance_error(tmp_path, "CO", source_flux=1.0)
+
+    assert abs(error) < 1e-9
+
+
+def test_mass_balance_error_is_negative_when_the_outlet_loses_flux(tmp_path):
+    _write_patch_flux(tmp_path, "outletFluxRightCO", 0.5)
+
+    error = post.mass_balance_error(tmp_path, "CO", source_flux=1.0)
+
+    assert error == pytest.approx(-0.5)
+
+
+def test_patch_fluxes_reads_the_latest_row(tmp_path):
+    output = (
+        tmp_path
+        / "postProcessing"
+        / "outletFluxRightCO"
+        / "0"
+        / "surfaceFieldValue.dat"
+    )
+    output.parent.mkdir(parents=True)
+    output.write_text("# Time weightedSum(phi)\n1\t0.25\n2\t0.75\n")
+
+    assert post.patch_fluxes(tmp_path) == {"outletFluxRightCO": 0.75}

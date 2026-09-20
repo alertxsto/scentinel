@@ -849,6 +849,21 @@ def _functions(sources: dict[str, float]) -> str:
         f"}}\n\n"
         for gas in sources
     )
+    fluxes = "".join(
+        f"outletFlux{side}{gas}\n{{\n"
+        f"    type            surfaceFieldValue;\n"
+        f"    libs            (fieldFunctionObjects);\n"
+        f"    regionType      patch;\n"
+        f"    name            {patch};\n"
+        f"    operation       weightedSum;\n"
+        f"    fields          (phi);\n"
+        f"    weightField     {gas};\n"
+        f"    writeFields     false;\n"
+        f"    writeControl    writeTime;\n"
+        f"}}\n\n"
+        for gas in sources
+        for side, patch in (("Left", "openLeft"), ("Right", "openRight"))
+    )
     return (
         _header("dictionary", "functions")
         + "solverInfo\n{\n    type            solverInfo;\n"
@@ -856,6 +871,7 @@ def _functions(sources: dict[str, float]) -> str:
         + "    fields          (p U k epsilon"
         + "".join(f" {gas}" for gas in sources)
         + ");\n}\n\n"
+        + fluxes
         + body
     )
 

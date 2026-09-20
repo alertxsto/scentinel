@@ -250,48 +250,43 @@ def render_concentration_field(
     )
 
 
-def mass_balance_error(
-    case_dir: Path,
-    gas: str,
-    time: float | None = None,
-) -> float:
-    """Relative imbalance between scalar leaving the domain and the source.
+def patch_fluxes(case_dir: Path) -> dict[str, float]:
+    """Last signed weighted flux from each ``surfaceFieldValue`` object."""
+    latest: dict[str, tuple[float, float]] = {}
+    pattern = "postProcessing/*/*/surfaceFieldValue.dat"
+    for path in Path(case_dir).glob(pattern):
+        name = path.parents[1].name
+        for line in path.read_text().splitlines():
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            cells = line.split()
+            if len(cells) < 2:
+                continue
+            time, value = float(cells[0]), float(cells[-1])
+            if name not in latest or time >= latest[name][0]:
+                latest[name] = (time, value)
+    return {name: item[1] for name, item in latest.items()}
 
-    A converged steady case should balance: what the waste surface releases
-    either leaves through the outlet or accumulates. Returns
-    ``(out_flux - in_flux) / source_flux``, so 0 is perfect balance and 1 means
-    nothing left the domain.
 
-    Requires ``foamToVTK -surfaceFields`` output, which carries the face fluxes.
+def mass_balance_error(case_dir: Path, gas: str, *, source_flux: float) -> float:
+    """Relative signed imbalance between CFD outlet flux and analytic source.
+
+    ``source_flux`` is the imposed diffusive source in volume-fraction m3/s:
+    ``D * gradient * computational_source_patch_area``. For the 2D slab, that
+    area is mound profile length times mesh thickness, not physical bin width.
+    The outlet is the signed sum of ``C*phi`` over both open patches. A steady,
+    conservative case therefore approaches ``(outlet - source) / |source| = 0``.
     """
-    import pyvista as pv
-
-    case_dir = Path(case_dir)
-    if time is None:
-        time = time_directories(case_dir)[-1]
-    boundary_dir = vtk_dir(case_dir) / f"{case_dir.name}_{_format_time(time)}" / "boundary"
-    if not boundary_dir.exists():
-        raise FileNotFoundError(
-            f"{boundary_dir} not found; re-run foamToVTK with -surfaceFields"
-        )
-
-    source_flux = 0.0
-    outlet_flux = 0.0
-    for patch_file in boundary_dir.glob("*.vtp"):
-        patch = pv.read(patch_file)
-        flux_name = f"phi_{gas}"
-        if flux_name not in patch.array_names:
-            continue
-        flux = float((patch[flux_name] * patch.area()).sum())
-        name = patch_file.stem
-        if name.startswith("source"):
-            source_flux += flux
-        elif name.startswith(("openLeft", "openRight")):
-            outlet_flux += flux
-
     if abs(source_flux) < 1e-30:
-        raise ValueError(f"no source flux found for {gas} in {boundary_dir}")
-    return (outlet_flux - source_flux) / abs(source_flux)
+        raise ValueError("source_flux must be non-zero")
+    fluxes = patch_fluxes(case_dir)
+    names = (f"outletFluxLeft{gas}", f"outletFluxRight{gas}")
+    found = [fluxes[name] for name in names if name in fluxes]
+    if not found:
+        raise FileNotFoundError(
+            f"no outlet surfaceFieldValue data for {gas} under {Path(case_dir) / 'postProcessing'}"
+        )
+    return (sum(found) - source_flux) / abs(source_flux)
 
 
 def solver_residuals_from_file(path: Path) -> dict[str, list[tuple[float, float]]]:
