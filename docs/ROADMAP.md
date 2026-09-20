@@ -191,6 +191,15 @@ deviation fell sharply, but the velocity field is the remaining limit. Lowering
 Sc_t shrinks the deviation further (Sc_t = 0.3 gives ~12%) but outside the cited
 0.7–0.9 RANS range; Sc_t is left at 0.7 rather than tuned to pass.
 
+**A second, independent resolution limit was found by the T-020c audit.** Once
+the source-wall `nut` was corrected, the imposed flux is `D_mol * gradient`
+(~1.5e-12 in fraction·m²/s), so the molecular sublayer is `D/U ~ 6e-5 m`
+against a first cell of 0.5 m. Wall-adjacent cells oscillate around zero
+(300/431 negative at ~0.8× the field maximum) and the near-wall probes are
+noise-dominated. At 0.125 m every probe reads positive. **This is a second
+reason absolute near-wall concentrations are not yet trustworthy** and it
+points at the same fix: near-wall refinement, not a larger Sc_t.
+
 **What is trustworthy in the meantime.** The transport itself is verified
 against closed-form solutions: pure advection reproduces the inlet value with
 zero error, and axial diffusion matches the exponential profile within 5.5% at

@@ -437,6 +437,33 @@ boundary; the spec's gas-source field comment left the basis open
 
 ### Phase 6 — Turbulent scalar transport
 
+#### T-020c Source-wall nut regression · DONE — 2026-09-19
+Files: `src/scentinel/core/casegen.py` (`_field_nut`),
+`tests/unit/test_casegen.py`
+Why: the Phase 6 change to `alphaD`/`alphaDt` made `scalarTransport` use
+`D = alphaD*nu + alphaDt*nut` at the face, but the source patch's `nut` stayed
+`calculated`. Its first-cell value (~0.023 m²/s) entered the wall flux, so
+`D_face` was ~1789× D_mol and the imposed emission was 1789× too high.
+Change: the source patch writes `fixedValue uniform 0` (a solid wall has zero
+turbulent viscosity). Measured, same case and end time:
+
+| `source` nut BC | `nut` at wall | outlet/source |
+|---|---|---|
+| `calculated` (before) | 2.336e-02 | 1789× |
+| `nutkWallFunction` | 2.664e-04 | 21.3× |
+| `fixedValue 0` (now) | 0 | 1.027× |
+
+Effect: the mass balance closes to **1.4%** (gate 5%) and
+`outlet == D_mol*gradient*area` holds.
+**New limit exposed:** the corrected flux is ~1e-11, so the molecular sublayer
+(`D/U ~ 6e-5 m`) is far thinner than the first cell (0.5 m). Wall-adjacent cells
+oscillate around zero — 300/431 negative at ~0.8× the field maximum — and the
+near-wall values are resolution-limited. At 0.125 m every probe reads positive.
+The two tests that asserted a non-negative near-wall probe now assert the
+physical property instead (bounded volume fraction; far-field positive), with
+the measurement in their docstrings. Not a sign bug: reversing the gradient
+reverses the whole field, and a zero source reads exactly zero.
+
 #### T-020b Unit audit of the flux source · DONE — 2026-09-19
 Files: `src/scentinel/core/casegen.py`, `tests/unit/test_casegen.py`,
 `tests/verification/test_analytical_benchmarks.py`
