@@ -145,7 +145,7 @@ MainWindow._on_run_finished
 | Dimensionality | 2D as 3D one cell thick | OpenFOAM has no 2D solver; front/back are `empty` |
 | Solver | `simpleFoam` | Steady SIMPLE, incompressible, isothermal |
 | Turbulence | k-epsilon RAS | `k`, `epsilon`, `nut` written per case |
-| Scalar transport | `scalarTransport` function object | One per selected gas, `diffusivity constant; D = casegen.scalar_diffusivity(gas)` — each gas's own FSG-computed diffusivity from `gas_data` |
+| Scalar transport | `scalarTransport` function object | One per selected gas, `alphaD*nu + alphaDt*nut` with `alphaD=1`, `alphaDt=1/Sc_t` — the turbulent effective diffusivity; `Sc_t = 0.7` is a model assumption |
 | Waste mound | Not meshed | Solid, no flow; contributes only the `source` patch |
 | Source term | Emission mass flux | kg/m²/s over the emitting area, imposed as a `fixedGradient` on the scalar |
 
@@ -269,9 +269,12 @@ silently or with a misleading error.
     smuggle in foreign readings.
 26. **`applied_physics` and the case digest separate request from experiment.**
     The reported wind speed becomes a different inlet velocity after the
-    power-law scaling, and the case applies a per-gas scalar diffusivity —
-    `casegen.scalar_diffusivity()` reads each gas's FSG-computed value from
-    `gas_data`. `casegen` owns those constants and renders both the case files
+    power-law scaling, and the case carries each scalar with the turbulent
+    effective diffusivity `alphaD*nu + alphaDt*nut` (`alphaD = 1`,
+    `alphaDt = 1/Sc_t`, `Sc_t = 0.7` a model assumption). The per-gas
+    molecular diffusivity `casegen.scalar_diffusivity()` reads each gas's
+    FSG-computed value from `gas_data` and still enters through `alphaD*nu`.
+    `casegen` owns those constants and renders both the case files
     and the persisted block from the same source, so a manifest cannot claim a
     setting the case does not use. The SHA-256 digest
     over the declared case inputs (`casegen.case_input_paths`) is the
@@ -322,21 +325,21 @@ guess a registry when it cannot prompt.
 
 ### Why mesh independence fails
 
-The source is now an emission mass flux (`fixedGradient`), so the imposed flux
-is independent of the first cell height. That cut the worst-probe deviation
-substantially, but the gate is still missed because the *velocity field* is not
-mesh-converged and the scalar is carried with molecular diffusivity only.
-Measured 2026-09-19:
+The source is an emission mass flux (`fixedGradient`), so the imposed flux is
+independent of the first cell height, and the scalar is carried with turbulent
+diffusivity (`D + ν_t/Sc_t`). Together these cut the worst-probe deviation from
+~87% to ~19%, but the gate is still missed because the *velocity field* is
+itself not mesh-converged at these cell counts. Measured 2026-09-19:
 
-| Mesh size | Cells | S1 (ppmv) | S3 (ppmv) |
-|---|---|---|---|
-| 0.50 m | 431 | 2.67e-4 | 3.15e-3 |
-| 0.25 m | 907 | 3.34e-4 | 2.31e-3 |
-| Deviation | | 25.3% | 26.7% |
+| Stage | Worst-probe deviation |
+|---|---|
+| pre-Phase-5 `fixedValue` concentration | ~87% |
+| Phase 5 mass-flux boundary | ~63% |
+| Phase 6 turbulent transport (Sc_t = 0.7) | ~19% |
 
-Treat absolute concentrations as screening estimates. The remaining fixes are
-turbulent scalar transport (T-240) and a mesh-converged velocity field
-(T-021) — see [ROADMAP.md](ROADMAP.md).
+The sequence is not monotone (0.50→0.25: 19.5%; 0.25→0.125: 17.8%). Treat
+absolute concentrations as screening estimates. The remaining fix is a
+mesh-converged velocity field (T-021) — see [ROADMAP.md](ROADMAP.md).
 
 ## 8. Conventions
 

@@ -91,7 +91,10 @@ from scentinel.core.scenario import (
 #: 7 — records the emission source as a mass flux over an emitting area rather
 #:     than a surface concentration. A version 6 record cannot say what flux the
 #:     case imposed.
-RUN_FORMAT_VERSION = 7
+#: 8 — records the turbulent Schmidt number the scalar transport used. A version
+#:     7 record describes molecular-only transport and cannot say how much
+#:     turbulent dispersion it applied.
+RUN_FORMAT_VERSION = 8
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -250,6 +253,8 @@ _APPLIED_PHYSICS_KEYS = (
     "wind_reference_height_m",
     "nu_m2_s",
     "scalar_diffusivity_m2_s",
+    "turbulent_schmidt_number",
+    "turbulent_schmidt_provenance",
     "emitting_area_m2",
     "emission_flux_kg_per_m2_s",
     "linear_solver_settings",
@@ -429,6 +434,8 @@ class AppliedPhysicsRecord:
     wind_reference_height_m: float
     nu_m2_s: float
     scalar_diffusivity_m2_s: dict[str, float]
+    turbulent_schmidt_number: float
+    turbulent_schmidt_provenance: str
     emitting_area_m2: float
     emission_flux_kg_per_m2_s: dict[str, float]
     linear_solver_settings: tuple[dict[str, object], ...]
@@ -953,6 +960,8 @@ def _applied_physics(
             gas: float(value)
             for gas, value in dict(applied["scalar_diffusivity_m2_s"]).items()
         },
+        turbulent_schmidt_number=float(applied["turbulent_schmidt_number"]),
+        turbulent_schmidt_provenance=str(applied["turbulent_schmidt_provenance"]),
         emitting_area_m2=float(applied["emitting_area_m2"]),
         emission_flux_kg_per_m2_s={
             gas: float(value)
@@ -1253,6 +1262,8 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "wind_reference_height_m": applied.wind_reference_height_m,
             "nu_m2_s": applied.nu_m2_s,
             "scalar_diffusivity_m2_s": dict(applied.scalar_diffusivity_m2_s),
+            "turbulent_schmidt_number": applied.turbulent_schmidt_number,
+            "turbulent_schmidt_provenance": applied.turbulent_schmidt_provenance,
             "emitting_area_m2": applied.emitting_area_m2,
             "emission_flux_kg_per_m2_s": dict(applied.emission_flux_kg_per_m2_s),
             "linear_solver_settings": [
@@ -1715,6 +1726,17 @@ def _decode_applied_physics(payload: object, where: str) -> AppliedPhysicsRecord
         nu_m2_s=_number(mapping["nu_m2_s"], f"{field}.nu_m2_s", where, minimum=0.0),
         scalar_diffusivity_m2_s=_number_mapping(
             mapping["scalar_diffusivity_m2_s"], f"{field}.scalar_diffusivity_m2_s", where
+        ),
+        turbulent_schmidt_number=_number(
+            mapping["turbulent_schmidt_number"],
+            f"{field}.turbulent_schmidt_number",
+            where,
+            minimum=0.0,
+        ),
+        turbulent_schmidt_provenance=_text(
+            mapping["turbulent_schmidt_provenance"],
+            f"{field}.turbulent_schmidt_provenance",
+            where,
         ),
         emitting_area_m2=_number(
             mapping["emitting_area_m2"], f"{field}.emitting_area_m2", where, minimum=0.0

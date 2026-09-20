@@ -128,7 +128,7 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 7), `list_runs()` / `get_run()` |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 8), `list_runs()` / `get_run()` |
 | 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
@@ -152,7 +152,7 @@ The W0–W3 engine shipped in 0.2.1: composition, phase, Equation HH-1
 generation, mass balance, suitability, and the recommendation all exist as core
 modules with unit tests, and `ui/batch_panel.py` exposes them live. The batch
 panel now also mirrors its composition, holding time, tonnage, moisture, and
-stream into the scenario the run uses, and manifest format 7 records them.
+stream into the scenario the run uses, and manifest format 8 records them.
 
 | Sub-phase | Content | Status |
 |---|---|---|
@@ -171,27 +171,25 @@ filling it.
 ## Blocking issue: mesh independence
 
 The design spec requires probe values to change by less than 10% when the mesh
-is refined 2×. The mass-flux source (Phase 5, 2026-09-19) changed the numbers;
-measured on the current pipeline on CO:
+is refined 2×. Two reworks have cut the deviation but not closed it — worst
+probe, measured 2026-09-19:
 
-| Mesh size | Cells | S1 (ppmv) | S2 (ppmv) | S3 (ppmv) |
-|---|---|---|---|---|
-| 0.50 m | 431 | 2.67e-4 | 1.88e-4 | 3.15e-3 |
-| 0.25 m | 907 | 3.34e-4 | 3.06e-4 | 2.31e-3 |
-| **Deviation** | | **25.3%** | **63.0%** | 26.7% |
+| Stage | Worst-probe deviation |
+|---|---|
+| pre-Phase-5 `fixedValue` concentration | ~87% |
+| Phase 5 mass-flux boundary | ~63% |
+| Phase 6 turbulent transport (Sc_t = 0.7) | ~19% |
 
-The flux boundary cut the worst probe from ~87% (the pre-Phase-5
-`fixedValue` measurement, on the old inflated cell counts) to ~63%, but the
-gate is still missed.
+The sequence is not monotone (0.50→0.25 worst 19.5%; 0.25→0.125 worst 17.8%,
+with S1 improving to 7.1% while S2 rises to 17.8%), and more SIMPLE iterations
+do not change it (300 vs 1500: 19.4% vs 19.5%).
 
-**Cause, measured.** The two meshes each converge (final Ux residual ~1e-4), but
-the *velocity field* differs between them at the probes (S1: 0.236 vs
-0.116 m/s). The k-epsilon RANS field around a mound is not mesh-converged at
-431/907 cells, and the scalar — carried with molecular diffusivity only —
-follows those streamlines. Raising the molecular diffusivity made the deviation
-*worse*, so it is not diffusion-limited: it is the missing turbulent scalar
-transport plus the unresolved velocity field. The source boundary itself is no
-longer the cause; it is now a flux independent of the first cell height.
+**Cause, measured.** The k-epsilon velocity field itself differs between meshes
+at the probes (S1: 0.236 vs 0.116 m/s) and is not mesh-converged at these cell
+counts. The scalar now follows it through `D + ν_t/Sc_t`, which is why the
+deviation fell sharply, but the velocity field is the remaining limit. Lowering
+Sc_t shrinks the deviation further (Sc_t = 0.3 gives ~12%) but outside the cited
+0.7–0.9 RANS range; Sc_t is left at 0.7 rather than tuned to pass.
 
 **What is trustworthy in the meantime.** The transport itself is verified
 against closed-form solutions: pure advection reproduces the inlet value with
@@ -201,19 +199,17 @@ comparisons and placement rankings hold; absolute concentrations do not.
 
 **Fix options, in order of preference:**
 
-1. **Turbulent scalar transport (T-240).** Carry the scalar with an effective
-   diffusivity `D + ν_t/Sc_t` instead of molecular `D` alone. This is the
-   dominant missing physics and the current best explanation for the residual
-   deviation.
-2. **Mesh-converged velocity field (T-021).** Refine until the velocity at the
-   probes is itself stable, then demonstrate the scalar converges.
-3. **Near-wall refinement.** Add boundary-layer grading normal to the waste
+1. **Mesh-converged velocity field (T-021).** Refine until the velocity at the
+   probes is itself stable, then demonstrate the scalar converges. This is now
+   the dominant limit.
+2. **Near-wall refinement.** Add boundary-layer grading normal to the waste
    surface so the first cell height is resolved.
-4. **Accept and document.** Keep the flux boundary and state clearly that values
-   are relative screening estimates. This is the current position.
+3. **Accept and document.** Keep the flux boundary and turbulent transport and
+   state clearly that values are relative screening estimates. This is the
+   current position.
 
-Phase 5 (mass-flux) is the prerequisite for all of these and is done; the gate
-now depends on T-240 and T-021, not on the source boundary.
+Phases 5 and 6 are done; the gate now depends on the velocity field (T-021),
+not on the source boundary or the scalar transport.
 
 1. **Mass-flux source.** Switch to a `fixedFluxPressure`-style or
    `externalWallHeatFluxTemperature`-equivalent scalar flux boundary so the

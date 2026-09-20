@@ -482,6 +482,8 @@ def applied_physics(scenario: Scenario, geom: BinGeometry) -> dict[str, object]:
         "wind_reference_height_m": WIND_REFERENCE_HEIGHT_M,
         "nu_m2_s": NU_AIR,
         "scalar_diffusivity_m2_s": {gas: scalar_diffusivity(gas) for gas in sources},
+        "turbulent_schmidt_number": TURBULENT_SCHMIDT_NUMBER,
+        "turbulent_schmidt_provenance": TURBULENT_SCHMIDT_PROVENANCE,
         "emitting_area_m2": emission_area_m2(geom),
         "emission_flux_kg_per_m2_s": {
             gas: emission_flux_kg_per_m2_s(scenario, geom, gas) for gas in sources

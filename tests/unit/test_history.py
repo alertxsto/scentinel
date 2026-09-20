@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 7
+    assert payload["format_version"] == 8
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -187,13 +187,21 @@ def test_the_manifest_records_the_composition_and_its_derived_chemistry(tmp_path
     assert history.load_run(record.run_dir).project.scenario.tonnage_t == pytest.approx(7.5)
 
 
-def test_a_version_6_manifest_is_rejected_naming_both_versions(tmp_path):
-    """A version 6 record cannot say the source was a mass flux."""
+def test_a_version_7_manifest_is_rejected_naming_both_versions(tmp_path):
+    """A version 7 record cannot say the scalar transport was turbulent."""
     record = _begin(tmp_path)
-    _rewrite(record, lambda payload: payload.__setitem__("format_version", 6))
+    _rewrite(record, lambda payload: payload.__setitem__("format_version", 7))
 
-    with pytest.raises(HistoryError, match="6"):
+    with pytest.raises(HistoryError, match="7"):
         history.load_run(record.run_dir)
+
+
+def test_the_manifest_records_the_schmidt_number(tmp_path):
+    """The applied physics carries the turbulent Schmidt number and its basis."""
+    record = _begin(tmp_path)
+    applied = _manifest(record)["applied_physics"]
+    assert applied["turbulent_schmidt_number"] == pytest.approx(0.7)
+    assert applied["turbulent_schmidt_provenance"] == "model assumption"
 
 
 def test_the_manifest_records_the_emission_flux_and_area(tmp_path):

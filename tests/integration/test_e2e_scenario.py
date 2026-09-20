@@ -92,8 +92,16 @@ def test_real_field_renders_with_sensor_and_hotspot_overlays(
     assert 0.0 <= summary.hotspot_y_m <= 2.5
 
 
-def test_concentration_stays_below_the_source_strength(solved_case: Path):
-    """The waste surface is the maximum; nothing may exceed it."""
-    source = casegen.resolve_sources(Scenario(gas_sources={"CO": "auto"}))["CO"]
+def test_concentration_is_positive_and_finite(solved_case: Path):
+    """A probe near the waste reads a positive, finite value.
+
+    The old bound — "nothing may exceed the source concentration" — no longer
+    holds: the source is an emission mass flux imposed as a ``fixedGradient``,
+    not a fixed surface concentration, so the near-wall value is set by the
+    flux/diffusion balance rather than capped at the nominal ppmv. What remains
+    true is that a probe above the waste sees gas and the value is physical.
+    """
     for reading in post.sample_sensors(solved_case, [Sensor("s", 3.0, 2.5)]):
-        assert 0.0 <= reading.values["CO"] <= source
+        value = reading.values["CO"]
+        assert value > 0.0
+        assert value < 1.0e6, f"absurd ppmv {value}"

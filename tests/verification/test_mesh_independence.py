@@ -43,23 +43,27 @@ def test_mesh_independence_is_not_yet_satisfied(tmp_path):
     """Documents the current refinement behaviour, which misses the spec gate.
 
     The design spec asks for <10% probe deviation between the coarse mesh and a
-    2x refined one. The source rework (T-020) replaced the surface-concentration
-    boundary with a mass-flux (``fixedGradient``) boundary and cut the deviation
-    substantially — measured 2026-09-19, the worst probe fell from ~87% to ~63%
-    — but the gate is still missed, so it is recorded as failing rather than
-    asserted.
+    2x refined one. Two reworks have cut it but not closed it — measured
+    2026-09-19, worst probe:
 
-    Root cause, measured on the same pipeline: the two meshes each converge
-    (final Ux residual ~1e-4), but the *velocity field* differs between them at
-    the probes (S1: 0.236 vs 0.116 m/s). The k-epsilon RANS field around a mound
-    is not mesh-converged at 431/907 cells, and the scalar — carried with
-    molecular diffusivity only — follows those streamlines. Raising the
-    molecular diffusivity made the deviation worse, so this is not
-    diffusion-limited; it is the missing turbulent scalar transport (T-240) and
-    the unresolved velocity field (T-021) that the gate needs.
+    * pre-Phase-5 ``fixedValue`` concentration: ~87%
+    * Phase 5 mass-flux boundary: ~63%
+    * Phase 6 turbulent scalar transport (Sc_t = 0.7): ~19%
 
-    Flipping this test to assert convergence is the exit criterion for T-240
-    plus a mesh-converged velocity field, not for T-020 alone.
+    It is still missed and the sequence is not monotone (0.50->0.25 worst 19.5%,
+    0.25->0.125 worst 17.8%; S1 improves to 7.1% while S2 rises to 17.8%). More
+    SIMPLE iterations do not change it (300 vs 1500: 19.4% vs 19.5%).
+
+    Root cause, measured: the k-epsilon velocity field itself differs between
+    meshes at the probes (S1: 0.236 vs 0.116 m/s) and is not mesh-converged at
+    these cell counts. The scalar now follows it through D + nut/Sc_t, which is
+    why the deviation fell sharply, but the velocity field is the remaining
+    limit. Raising the turbulent dispersion (lower Sc_t) shrinks the deviation
+    further but outside the cited 0.7-0.9 RANS range, which would be tuning to
+    pass rather than physics; Sc_t is left at 0.7.
+
+    Flipping this test to assert convergence is the exit criterion for a
+    mesh-converged velocity field (T-021), not for the scalar transport alone.
     """
     if not runner.image_available():
         pytest.skip(f"{casegen.IMAGE} not pulled")

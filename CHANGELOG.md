@@ -67,6 +67,23 @@ Two things are worth knowing before reading:
   `phase_uncertainty`; version 5 manifests are rejected naming both versions.
   The batch panel's phase readout states the applicability.
 
+### Phase 6 — turbulent scalar transport
+
+- **The passive scalars are carried with `D + ν_t/Sc_t`, not molecular `D`
+  alone.** `scalarTransport` writes `alphaD`/`alphaDt` and omits both `D` and
+  `nut`, the only form that makes OpenFOAM use its `alphaD·ν + alphaDt·ν_t`
+  branch (verified against the v2512 source in the container).
+- `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a **model assumption** with its
+  RANS basis (0.7–0.9 range); it is not measured for this geometry. Manifest
+  format v8 records it and its provenance; v7 is rejected naming both.
+- The worst-probe mesh deviation fell from ~63% to ~19%, but the <10% gate is
+  still missed and the sequence is not monotone. Measured cause: the k-epsilon
+  velocity field is itself mesh-dependent at these cell counts. Lowering Sc_t
+  would shrink the deviation further but outside the cited range, so it was not
+  tuned to pass. The remaining fix is a mesh-converged velocity field (T-021).
+- The bin-probe benchmark now samples an in-air point; its old "floor" probe was
+  buried in the mound (the sensor-containment defect T-242 covers).
+
 ### Phase 5 — CFD mass-flux source
 
 - **The source is now an emission mass flux, not a surface concentration.**

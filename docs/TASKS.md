@@ -435,11 +435,34 @@ Note: this changes the design spec's §4.2/§4.3 `fixedValue` concentration
 boundary; the spec's gas-source field comment left the basis open
 (`kg/m2/s or ppm basis`), and this resolves it toward a flux.
 
-#### T-021 Mesh-independence gate · BLOCKED on T-240 + mesh-converged velocity
+### Phase 6 — Turbulent scalar transport
+
+#### T-240 Turbulent scalar diffusivity · DONE (mechanism) — 2026-09-19
+Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/history.py`,
+`tests/unit/test_casegen.py`, `tests/unit/test_history.py`,
+`tests/verification/test_mesh_independence.py`
+Why: the scalar was carried with molecular diffusivity alone, so it followed
+streamlines the momentum solver resolves only partly at these cell counts.
+Change: `scalarTransport` now writes `alphaD`/`alphaDt` and omits both `D` and
+`nut`, which is the only form that makes OpenFOAM use its
+`alphaD*nu + alphaDt*nut` branch (verified against the v2512 `scalarTransport.C`
+source in the container). `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a model
+assumption with its RANS basis. Manifest v8 records the number and provenance.
+Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case, and
+the worst-probe mesh deviation fell from ~63% to ~19%.
+**Not met for the gate:** still >10% and not monotone. Measured cause: the
+k-epsilon velocity field is itself mesh-dependent (S1: 0.236 vs 0.116 m/s).
+Lowering Sc_t shrinks the deviation but outside the cited 0.7–0.9 range; Sc_t
+stays 0.7 rather than being tuned to pass.
+Note: `tests/verification/test_analytical_benchmarks.py`'s bin-probe test now
+uses an in-air probe; its old "floor" probe at (0.5, 0.2) was buried in the
+mound, which is the sensor-containment defect T-242 addresses.
+
+#### T-021 Mesh-independence gate · BLOCKED on a mesh-converged velocity field
 Files: `tests/verification/test_mesh_independence.py`
 Current state: the test measures the deviation and asserts it is *still* above
-10%, recording the measured cause (unresolved velocity field + molecular-only
-scalar transport).
+10%, recording the measured cause and the two reworks that reduced it
+(87% → 63% → 19%).
 Acceptance: asserts <10% and the trend is monotone with refinement.
 
 ### F2 remainder

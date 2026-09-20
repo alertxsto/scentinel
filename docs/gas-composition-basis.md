@@ -453,6 +453,27 @@ fluks sudah bukan penyebabnya lagi; akar yang terukur adalah medan kecepatan
 k-epsilon yang belum konvergen terhadap mesh dan skalar yang hanya memakai
 difusivitas molekuler (lihat [ROADMAP.md](ROADMAP.md)).
 
+### 7.2 Transpor skalar turbulen (Phase 6)
+
+Skalar pasif tidak lagi dibawa oleh difusivitas molekuler saja, melainkan oleh
+
+```
+D_eff = D_molekuler + ν_t / Sc_t
+```
+
+dengan `Sc_t = 0.7` (turbulent Schmidt number) sebagai **model assumption**
+berlabel; rentang literatur RANS 0.7–0.9, tidak diukur untuk geometri ini.
+`scalarTransport` OpenFOAM hanya memakai cabang `alphaD·ν + alphaDt·ν_t` bila
+entri `D` **dan** `nut` sama-sama tidak ditulis; kasus ini menulis
+`alphaD`/`alphaDt` dan menghilangkan keduanya (diverifikasi terhadap sumber
+`scalarTransport.C` v2512).
+
+Efeknya: deviasi mesh turun dari ~63% ke ~19%, tetapi gate <10% belum tutup.
+Menurunkan `Sc_t` (mis. 0.3) mengecilkan deviasi lebih jauh namun di luar
+rentang tersitasi — itu menyetel angka demi lolos gate, bukan fisika, sehingga
+`Sc_t` dibiarkan 0.7. Sisa error berasal dari medan kecepatan yang belum
+mesh-converged (T-021).
+
 ### Urutan pengerjaan yang disarankan
 
 1. **Ekstrak nilai** dari tiga sumber §5.1 — tanpa angka, fasa I tidak dapat
