@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Executed 2026-09-20.** Tasks 0–6 are implemented and automated. Task 7
+> re-measured T-021 honestly: mass balance passes at 1.4245%, convergence and
+> containment diagnostics are persisted, but the Phase exit gate remains
+> blocked because containing-cell mesh deviation is 266.29% (>10%).
+
 **Goal:** Turn the four verification gates into automated checks: mesh
 independence is measured (and honestly reported while it fails), mass balance is
 computed from the solver's own flux, convergence is parsed from the solver's
@@ -68,12 +73,13 @@ Measured on OpenFOAM v2512 in the container on 2026-09-19:
 
   | `source` nut BC | `nut` at the wall | outlet/source flux ratio |
   |---|---|---|
-  | `calculated` (current) | 2.336e-02 | **1789x** |
+  | `calculated` (before) | 2.336e-02 | **1789x** |
   | `nutkWallFunction` | 2.664e-04 | 21.3x |
   | `fixedValue 0` | 0 | **1.027x** |
 
-  With `fixedValue uniform 0` the mass balance closes to 2.7%, and the analytic
-  identity `outlet == D_mol * gradient * area` holds. This is a Phase 6
+  With `fixedValue uniform 0` the mass balance closes to 1.4245%, and the
+  analytic identity `outlet == D_mol * gradient * A_patch` holds, where the 2D
+  computational patch area is profile length times slab thickness. This is a Phase 6
   regression: before it, the function object used a constant `D`, so the wall
   flux was `D_mol * gradient` by construction. `nut` on a solid wall physically
   is zero, so `fixedValue 0` is the correct boundary, not a workaround.
@@ -81,8 +87,9 @@ Measured on OpenFOAM v2512 in the container on 2026-09-19:
   mound (verified: `(0.5, 0.2)` with `mound_height_at = 0.457` -> `-1`), while
   `find_closest_cell` returns a wall cell (412) with an absurd value. This is
   the mechanism T-242 needs.
-- The mesh-independence deviation is scale-invariant: it measured 19.56% worst
-  probe after the unit fix, unchanged from before it.
+- The old nearest-cell mesh metric measured 19.56%. After Task 4 removed silent
+  snapping, containing-cell sampling measures 266.29% because S3 changes sign
+  at the scalar noise floor; velocity itself changes by up to 30.84%.
 
 ---
 
@@ -180,7 +187,7 @@ git commit -m "fix(casegen): zero nut on the source wall so the flux is D_mol*gr
 **Interfaces:**
 - Consumes: `resolve_sources(scenario)` → `dict[str, float]` (existing).
 - Produces: `_functions(sources)` writes `solverInfo` (not `residuals`) plus
-  one `scalarTransport` per gas. `casegen.RESIDUALS_FUNCTION_NAME = "solverInfo"`.
+  one `scalarTransport` per gas.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -582,7 +589,7 @@ git commit -m "fix(post): sample the containing cell or reject, never snap to ne
 def test_placement_problem_names_why_a_point_is_rejected():
     geom = BinGeometry(length_m=6.0, height_m=2.5, mound_shape="mounded",
                        mound_fill_fraction=0.45)
-    assert geometry.placement_problem(geom, 3.0, 2.6) == ""
+    assert geometry.placement_problem(geom, 3.0, 2.0) == ""
     assert "outside" in geometry.placement_problem(geom, -0.1, 1.0)
     assert "mound" in geometry.placement_problem(geom, 0.5, 0.2)
 ```
@@ -630,11 +637,12 @@ git commit -m "feat(geometry): one placement rule with a stated reason"
 - Produces:
   - `post.patch_fluxes(case_dir) -> dict[str, float]` — the last value per
     `postProcessing/*/surfaceFieldValue.dat`, keyed by the function object
-    name (`outletFluxLeft`, `outletFluxRight`).
+    name (`outletFluxLeftCO`, `outletFluxRightCO`, etc.).
   - `post.mass_balance_error(case_dir, gas) -> float` rewritten to
     `(outlet - source) / |source|`, where `source` is the **analytic** flux the
-    case imposes (`D_mol * gradient * emitting_area`, from the case's own
-    `applied_physics`) and `outlet` is the CFD flux. Raises
+    case imposes (`D_mol * gradient * computational_patch_area`) and `outlet`
+    is the CFD flux. The 2D patch area is mound profile length times mesh
+    thickness, not physical bin width. Raises
     `FileNotFoundError` when the outlet file is missing.
 - Note: the source patch cannot measure its own flux with `surfaceFieldValue`,
   because its `phi` is zero (no-slip wall) and its flux is diffusive. The
@@ -645,21 +653,21 @@ git commit -m "feat(geometry): one placement rule with a stated reason"
 
 ```python
 def test_mass_balance_error_compares_outlet_to_the_analytic_source(tmp_path):
-    (tmp_path / "postProcessing" / "outletFluxLeft" / "0").mkdir(parents=True)
-    (tmp_path / "postProcessing" / "outletFluxLeft" / "0" / "surfaceFieldValue.dat").write_text(
+    (tmp_path / "postProcessing" / "outletFluxLeftCO" / "0").mkdir(parents=True)
+    (tmp_path / "postProcessing" / "outletFluxLeftCO" / "0" / "surfaceFieldValue.dat").write_text(
         "# Region type : patch openLeft\n1\t-0.5\n"
     )
-    (tmp_path / "postProcessing" / "outletFluxRight" / "0").mkdir(parents=True)
-    (tmp_path / "postProcessing" / "outletFluxRight" / "0" / "surfaceFieldValue.dat").write_text(
-        "# Region type : patch openRight\n1\t0.5\n"
+    (tmp_path / "postProcessing" / "outletFluxRightCO" / "0").mkdir(parents=True)
+    (tmp_path / "postProcessing" / "outletFluxRightCO" / "0" / "surfaceFieldValue.dat").write_text(
+        "# Region type : patch openRight\n1\t1.5\n"
     )
     error = post.mass_balance_error(tmp_path, "CO", source_flux=1.0)
     assert abs(error) < 1e-9
 
 
 def test_mass_balance_error_is_negative_when_the_outlet_loses_flux(tmp_path):
-    (tmp_path / "postProcessing" / "outletFluxRight" / "0").mkdir(parents=True)
-    (tmp_path / "postProcessing" / "outletFluxRight" / "0" / "surfaceFieldValue.dat").write_text(
+    (tmp_path / "postProcessing" / "outletFluxRightCO" / "0").mkdir(parents=True)
+    (tmp_path / "postProcessing" / "outletFluxRightCO" / "0" / "surfaceFieldValue.dat").write_text(
         "# Region type : patch openRight\n1\t0.5\n"
     )
     error = post.mass_balance_error(tmp_path, "CO", source_flux=1.0)
@@ -678,9 +686,9 @@ Add the two outlet `surfaceFieldValue` entries to `_functions` (one per open
 patch; `operation weightedSum`, `weightField <gas>`), and rewrite
 `mass_balance_error` to read the last row of each `.dat` and compare against
 `source_flux`. The caller computes `source_flux` from
-`applied_physics(scenario, geom)["emission_flux_kg_per_m2_s"][gas]` times
-`emitting_area_m2`, converted to the fraction basis with `Vm/MW` (the same
-conversion as `casegen.source_gradient`, but not divided by `D`).
+`casegen.source_gradient * casegen.scalar_diffusivity *
+(mound_profile_length * mesh.thickness_m)`. This is exactly the imposed
+boundary condition integrated over the computational slab.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -694,8 +702,8 @@ Expected: PASS.
 ```python
 import pytest
 
-from scentinel.core import casegen, gas_data, post, runner
-from scentinel.core.geometry import BinGeometry, emission_area_m2
+from scentinel.core import casegen, post, runner
+from scentinel.core.geometry import BinGeometry, mound_profile_length
 from scentinel.core.mesh import generate_mesh
 from scentinel.core.scenario import Scenario
 
@@ -715,10 +723,9 @@ def test_mass_balance_on_a_solved_bin_case(tmp_path):
     result = runner.run_case(case)
     assert result.ok, runner.stage_log(case, result.failed_stage or "simpleFoam")[-2000:]
 
-    # The analytic source the case imposes, in volume-fraction * m^2/s.
-    flux = casegen.emission_flux_kg_per_m2_s(scenario, geom, "CO")
-    mw = gas_data.get_gas("CO").mw_g_mol / 1000.0
-    source = flux * (casegen.MOLAR_VOLUME_M3_PER_MOL / mw) * emission_area_m2(geom)
+    source_area = mound_profile_length(geom) * mesh.thickness_m
+    source = (casegen.source_gradient(scenario, geom, "CO")
+              * casegen.scalar_diffusivity("CO") * source_area)
     error = post.mass_balance_error(case, "CO", source_flux=source)
     assert abs(error) < 0.05, f"mass balance error {error:.1%}"
 ```
@@ -726,8 +733,8 @@ def test_mass_balance_on_a_solved_bin_case(tmp_path):
 - [ ] **Step 6: Run the verification test**
 
 Run: `.venv/bin/pytest -m verification tests/verification/test_mass_balance.py -q`
-Expected: PASS (<5%). The controlled measurement with Task 0 in place closed
-to 2.7%; if the number is larger, record it in `docs/TASKS.md` T-022 rather
+Expected: PASS (<5%). The executed measurement closed to 1.4245%; if the number
+is larger, record it in `docs/TASKS.md` T-022 rather
 than loosening the bound.
 
 - [ ] **Step 7: Commit**
@@ -782,12 +789,11 @@ git commit -m "docs(gates): record the post-audit mesh deviation"
 ## Self-review
 
 - **Spec coverage:** T-020c (new, the nut regression) → Task 0; T-021 →
-  Task 7; T-022 → Task 6; T-241 → Tasks 1–3; T-242 → Tasks 4–5. The program's
-  exit gate ("both numeric gates pass; convergence and containment are
-  automated and persisted") is reachable: mass balance closes to 2.7% once
-  Task 0 is in, convergence and containment become automated and persisted,
-  and the mesh gate reports its measured state honestly while T-021's root
-  cause (the velocity field) is unresolved.
+  Task 7; T-022 → Task 6; T-241 → Tasks 1–3; T-242 → Tasks 4–5. Mass balance
+  closes to 1.4245%, and convergence and containment are automated and
+  persisted. The Phase exit gate is still blocked by T-021: containing-cell
+  deviation is 266.29%, velocity changes up to 30.84%, and scalar S3 changes
+  sign at the noise floor.
 - **Placeholder scan:** no "TBD"; Task 2's fixture is generated by a concrete
   command.
 - **Type consistency:** `solver_residuals`, `solver_residuals_from_file`,

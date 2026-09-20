@@ -213,13 +213,14 @@ convergence or valid sampling.
 
 | Task | Deliverable | Files | Acceptance |
 |---|---|---|---|
-| T-021 Mesh-independence gate | assert <10% with monotone trend | `tests/verification/test_mesh_independence.py` | test fails if deviation ≥10% or the trend reverses |
+| T-021 Mesh-independence gate | measure <10% with monotone trend; report failure honestly | `tests/verification/test_mesh_independence.py` | currently BLOCKED: containing-cell deviation 266.29%; flip only after <10% and monotone |
 | T-022 Mass-balance gate | integrated source flux vs outlet flux, automated | `core/post.py`, `tests/verification/test_mass_balance.py` | <5% on a converged case |
-| T-241 Residual parsing + convergence state | parse the `residuals` function object; `quality.convergence` is `passed`/`failed`/`not_evaluated` with the reason; `solver_termination` parsed | `core/post.py`, `core/history.py`, `core/pipeline.py`, tests | a converged case reports `passed`; a max-iterations case reports `failed`; exit 0 alone never marks convergence; the reason string is persisted |
+| T-241 Residual parsing + convergence state | parse v2512 `solverInfo`; `quality.convergence` is `residual_targets_met`/`residual_targets_not_met`/`not_evaluated` with the reason | `core/post.py`, `core/history.py`, `ui/main_window.py`, tests | residual verdict and reason are persisted; exit 0 alone never marks convergence |
 | T-242 Sensor containment validation | replace `find_closest_cell()` with containment validation; reject sensors outside the fluid domain (and inside the mound) at placement and at sampling; persist the diagnostic | `core/post.py`, `ui/viewport.py`, tests | an invalid sensor is rejected with a reason; a valid one samples its containing cell; no silent nearest-cell fallback remains |
 
 **Exit gate:** both numeric gates pass; convergence and containment are
-automated and persisted.
+automated and persisted. **Current:** convergence/containment and T-022 pass;
+the phase exit remains blocked on T-021.
 
 ---
 

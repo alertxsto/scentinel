@@ -653,6 +653,38 @@ def test_a_successful_run_still_reports_every_scientific_gate_as_not_passing(
     assert record.quality.experimental_validation == "not_run"
 
 
+def test_a_rejected_probe_is_persisted_as_a_failed_run(run_window, tmp_path, monkeypatch):
+    def rejected(self):
+        return RunOutcome(
+            case_dir=self._run_dir / "case",
+            readings=[
+                RawReading(
+                    sensor_id="S1",
+                    x=1.2,
+                    y=2.1,
+                    values={},
+                    contained=False,
+                    reason="the sensor position has no containing fluid cell",
+                )
+            ],
+            mesh_cells=7248,
+            element_types={"Hexahedron 8": 7248},
+            exit_code=0,
+        )
+
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline", rejected
+    )
+
+    assert run_window.start_run() is True
+
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.execution_status == "failed"
+    assert record.results.sensor_readings == ()
+    assert "S1" in record.execution.error
+    assert "no containing fluid cell" in record.execution.error
+
+
 def test_a_finalization_failure_keeps_the_results_but_reports_the_failure(
     run_window, tmp_path, monkeypatch
 ):

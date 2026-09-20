@@ -482,8 +482,9 @@ Change:
   exponential within 5.5%.
 - The bin-probe benchmark's `value < 1` bound is restored; dropping it had
   masked the `1e6` defect as a "buried probe".
-Effect: near-mound values are physical (CH4 ≈ 1.1e3 ppmv, CO ≈ 0.3–0.7 ppmv).
-The mesh deviation is scale-invariant and stays ~19.6%, so T-021 is unchanged.
+Effect: source units and per-gas molecular diffusivity are now correct.
+Absolute near-mound values remain resolution-limited; containing-cell sampling
+later measured a sign-changing S3 field and 266.29% deviation.
 Note: this supersedes the `source_gradient_ppmv_per_m` naming in the Phase 5
 plan and the `ALPHA_D = 1.0` line in the Phase 6 plan.
 
@@ -497,12 +498,14 @@ Change: `scalarTransport` now writes `alphaD`/`alphaDt` and omits both `D` and
 `nut`, which is the only form that makes OpenFOAM use its
 `alphaD*nu + alphaDt*nut` branch (verified against the v2512 `scalarTransport.C`
 source in the container). `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a model
-assumption with its RANS basis. Manifest v8 records the number and provenance.
-Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case (with
-`alphaD` per gas, see T-020b), and the worst-probe mesh deviation fell from
-~63% to ~19%.
-**Not met for the gate:** still >10% and not monotone. Measured cause: the
-k-epsilon velocity field is itself mesh-dependent (S1: 0.236 vs 0.116 m/s).
+assumption with its RANS basis. Manifest v8 introduced the number and
+provenance; current manifests are v9.
+Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case
+(with `alphaD` per gas, see T-020b). The historical nearest-cell metric fell
+from ~63% to ~19%.
+**Not met for the gate:** containing-cell deviation is 266.29%. The velocity
+field is itself mesh-dependent (up to 30.84%) and S3 changes sign at the scalar
+noise floor.
 Lowering Sc_t shrinks the deviation but outside the cited 0.7–0.9 range; Sc_t
 stays 0.7 rather than being tuned to pass.
 Note: `tests/verification/test_analytical_benchmarks.py`'s bin-probe test now
@@ -537,6 +540,22 @@ must not be integrated a second time. Using physical width overstates the CFD
 source by `2.4/0.01 = 240x`.
 Acceptance met: outlet `1.573122e-12` vs source `1.551027e-12`, relative error
 **1.4245%** (<5%).
+
+#### T-241 Residual parsing + convergence state · DONE — 2026-09-20
+Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/post.py`,
+`src/scentinel/core/history.py`, `src/scentinel/ui/main_window.py`
+Change: v2512 `solverInfo` replaces the nonexistent `residuals` functionObject;
+its real output fixture drives parsing of last initial residuals. Run manifests
+v9 persist `residual_targets_met`, `residual_targets_not_met`, or
+`not_evaluated` plus a human reason. Exit code 0 is never treated as evidence.
+
+#### T-242 Sensor containment validation · DONE — 2026-09-20
+Files: `src/scentinel/core/geometry.py`, `src/scentinel/core/post.py`,
+`src/scentinel/ui/viewport.py`, `src/scentinel/ui/main_window.py`
+Change: placement uses one reason-bearing geometry rule; sampling uses
+`find_containing_cell` and never silently snaps to the nearest wall cell. A
+rejected probe makes the run terminal `failed`, with sensor id and reason
+persisted in `execution.error`; partial readings are not stored.
 
 #### T-023 Analytical 1D diffusion benchmark · TODO
 Files: `tests/verification/test_1d_diffusion.py`
@@ -866,6 +885,4 @@ Acceptance: the decision output carries the screening caveat, asserted by test.
 | Wayland + VTK smoke test | The spec flags it as a risk; pyvista is not used in the UI yet, so it is untested |
 | Unsaved-project run namespace | Unsaved projects share `<cwd>/runs`; allocation is collision-safe and each run keeps its own snapshot, so there is no pairing corruption. Decide save-before-run versus per-session namespacing when history UI semantics are designed |
 | First-cell height in the verification record | Needed for credible mesh-convergence/GCI evidence, not for ordinary run persistence. Add it to a future verification-record schema once it is measured |
-| Probe containment diagnostics | `find_closest_cell` can hide invalid probe positions. Address with containment/distance diagnostics in post-processing verification, then persist the diagnostic; do not fake it in T-030 |
 | Reproducible Scrapling acquisition manifest | `scripts/scrape_references.py` saves raw pages but no acquisition record (canonical URL, retrieval UTC, HTTP status/headers, content SHA-256, raw artifact path, tool/parser versions, repository revision, extraction-rule version, structured-output hash, failure history). Deferred to the next provenance architecture; keep raw responses immutable and make `build_gas_data.py` reproducible offline from checksummed artifacts |
-| Residual/termination parsing | Required before `solver_termination` or `quality.convergence` can ever report anything but `not_evaluated`. Parse the `residuals` function object output and record the reason; never infer it from exit code 0 |

@@ -503,6 +503,10 @@ class MainWindow(DockedWorkspace):
 
         record = self._active_run
         self._active_run = None
+        containment_error = _containment_error(outcome.readings)
+        if containment_error:
+            outcome.error = containment_error
+            outcome.readings = []
         readings_ppmv = _ppmv_readings(outcome.readings)
         if readings_ppmv:
             self._results_panel.set_results(readings_ppmv)
@@ -930,6 +934,18 @@ def _ppmv_readings(readings: list) -> list[SensorReading]:
         )
         for reading in readings
     ]
+
+
+def _containment_error(readings: list) -> str:
+    """Persistable error for rejected probes, or ``""`` when all are valid."""
+    rejected = [reading for reading in readings if not getattr(reading, "contained", True)]
+    if not rejected:
+        return ""
+    details = "; ".join(
+        f"{reading.sensor_id}: {reading.reason or 'no containing fluid cell'}"
+        for reading in rejected
+    )
+    return f"sensor containment failed: {details}"
 
 
 def _terminal_status(outcome: RunOutcome, record: RunRecord) -> str:

@@ -1,5 +1,11 @@
 # GOAL
 
+> **Historical T-030 implementation contract.** This document freezes the state
+> before run history was implemented; its version numbers and verification
+> measurements are not current. See `docs/TASKS.md`, `docs/ROADMAP.md`, and
+> `docs/ARCHITECTURE.md` for the live contract (manifest v9; mass balance
+> 1.4245%; containing-cell mesh gate 266.29% and still blocked).
+
 Implement the next smallest meaningful engineering feature: **persistent run history with an immutable, provenance-bearing manifest for every simulation attempt** (T-030).
 
 A run must remain identifiable and inspectable after Scentinel restarts. Starting a run reserves a non-colliding `run-NNN` directory and writes its exact inputs; completion atomically adds outcome and probe results. The manifest is the stable input to later comparison and reporting work. This feature does not add a history browser, comparison view, PDF generation, or new CFD physics.

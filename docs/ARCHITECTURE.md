@@ -327,19 +327,22 @@ guess a registry when it cannot prompt.
 
 The source is an emission mass flux (`fixedGradient`), so the imposed flux is
 independent of the first cell height, and the scalar is carried with turbulent
-diffusivity (`D + ν_t/Sc_t`). Together these cut the worst-probe deviation from
-~87% to ~19%, but the gate is still missed because the *velocity field* is
-itself not mesh-converged at these cell counts. Measured 2026-09-19:
+diffusivity (`D + ν_t/Sc_t`). The old nearest-cell metric fell from ~87% to
+~19%, but that sampler silently snapped probes. Containing-cell sampling after
+the source audit measures 266.29%, and the *velocity field* is also not
+mesh-converged at these cell counts. Measured 2026-09-20:
 
 | Stage | Worst-probe deviation |
 |---|---|
 | pre-Phase-5 `fixedValue` concentration | ~87% |
 | Phase 5 mass-flux boundary | ~63% |
-| Phase 6 turbulent transport (Sc_t = 0.7) | ~19% |
+| Phase 6 turbulent transport, nearest-cell sampling | ~19% |
+| Phase 7 corrected source + containing-cell sampling | 266.29% |
 
-The sequence is not monotone (0.50→0.25: 19.5%; 0.25→0.125: 17.8%). Treat
-absolute concentrations as screening estimates. The remaining fix is a
-mesh-converged velocity field (T-021) — see [ROADMAP.md](ROADMAP.md).
+S3 changes sign at the trace-scalar noise floor; velocity magnitude changes by
+up to 30.84% between 0.50 and 0.25 m. Treat absolute concentrations and sensor
+rankings as screening estimates. The remaining fix is a mesh-converged velocity
+field plus near-wall refinement (T-021) — see [ROADMAP.md](ROADMAP.md).
 
 ## 8. Conventions
 

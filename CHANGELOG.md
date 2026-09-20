@@ -7,8 +7,9 @@ All notable changes to Scentinel are recorded here. The format follows
 Two things are worth knowing before reading:
 
 - **`screening_estimate` is not a formality.** Absolute concentrations are not
-  mesh-converged (measured: 56.4% / 87.2% / 8.5% deviation under a 2× refinement),
-  so every concentration-derived figure is relative until that gate passes.
+  mesh-converged (latest containing-cell deviation: 266.29% under a 2×
+  refinement), so concentration-derived figures remain screening outputs until
+  that gate passes.
 - **A value without a citation does not enter the model.** Where no cited value
   exists, the output states the gap instead of filling it. This is why several
   fields read "requires laboratory characterisation" rather than showing a number.
@@ -92,9 +93,25 @@ the OpenFOAM source and fixed:
 - The bin-probe benchmark's physical bound (`value < 1`) is restored; it was
   briefly dropped while the `1e6` defect was mistaken for a sampling issue.
 
-With the corrected source, the near-mound values are physical (CH4 ≈ 1.1e3
-ppmv, CO ≈ 0.3–0.7 ppmv). The mesh-independence deviation is scale-invariant
-and stays ~19.6%, so the gate status is unchanged.
+With the corrected source, the units and imposed flux are physical. Absolute
+near-mound probe values remain resolution-limited; containing-cell sampling
+later exposed sign-changing numerical undershoot.
+
+### Phase 7 — CFD verification gates
+
+- OpenFOAM v2512 `solverInfo` replaces the nonexistent `residuals`
+  functionObject. Manifest format v9 persists whether residual targets were
+  met, plus the reason; exit code 0 alone is never treated as convergence.
+- Sensor sampling uses `find_containing_cell`, never nearest-cell snapping.
+  Placement and sampling reject invalid probes with a reason; a rejected probe
+  is persisted as a failed run rather than leaving an incomplete manifest.
+- Per-gas `surfaceFieldValue weightedSum(C, phi)` automates mass balance. The
+  solved gate closes at 1.4245% (<5%). The analytic source integrates over the
+  2D computational patch (`profile length × slab thickness`), not physical bin
+  width.
+- The mesh gate remains blocked. Correct containing-cell sampling measures
+  266.29% because S3 changes sign at the scalar noise floor; velocity magnitude
+  independently changes by up to 30.84%. `Sc_t` remains 0.7 and was not tuned.
 
 ### Phase 6 — turbulent scalar transport
 
@@ -105,8 +122,8 @@ and stays ~19.6%, so the gate status is unchanged.
 - `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a **model assumption** with its
   RANS basis (0.7–0.9 range); it is not measured for this geometry. Manifest
   format v8 records it and its provenance; v7 is rejected naming both.
-- The worst-probe mesh deviation fell from ~63% to ~19%, but the <10% gate is
-  still missed and the sequence is not monotone. Measured cause: the k-epsilon
+- The old nearest-cell mesh metric fell from ~63% to ~19%, but the <10% gate is
+  still missed. Measured cause: the k-epsilon
   velocity field is itself mesh-dependent at these cell counts. Lowering Sc_t
   would shrink the deviation further but outside the cited range, so it was not
   tuned to pass. The remaining fix is a mesh-converged velocity field (T-021).
