@@ -628,7 +628,7 @@ def _field_epsilon(roles: dict[str, PatchRole], inlet_speed: float) -> str:
 
 
 def _field_nut(roles: dict[str, PatchRole]) -> str:
-    """Turbulent viscosity: computed by the model, so only wall patches matter."""
+    """Turbulent viscosity: computed by the model, except at the solid walls."""
     lines = [
         _header("volScalarField", "nut"),
         "dimensions      [0 2 -1 0 0 0 0];\n",
@@ -640,6 +640,15 @@ def _field_nut(roles: dict[str, PatchRole]) -> str:
             lines.append(f"    {name}\n    {{\n        type            empty;\n    }}\n")
         elif role.kind == "wall":
             lines.append(f"    {name}\n    {{\n        type            nutkWallFunction;\n        value           uniform 0;\n    }}\n")
+        elif role.kind == "source":
+            # A solid wall has zero turbulent viscosity. This also fixes the
+            # scalar's face diffusivity: ``scalarTransport`` uses
+            # ``alphaD*nu + alphaDt*nut``, so a ``calculated`` nut here would
+            # carry the first cell's value (~0.023) into the wall flux and
+            # inflate the imposed emission ~1789x. With zero, ``D_face`` is the
+            # gas's molecular D and ``gradient * D`` is the flux the manifest
+            # records.
+            lines.append(f"    {name}\n    {{\n        type            fixedValue;\n        value           uniform 0;\n    }}\n")
         else:
             lines.append(f"    {name}\n    {{\n        type            calculated;\n        value           uniform 0;\n    }}\n")
     lines.append("}\n")

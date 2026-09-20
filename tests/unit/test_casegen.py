@@ -108,6 +108,28 @@ def test_the_scalar_carries_turbulent_diffusivity(tmp_path, mesh):
     assert "\n    nut " not in block
 
 
+def test_the_source_wall_has_zero_turbulent_viscosity(tmp_path, mesh):
+    """``scalarTransport`` uses ``D = alphaD*nu + alphaDt*nut`` at the face.
+
+    A ``calculated`` nut on the solid source patch carries the first cell's
+    value (~0.023) into the wall flux, inflating the imposed emission ~1789x
+    (measured 2026-09-19). ``nut`` is physically zero at a solid wall, and only
+    then does ``D_face == D_mol`` so ``gradient * D_mol`` is the flux the
+    manifest claims.
+    """
+    case = write_case(
+        Scenario(gas_sources={"CO": "auto"}), mesh, tmp_path / "case", geom=BinGeometry()
+    )
+    nut = (case / "0" / "nut").read_text()
+    source = nut.split("source")[1].split("}")[0]
+    assert "fixedValue" in source
+    assert "uniform 0" in source
+    assert "calculated" not in source
+    # The bin walls keep their wall function.
+    wall = nut.split("wallLeft")[1].split("}")[0]
+    assert "nutkWallFunction" in wall
+
+
 def test_the_schmidt_number_is_a_labelled_assumption():
     assert 0.5 <= casegen.TURBULENT_SCHMIDT_NUMBER <= 1.0
     assert casegen.TURBULENT_SCHMIDT_PROVENANCE == "model assumption"
