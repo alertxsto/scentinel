@@ -178,18 +178,19 @@ probe, measured 2026-09-19:
 |---|---|
 | pre-Phase-5 `fixedValue` concentration | ~87% |
 | Phase 5 mass-flux boundary | ~63% |
-| Phase 6 turbulent transport (Sc_t = 0.7) | ~19% |
+| Phase 6 turbulent transport (Sc_t = 0.7), nearest-cell sampling | ~19% |
+| Phase 7 corrected source + containing-cell sampling | 266.29% |
 
-The sequence is not monotone (0.50→0.25 worst 19.5%; 0.25→0.125 worst 17.8%,
-with S1 improving to 7.1% while S2 rises to 17.8%), and more SIMPLE iterations
-do not change it (300 vs 1500: 19.4% vs 19.5%).
+The current containing-cell 0.50→0.25 measurement is S1 18.65%, S2 0.53%,
+S3 266.29%. S3 changes sign (+1.164e-8 → -1.935e-8), so its relative metric
+is dominated by trace-scalar undershoot. The old 19.5% number used nearest-cell
+sampling and is not comparable.
 
-**Cause, measured.** The k-epsilon velocity field itself differs between meshes
-at the probes (S1: 0.236 vs 0.116 m/s) and is not mesh-converged at these cell
-counts. The scalar now follows it through `D + ν_t/Sc_t`, which is why the
-deviation fell sharply, but the velocity field is the remaining limit. Lowering
-Sc_t shrinks the deviation further (Sc_t = 0.3 gives ~12%) but outside the cited
-0.7–0.9 RANS range; Sc_t is left at 0.7 rather than tuned to pass.
+**Cause, measured.** At the same containing cells, velocity magnitude changes
+by S1 30.84%, S2 5.55%, S3 12.53%, so the k-epsilon flow is not mesh-converged
+at these cell counts. The scalar also sits at the discretisation noise floor.
+Lowering Sc_t is outside the cited 0.7–0.9 RANS range; Sc_t remains 0.7 rather
+than being tuned to pass.
 
 **A second, independent resolution limit was found by the T-020c audit.** Once
 the source-wall `nut` was corrected, the imposed flux is `D_mol * gradient`
@@ -203,8 +204,9 @@ points at the same fix: near-wall refinement, not a larger Sc_t.
 **What is trustworthy in the meantime.** The transport itself is verified
 against closed-form solutions: pure advection reproduces the inlet value with
 zero error, and axial diffusion matches the exponential profile within 5.5% at
-Pe = 5 (`tests/verification/test_analytical_benchmarks.py`). Relative
-comparisons and placement rankings hold; absolute concentrations do not.
+Pe = 5 (`tests/verification/test_analytical_benchmarks.py`). Integrated mass
+balance closes to 1.4245%. Absolute probe concentrations and placement rankings
+are not established while the containing-cell mesh gate fails.
 
 **Fix options, in order of preference:**
 

@@ -513,17 +513,30 @@ bound is kept — it is what caught the `1e6` unit defect (T-020b).
 #### T-021 Mesh-independence gate · BLOCKED on a mesh-converged velocity field
 Files: `tests/verification/test_mesh_independence.py`
 Current state: the test measures the deviation and asserts it is *still* above
-10%, recording the measured cause and the two reworks that reduced it
-(87% → 63% → 19%).
+10%. Re-measured after source-wall correction and containing-cell sampling:
+S1 **18.65%**, S2 **0.53%**, S3 **266.29%** for 0.50→0.25 m. S3 changes sign
+(+1.164e-8 → -1.935e-8), so the relative metric is dominated by the documented
+trace-scalar undershoot. The flow is independently not converged at those same
+cells: velocity magnitude changes by S1 **30.84%**, S2 **5.55%**, S3 **12.53%**.
+The old 19.5% figure used nearest-cell sampling and is not comparable to the
+correct containing-cell measurement.
 Acceptance: asserts <10% and the trend is monotone with refinement.
 
 ### F2 remainder
 
-#### T-022 Mass-balance check · TODO
-Files: `src/scentinel/core/post.py` (`mass_balance_error` exists but is unused), `tests/verification/test_mass_balance.py`
-Why: the spec gate is <5%; a hand-rolled estimate currently reads ~8%.
-Change: re-run `foamToVTK -surfaceFields` in the pipeline, then compare the integrated source flux against the outlet flux.
-Acceptance: automated test asserting <5% for a converged case.
+#### T-022 Mass-balance check · DONE — 2026-09-20
+Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/post.py`,
+`tests/verification/test_mass_balance.py`
+Change: each gas writes signed `weightedSum(C, phi)` on `openLeft` and
+`openRight`; `post.patch_fluxes` reads the final rows and compares their signed
+sum with the exact imposed source `D * gradient * A_patch`. OpenFOAM v2512
+requires explicit `writeFields false`; omitting it is a fatal IO error.
+Audit correction: `A_patch = mound_profile_length * mesh.thickness_m` for the
+2D CFD slab. The physical bin width is already used to derive the mass flux and
+must not be integrated a second time. Using physical width overstates the CFD
+source by `2.4/0.01 = 240x`.
+Acceptance met: outlet `1.573122e-12` vs source `1.551027e-12`, relative error
+**1.4245%** (<5%).
 
 #### T-023 Analytical 1D diffusion benchmark · TODO
 Files: `tests/verification/test_1d_diffusion.py`
