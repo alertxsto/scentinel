@@ -322,6 +322,21 @@ def test_control_dict_names_the_solver(tmp_path, mesh):
     assert f"application     {SOLVER};" in (case / "system" / "controlDict").read_text()
 
 
+def test_functions_uses_solverInfo_not_residuals(tmp_path, mesh):
+    """OpenFOAM v2512 has no `residuals` functionObject; `solverInfo` is valid.
+
+    The solver logs `Unknown function type residuals` and continues when
+    `residuals` is written. `solverInfo` is a real functionObject that writes
+    `postProcessing/solverInfo/0/solverInfo.dat` with per-iteration residuals.
+    """
+    case = write_case(
+        Scenario(gas_sources={"CO": "auto"}), mesh, tmp_path / "case", geom=BinGeometry()
+    )
+    text = (case / "system" / "functions").read_text()
+    assert "solverInfo" in text, "functions must use solverInfo"
+    assert "type            residuals" not in text, "residuals is not valid in v2512"
+
+
 def test_scalar_field_imposes_the_source_flux(tmp_path, mesh):
     """The field's source patch carries a gradient, not a fixed concentration."""
     from scentinel.core.casegen import source_gradient

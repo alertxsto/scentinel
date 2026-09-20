@@ -823,7 +823,12 @@ def _foam_value(value: object) -> str:
 
 
 def _functions(sources: dict[str, float]) -> str:
-    """The residuals object and one ``scalarTransport`` per gas.
+    """The ``solverInfo`` object and one ``scalarTransport`` per gas.
+
+    OpenFOAM v2512 has no ``residuals`` functionObject — the solver logs
+    ``Unknown function type residuals`` and continues. ``solverInfo`` is a real
+    functionObject that writes ``postProcessing/solverInfo/0/solverInfo.dat``
+    with per-iteration residuals for every solved field.
 
     The scalar is carried with an effective diffusivity ``alphaD*nu +
     alphaDt*nut = D_gas + nu_t/Sc_t``. ``scalarTransport`` reaches that branch
@@ -846,7 +851,7 @@ def _functions(sources: dict[str, float]) -> str:
     )
     return (
         _header("dictionary", "functions")
-        + "residuals\n{\n    type            residuals;\n"
+        + "solverInfo\n{\n    type            solverInfo;\n"
         + "    libs            (utilityFunctionObjects);\n"
         + "    fields          (p U k epsilon"
         + "".join(f" {gas}" for gas in sources)
