@@ -11,7 +11,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView, QWidget
 
-from scentinel.core.geometry import BinGeometry, bin_polygon, mound_height_at, mound_polygon
+from scentinel.core.geometry import BinGeometry, bin_polygon, mound_polygon, placement_problem
 from scentinel.core.project import Sensor
 
 GRID_STEP_M = 0.5
@@ -90,9 +90,7 @@ class ViewportWidget(QGraphicsView):
 
     def is_placeable(self, x: float, y: float) -> bool:
         """True when (x, y) is inside the bin and clear of the waste mound."""
-        if not (0.0 <= x <= self._geom.length_m and 0.0 <= y <= self._geom.height_m):
-            return False
-        return y >= mound_height_at(self._geom, x)
+        return not placement_problem(self._geom, x, y)
 
     def add_sensor(self, x: float, y: float) -> Sensor | None:
         if not self.is_placeable(x, y):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from scentinel.core import geometry
 from scentinel.core.geometry import (
     BinGeometry,
     MOUND_SHAPES,
@@ -51,6 +52,18 @@ def test_mound_height_at_tracks_the_outline():
 
     peaked = BinGeometry(length_m=6.0, height_m=2.5, mound_shape="mounded", mound_fill_fraction=0.4)
     assert mound_height_at(peaked, 3.0) > mound_height_at(peaked, 0.5)
+
+
+def test_placement_problem_names_why_a_point_is_rejected():
+    geom = BinGeometry(
+        length_m=6.0,
+        height_m=2.5,
+        mound_shape="mounded",
+        mound_fill_fraction=0.45,
+    )
+    assert geometry.placement_problem(geom, 3.0, 2.0) == ""
+    assert "outside" in geometry.placement_problem(geom, -0.1, 1.0)
+    assert "mound" in geometry.placement_problem(geom, 0.5, 0.2)
 
 
 def test_irregular_mound_is_deterministic():

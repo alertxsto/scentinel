@@ -129,6 +129,15 @@ def mound_height_at(geom: BinGeometry, x: float) -> float:
     return surface[-1][1] if x >= surface[-1][0] else surface[0][1]
 
 
+def placement_problem(geom: BinGeometry, x: float, y: float) -> str:
+    """Why a sensor cannot be placed at ``(x, y)``, or ``""`` when valid."""
+    if not (0.0 <= x <= geom.length_m and 0.0 <= y <= geom.height_m):
+        return "outside the bin"
+    if y < mound_height_at(geom, x):
+        return "inside the waste mound"
+    return ""
+
+
 def mound_area(geom: BinGeometry) -> float:
     """Area of the mound cross-section, in m^2."""
     return _shoelace(mound_polygon(geom))
