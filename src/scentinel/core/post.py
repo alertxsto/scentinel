@@ -263,3 +263,78 @@ def mass_balance_error(
     if abs(source_flux) < 1e-30:
         raise ValueError(f"no source flux found for {gas} in {boundary_dir}")
     return (outlet_flux - source_flux) / abs(source_flux)
+
+
+def solver_residuals_from_file(path: Path) -> dict[str, list[tuple[float, float]]]:
+    """Initial residuals per solver field, from a ``solverInfo.dat``.
+
+    The header names the columns (``# Time  U_solver  Ux_initial  ...``); the
+    first column is time and each ``<field>_initial`` column is that field's
+    initial residual. Vector fields are reported per component (``Ux``,
+    ``Uy``), so a caller matching the target ``U`` must accept the prefix.
+    """
+    text = Path(path).read_text()
+    header: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("#") and "Time" in line:
+            header = line.lstrip("#").split()
+            break
+    if not header:
+        raise ValueError(f"{path} has no solverInfo header")
+    columns = {
+        name.removesuffix("_initial"): index
+        for index, name in enumerate(header)
+        if name.endswith("_initial")
+    }
+    parsed: dict[str, list[tuple[float, float]]] = {name: [] for name in columns}
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        cells = line.split()
+        if len(cells) < len(header):
+            continue
+        time = float(cells[0])
+        for name, index in columns.items():
+            parsed[name].append((time, float(cells[index])))
+    return parsed
+
+
+def solver_residuals(case_dir: Path) -> dict[str, list[tuple[float, float]]]:
+    """The newest ``solverInfo.dat`` under ``case_dir``, or ``{}`` when absent."""
+    files = sorted(
+        Path(case_dir).glob("postProcessing/solverInfo/*/solverInfo.dat")
+    )
+    return solver_residuals_from_file(files[-1]) if files else {}
+
+
+def residual_targets_met_from_residuals(
+    residuals: dict[str, list[tuple[float, float]]],
+    targets: dict[str, float],
+) -> tuple[bool, str]:
+    """Compare each target's last initial residual against its ``fvSolution`` value.
+
+    ``targets`` keys are the written field patterns: ``p``, ``U``, and the
+    parenthesised ``"(k|epsilon)"``. A pattern matches a column when the column
+    equals one of its names or starts with it (``U`` matches ``Ux``/``Uy``).
+    A target with no matching column is not evidence of convergence, so it is
+    skipped — the reason string says so when nothing was compared.
+    """
+    offenders: list[tuple[float, str, float, float]] = []
+    compared = 0
+    for pattern, target in targets.items():
+        for name in pattern.strip('"()').split("|"):
+            for field, series in residuals.items():
+                if (field == name or field.startswith(name)) and series:
+                    compared += 1
+                    value = series[-1][1]
+                    if value > target:
+                        offenders.append((value / target, field, value, target))
+    if not compared:
+        return True, "no residual columns matched the targets; nothing to compare"
+    if not offenders:
+        return True, "every residual target met at the last iteration"
+    _, field, value, target = max(offenders)
+    return (
+        False,
+        f"{field} initial residual {value:.3g} exceeds its target {target:.3g}",
+    )
