@@ -31,6 +31,7 @@ def test_residual_targets_met_passes_when_every_field_is_under():
         residuals, {"p": 1e-3, "U": 1e-4}
     )
     assert met is True
+    assert reason
 
 
 def test_residual_targets_met_ignores_a_field_with_no_rows():
