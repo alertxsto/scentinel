@@ -141,10 +141,23 @@ TURBULENT_SCHMIDT_BASIS = (
     "scalar dispersion; 0.7 used. Not measured for this geometry."
 )
 
-#: ``alphaD`` is the molecular contribution weight in ``scalarTransport``; the
-#: turbulent weight ``alphaDt`` is ``1 / Sc_t``.
-ALPHA_D = 1.0
+#: ``alphaDt`` is the turbulent weight in ``scalarTransport``, ``1 / Sc_t``.
+#: ``alphaD`` is *not* a constant: OpenFOAM computes ``D = alphaD*nu +
+#: alphaDt*nut``, so each gas needs ``alphaD = D_gas / nu`` for the molecular
+#: term to be that gas's own diffusivity. See :func:`alpha_d`.
 ALPHA_DT = 1.0 / TURBULENT_SCHMIDT_NUMBER
+
+
+def alpha_d(gas: str) -> float:
+    """Molecular weight making ``scalarTransport``'s ``alphaD*nu`` equal ``D_gas``.
+
+    OpenFOAM's ``scalarTransport`` multiplies ``alphaD`` by the kinematic
+    viscosity ``nu`` (verified in v2512 ``scalarTransport.C``), not by a per-gas
+    diffusivity. Passing ``alphaD = D_gas / nu`` therefore restores each gas's
+    own Fuller-Schettler-Giddings diffusivity in the ``alphaD*nu + alphaDt*nut``
+    branch, which is the form that also carries the turbulent term.
+    """
+    return scalar_diffusivity(gas) / NU_AIR
 
 #: Patch roles. ``gmshToFoam`` names patches after the gmsh physical groups.
 WALL_PATCHES = ("wallLeft", "wallRight")
@@ -345,20 +358,21 @@ def emission_flux_kg_per_m2_s(
     return emission_rate_kg_per_s(scenario, gas) / emission_area_m2(geom)
 
 
-def source_gradient_ppmv_per_m(
+def source_gradient(
     scenario: Scenario, geom: BinGeometry, gas: str
 ) -> float:
-    """The ``fixedGradient`` value that imposes ``gas``'s flux, in ppmv/m.
+    """The ``fixedGradient`` value that imposes ``gas``'s flux, in fraction/m.
 
-    The transported field is a volume fraction (ppmv-equivalent), and the
-    transport equation is linear, so a mass flux ``J`` becomes a fraction flux
-    ``J * (Vm / MW) * 1e6``. The boundary imposes ``gradient = J_C / D``, which
-    is independent of the first cell height — the fix for the mesh dependence
-    the surface-concentration boundary caused.
+    The transported field is a volume *fraction* (dimensionless, the same basis
+    as :func:`resolve_sources`), and the transport equation is linear, so a mass
+    flux ``J`` becomes a fraction flux ``J * (Vm / MW)`` — no ``1e6``: that
+    factor belongs only to display. The boundary imposes ``gradient = J_C / D``,
+    which is independent of the first cell height — the fix for the mesh
+    dependence the surface-concentration boundary caused.
     """
     flux = emission_flux_kg_per_m2_s(scenario, geom, gas)
     mw = gas_data.get_gas(gas).mw_g_mol / 1000.0  # kg/mol
-    fraction_flux = flux * (MOLAR_VOLUME_M3_PER_MOL / mw) * 1.0e6
+    fraction_flux = flux * (MOLAR_VOLUME_M3_PER_MOL / mw)
     return fraction_flux / scalar_diffusivity(gas)
 
 
@@ -437,7 +451,7 @@ def write_case(
     for gas in sources:
         _write(
             out_dir / "0" / gas,
-            _field_scalar(gas, roles, source_gradient_ppmv_per_m(scenario, geom, gas)),
+            _field_scalar(gas, roles, source_gradient(scenario, geom, gas)),
         )
 
     _write(out_dir / "constant" / "transportProperties", _physical_properties())
@@ -803,18 +817,18 @@ def _functions(sources: dict[str, float]) -> str:
     """The residuals object and one ``scalarTransport`` per gas.
 
     The scalar is carried with an effective diffusivity ``alphaD*nu +
-    alphaDt*nut = D + nu_t/Sc_t``. ``scalarTransport`` reaches that branch only
-    when *neither* ``D`` nor ``nut`` is written: ``D`` forces the
+    alphaDt*nut = D_gas + nu_t/Sc_t``. ``scalarTransport`` reaches that branch
+    only when *neither* ``D`` nor ``nut`` is written: ``D`` forces the
     constant-molecular branch, and ``nut`` makes it return ``nut`` alone,
-    ignoring ``alphaD``/``alphaDt``. So the body writes ``alphaD`` and
-    ``alphaDt`` and deliberately omits both.
+    ignoring ``alphaD``/``alphaDt``. So the body writes ``alphaD`` (per gas,
+    ``D_gas/nu``) and ``alphaDt`` (``1/Sc_t``) and deliberately omits both.
     """
     body = "".join(
         f"{gas}Transport\n{{\n"
         f"    type            scalarTransport;\n"
         f"    libs            (solverFunctionObjects);\n"
         f"    field           {gas};\n"
-        f"    alphaD          {ALPHA_D:g};\n"
+        f"    alphaD          {alpha_d(gas):g};\n"
         f"    alphaDt         {ALPHA_DT:g};\n"
         f"    nCorr           1;\n"
         f"    resetOnStartup  false;\n"

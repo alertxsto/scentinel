@@ -36,6 +36,7 @@ def _write_minimal_case(
     end_time: int,
     diffusion: float,
     outlet_value: float | None = None,
+    alpha_d: float | None = None,
 ) -> Path:
     """A 1D duct: inflow at x=0 with a fixed scalar, outflow at x=L.
 
@@ -46,6 +47,12 @@ def _write_minimal_case(
     duct into a through-flow diffusion cell. Left ``None`` the outlet is
     ``zeroGradient``, so nothing diffuses out and the exact solution is the
     inlet value everywhere.
+
+    ``alpha_d`` switches the function object to OpenFOAM's ``alphaD``/``alphaDt``
+    form (no ``D``, no ``nut``), which makes it compute ``D = alphaD*nu +
+    alphaDt*nut``. The default ``simulationType laminar`` registers a laminar
+    turbulence model, so ``nut = 0`` and the effective diffusivity is the
+    constant ``alphaD*nu`` — the exponential solution still holds.
     """
     case_dir = Path(case_dir)
     for relative in ("0", "constant", "system"):
@@ -53,6 +60,12 @@ def _write_minimal_case(
 
     length = 1.0
     height = 0.05
+    if alpha_d is None:
+        diffusivity_block = (
+            f"        diffusivity     constant;\n        D               {diffusion};"
+        )
+    else:
+        diffusivity_block = f"        alphaD          {alpha_d};\n        alphaDt         0;"
     (case_dir / "system" / "blockMeshDict").write_text(
         f"""FoamFile {{ version 2.0; format ascii; class dictionary; object blockMeshDict; }}
 scale 1;
@@ -96,8 +109,7 @@ functions
         type            scalarTransport;
         libs            (solverFunctionObjects);
         field           C;
-        diffusivity     constant;
-        D               {diffusion};
+{diffusivity_block}
         nCorr           1;
         resetOnStartup  false;
     }}
@@ -324,8 +336,49 @@ def test_axial_diffusion_reproduces_the_exponential_profile(tmp_path):
     )
 
 
-# -- 3. The bin case: is the sampled value self-consistent? ------------------
+# -- 2b. The alphaD path multiplies nu, so alphaD must be D/nu ---------------
 
+
+def test_the_alpha_d_path_reproduces_the_exponential_profile(tmp_path):
+    """The turbulent branch computes ``D = alphaD*nu + alphaDt*nut``.
+
+    OpenFOAM's ``scalarTransport`` multiplies ``alphaD`` by the *kinematic
+    viscosity*, not by a per-gas diffusivity (verified in v2512
+    ``scalarTransport.C``). With ``simulationType laminar`` the registered model
+    has ``nut = 0``, so the effective diffusivity is the constant ``alphaD*nu``
+    and the through-flow duct still has the exponential solution. Setting
+    ``alphaD = D_target / nu`` must reproduce it; a constant ``alphaD = 1``
+    would instead run at ``nu`` and miss by hundreds of percent. This is the
+    wiring that makes ``casegen.alpha_d`` correct.
+    """
+    _requires_solver()
+    nu = 1.0e-5  # matches the duct's ``nu`` in _write_minimal_case
+    diffusion = 0.2
+    case = _write_minimal_case(
+        tmp_path / "case",
+        inlet_value=1.0,
+        end_time=5000,
+        diffusion=diffusion,
+        outlet_value=0.0,
+        alpha_d=diffusion / nu,
+    )
+    _solve(case)
+
+    peclet = 1.0 / diffusion
+    xs = [0.1, 0.3, 0.5, 0.7, 0.9]
+    expected = [
+        (math.exp(peclet) - math.exp(peclet * x)) / (math.exp(peclet) - 1.0)
+        for x in xs
+    ]
+    values = _profile(case, xs)
+    worst = max(abs(v - e) for v, e in zip(values, expected))
+    assert worst < 0.08, (
+        f"alphaD path deviates by {worst:.4f}; "
+        f"sampled={dict(zip(xs, values))} exact={dict(zip(xs, expected))}"
+    )
+
+
+# -- 3. The bin case: is the sampled value self-consistent? ------------------
 
 def test_bin_probe_is_inside_the_source_bound_and_positive(tmp_path):
     """The bin case has no closed form, so only bounds can be asserted.
@@ -359,4 +412,5 @@ def test_bin_probe_is_inside_the_source_bound_and_positive(tmp_path):
     for reading in readings:
         value = reading.values["CO"]
         assert value >= 0.0, f"{reading.sensor_id} read a negative {value}"
+        assert value < 1.0, f"{reading.sensor_id} read an absurd volume fraction {value}"
     assert readings[0].values["CO"] > 0.0, "a probe above the mound must see some gas"

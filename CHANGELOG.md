@@ -67,6 +67,35 @@ Two things are worth knowing before reading:
   `phase_uncertainty`; version 5 manifests are rejected naming both versions.
   The batch panel's phase readout states the applicability.
 
+### Audit fix — the source flux was 10^6 too high, and alphaD discarded each gas's diffusivity
+
+Two defects in the Phase 5/6 source were found by auditing the units against
+the OpenFOAM source and fixed:
+
+- **`source_gradient` carried a spurious `1e6`.** The transported scalar is a
+  volume *fraction* (dimensionless): `resolve_sources` returns fractions, the
+  old source boundary wrote a fraction, and `post` multiplies by `1e6` only for
+  display. The gradient multiplied the fraction flux by `1e6`, inflating the
+  imposed flux a million-fold and producing sampled values above 1 (CO read
+  2.7 as a "fraction"). The function is now `source_gradient` in fraction/m,
+  and `gradient * D` returns the intended `J * (Vm/MW)`. A verification test
+  pins `gradient * D_gas == fraction flux`.
+- **`alphaD = 1` made every gas diffuse at air's viscosity.** OpenFOAM's
+  `scalarTransport` computes `D = alphaD*nu + alphaDt*nut`; `alphaD` multiplies
+  the *kinematic viscosity*, so a constant `1` replaced each gas's
+  Fuller-Schettler-Giddings diffusivity with `nu_air` — a −20% (CO) to −29%
+  (CH4) flux error. `alphaD` is now per gas, `D_gas / nu_air`, so the molecular
+  term is the gas's own diffusivity. The manifest already recorded the real
+  `scalar_diffusivity_m2_s` per gas, so it now matches the case.
+- New verification benchmark: the `alphaD` path on a 1D duct reproduces the
+  exponential profile within 5.5%, proving `alphaD` multiplies `nu`.
+- The bin-probe benchmark's physical bound (`value < 1`) is restored; it was
+  briefly dropped while the `1e6` defect was mistaken for a sampling issue.
+
+With the corrected source, the near-mound values are physical (CH4 ≈ 1.1e3
+ppmv, CO ≈ 0.3–0.7 ppmv). The mesh-independence deviation is scale-invariant
+and stays ~19.6%, so the gate status is unchanged.
+
 ### Phase 6 — turbulent scalar transport
 
 - **The passive scalars are carried with `D + ν_t/Sc_t`, not molecular `D`

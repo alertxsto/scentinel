@@ -145,9 +145,9 @@ MainWindow._on_run_finished
 | Dimensionality | 2D as 3D one cell thick | OpenFOAM has no 2D solver; front/back are `empty` |
 | Solver | `simpleFoam` | Steady SIMPLE, incompressible, isothermal |
 | Turbulence | k-epsilon RAS | `k`, `epsilon`, `nut` written per case |
-| Scalar transport | `scalarTransport` function object | One per selected gas, `alphaD*nu + alphaDt*nut` with `alphaD=1`, `alphaDt=1/Sc_t` — the turbulent effective diffusivity; `Sc_t = 0.7` is a model assumption |
+| Scalar transport | `scalarTransport` function object | One per selected gas, `alphaD*nu + alphaDt*nut` with `alphaD = D_gas/nu` (per gas) and `alphaDt = 1/Sc_t` — the turbulent effective diffusivity; `Sc_t = 0.7` is a model assumption |
 | Waste mound | Not meshed | Solid, no flow; contributes only the `source` patch |
-| Source term | Emission mass flux | kg/m²/s over the emitting area, imposed as a `fixedGradient` on the scalar |
+| Source term | Emission mass flux | kg/m²/s over the emitting area, imposed as a `fixedGradient` on the scalar in volume-fraction units (`J*(Vm/MW)/D`; no `1e6`) |
 
 ### Boundary conditions
 

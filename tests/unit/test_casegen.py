@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -44,15 +45,41 @@ def test_the_source_patch_imposes_a_gradient_not_a_value(tmp_path, mesh):
 
 
 def test_the_gradient_matches_the_flux_over_diffusivity(tmp_path, mesh):
-    from scentinel.core.casegen import source_gradient_ppmv_per_m
+    from scentinel.core.casegen import source_gradient
 
     scenario = Scenario(gas_sources={"CO": "auto"}, tonnage_t=10.0)
     geom = BinGeometry()
     case = write_case(scenario, mesh, tmp_path / "case", geom=geom)
     field = (case / "0" / "CO").read_text()
     source_block = field.split("source")[1].split("}")[0]
-    expected = source_gradient_ppmv_per_m(scenario, geom, "CO")
+    expected = source_gradient(scenario, geom, "CO")
     assert f"{expected:g}" in source_block
+
+
+def test_the_gradient_is_in_field_units_not_ppmv():
+    """The transported scalar is a volume *fraction* (dimensionless).
+
+    ``resolve_sources`` returns fractions, the source boundary used to write a
+    fraction, and the post-processor multiplies by ``1e6`` only for display. So
+    the imposed gradient must be ``J_C / D`` in fraction/m — a ``1e6`` there
+    inflates the flux a million-fold and the sampled field above 1. The flux is
+    ``J * (Vm / MW)`` in fraction*m/s; multiplied by ``D`` it must come back.
+    """
+    from scentinel.core.casegen import (
+        MOLAR_VOLUME_M3_PER_MOL,
+        emission_flux_kg_per_m2_s,
+        source_gradient,
+    )
+
+    scenario = Scenario(gas_sources={"CO": "auto"}, tonnage_t=10.0, age_h=24 * 365 * 3)
+    geom = BinGeometry()
+    flux = emission_flux_kg_per_m2_s(scenario, geom, "CO")
+    mw = gas_data.get_gas("CO").mw_g_mol / 1000.0
+    fraction_flux = flux * (MOLAR_VOLUME_M3_PER_MOL / mw)
+    assert source_gradient(scenario, geom, "CO") * scalar_diffusivity("CO") == pytest.approx(
+        fraction_flux
+    )
+
 
 
 def test_applied_physics_records_the_flux_and_area(tmp_path, mesh):
@@ -85,6 +112,32 @@ def test_the_schmidt_number_is_a_labelled_assumption():
     assert 0.5 <= casegen.TURBULENT_SCHMIDT_NUMBER <= 1.0
     assert casegen.TURBULENT_SCHMIDT_PROVENANCE == "model assumption"
     assert casegen.TURBULENT_SCHMIDT_BASIS
+
+
+def test_each_gas_alphaD_restores_its_own_molecular_diffusivity(tmp_path, mesh):
+    """``scalarTransport`` computes ``D = alphaD*nu + alphaDt*nut``.
+
+    OpenFOAM's source (v2512) multiplies ``alphaD`` by the *kinematic
+    viscosity*, not by a per-gas diffusivity, so a constant ``alphaD = 1``
+    would carry every gas at ``nu_air`` and discard its own Fuller-Schettler-
+    Giddings value. ``alphaD`` must therefore be ``D_gas / nu_air`` so that the
+    molecular term is the gas's real diffusivity.
+    """
+    case = write_case(
+        Scenario(gas_sources={"CO": "auto", "H2S": "auto"}),
+        mesh,
+        tmp_path / "case",
+        geom=BinGeometry(),
+    )
+    functions = (case / "system" / "functions").read_text()
+    for gas in ("CO", "H2S"):
+        block = functions.split(f"{gas}Transport\n")[1].split("}")[0]
+        written = float(re.search(r"alphaD\s+([0-9.eE+-]+)", block).group(1))
+        # The case writes ``:g`` (6 significant figures); compare in that form.
+        assert written == float(f"{scalar_diffusivity(gas) / casegen.NU_AIR:g}")
+    # And the two gases genuinely differ, so a shared constant cannot pass.
+    assert scalar_diffusivity("CO") != pytest.approx(scalar_diffusivity("H2S"))
+
 
 
 def test_auto_sources_use_the_cited_ap42_defaults():
@@ -249,7 +302,7 @@ def test_control_dict_names_the_solver(tmp_path, mesh):
 
 def test_scalar_field_imposes_the_source_flux(tmp_path, mesh):
     """The field's source patch carries a gradient, not a fixed concentration."""
-    from scentinel.core.casegen import source_gradient_ppmv_per_m
+    from scentinel.core.casegen import source_gradient
 
     scenario = Scenario(gas_sources={"CO": 105.0})
     geom = BinGeometry()
@@ -257,7 +310,7 @@ def test_scalar_field_imposes_the_source_flux(tmp_path, mesh):
     text = (case / "0" / "CO").read_text()
     assert "source" in text
     assert "fixedGradient" in text
-    assert f"{source_gradient_ppmv_per_m(scenario, geom, 'CO'):g}" in text
+    assert f"{source_gradient(scenario, geom, 'CO'):g}" in text
 
 
 def test_wind_sign_reaches_the_inlet_velocity(tmp_path, mesh):

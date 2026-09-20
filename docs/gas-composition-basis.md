@@ -466,7 +466,14 @@ berlabel; rentang literatur RANS 0.7–0.9, tidak diukur untuk geometri ini.
 `scalarTransport` OpenFOAM hanya memakai cabang `alphaD·ν + alphaDt·ν_t` bila
 entri `D` **dan** `nut` sama-sama tidak ditulis; kasus ini menulis
 `alphaD`/`alphaDt` dan menghilangkan keduanya (diverifikasi terhadap sumber
-`scalarTransport.C` v2512).
+`scalarTransport.C` v2512). Karena cabang itu mengalikan `alphaD` dengan **ν
+udara**, `alphaD` bersifat per-gas: `alphaD = D_gas / ν` (audit T-020b), bukan
+konstanta 1 — kalau tidak, setiap gas berdifusi secepat viskositas udara dan
+difusivitas FSG-nya sendiri hilang.
+
+Sumber fluks ditulis dalam satuan **fraksi volume**, bukan ppmv: gradient =
+`J·(Vm/MW)/D` tanpa faktor `1e6` (faktor itu hanya untuk tampilan di
+`post.py`).
 
 Efeknya: deviasi mesh turun dari ~63% ke ~19%, tetapi gate <10% belum tutup.
 Menurunkan `Sc_t` (mis. 0.3) mengecilkan deviasi lebih jauh namun di luar

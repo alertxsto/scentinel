@@ -419,8 +419,8 @@ first cell height, so mesh independence failed and did not converge.
 Change: the source is now an emission mass flux. `BinGeometry.width_m` gives the
 emitting area (mound profile × width); `casegen.emission_rate_kg_per_s` derives
 the batch's rate from the generation model; `emission_flux_kg_per_m2_s` spreads
-it over the area; `source_gradient_ppmv_per_m` converts it to the `fixedGradient`
-the scalar boundary imposes. Project format is v2 (adds `width_m`, v1 migrates);
+it over the area; `source_gradient` converts it to the `fixedGradient`
+the scalar boundary imposes (in volume-fraction units — see the audit note below). Project format is v2 (adds `width_m`, v1 migrates);
 manifest is v7 (records `emitting_area_m2` and `emission_flux_kg_per_m2_s`).
 Acceptance met for the mechanism: the boundary is a flux, tonnage and age move
 it, and the mesh deviation fell from ~87% to ~63% (worst probe, 2026-09-19).
@@ -437,6 +437,29 @@ boundary; the spec's gas-source field comment left the basis open
 
 ### Phase 6 — Turbulent scalar transport
 
+#### T-020b Unit audit of the flux source · DONE — 2026-09-19
+Files: `src/scentinel/core/casegen.py`, `tests/unit/test_casegen.py`,
+`tests/verification/test_analytical_benchmarks.py`
+Why: auditing the source against OpenFOAM's own source found two defects that
+made the imposed flux wrong by orders of magnitude, hidden behind tests that
+only checked internal consistency.
+Change:
+- `source_gradient_ppmv_per_m` → `source_gradient`, in fraction/m. The scalar
+  field is a volume *fraction* (dimensionless); the old code multiplied the
+  fraction flux by `1e6`, inflating the source a million-fold. `post` applies
+  `1e6` only for display. A test pins `gradient * D_gas == J*(Vm/MW)`.
+- `alphaD` is now per gas (`casegen.alpha_d(gas) = D_gas/nu_air`), because
+  `scalarTransport` computes `D = alphaD*nu + alphaDt*nut` and the old constant
+  `1` replaced every gas's diffusivity with air's viscosity (CO −20%, CH4
+  −29%). A new duct benchmark proves the `alphaD` path reproduces the exact
+  exponential within 5.5%.
+- The bin-probe benchmark's `value < 1` bound is restored; dropping it had
+  masked the `1e6` defect as a "buried probe".
+Effect: near-mound values are physical (CH4 ≈ 1.1e3 ppmv, CO ≈ 0.3–0.7 ppmv).
+The mesh deviation is scale-invariant and stays ~19.6%, so T-021 is unchanged.
+Note: this supersedes the `source_gradient_ppmv_per_m` naming in the Phase 5
+plan and the `ALPHA_D = 1.0` line in the Phase 6 plan.
+
 #### T-240 Turbulent scalar diffusivity · DONE (mechanism) — 2026-09-19
 Files: `src/scentinel/core/casegen.py`, `src/scentinel/core/history.py`,
 `tests/unit/test_casegen.py`, `tests/unit/test_history.py`,
@@ -448,15 +471,17 @@ Change: `scalarTransport` now writes `alphaD`/`alphaDt` and omits both `D` and
 `alphaD*nu + alphaDt*nut` branch (verified against the v2512 `scalarTransport.C`
 source in the container). `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a model
 assumption with its RANS basis. Manifest v8 records the number and provenance.
-Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case, and
-the worst-probe mesh deviation fell from ~63% to ~19%.
+Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case (with
+`alphaD` per gas, see T-020b), and the worst-probe mesh deviation fell from
+~63% to ~19%.
 **Not met for the gate:** still >10% and not monotone. Measured cause: the
 k-epsilon velocity field is itself mesh-dependent (S1: 0.236 vs 0.116 m/s).
 Lowering Sc_t shrinks the deviation but outside the cited 0.7–0.9 range; Sc_t
 stays 0.7 rather than being tuned to pass.
 Note: `tests/verification/test_analytical_benchmarks.py`'s bin-probe test now
 uses an in-air probe; its old "floor" probe at (0.5, 0.2) was buried in the
-mound, which is the sensor-containment defect T-242 addresses.
+mound, which is the sensor-containment defect T-242 addresses. Its `value < 1`
+bound is kept — it is what caught the `1e6` unit defect (T-020b).
 
 #### T-021 Mesh-independence gate · BLOCKED on a mesh-converged velocity field
 Files: `tests/verification/test_mesh_independence.py`
