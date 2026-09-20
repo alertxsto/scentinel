@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import numpy as np
+import pyvista as pv
+
 from scentinel.core import post
+from scentinel.core.project import Sensor
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "solverInfo.dat"
 
@@ -41,3 +45,29 @@ def test_residual_targets_met_ignores_a_field_with_no_rows():
     )
     assert met is True  # nothing to compare against; only p is present
     assert reason
+
+
+def test_a_buried_sensor_is_rejected_not_snapped():
+    """A point inside the mound has no containing cell.
+
+    ``find_closest_cell`` returns the nearest wall cell, which reads the
+    near-wall value as if it were the probe's — the defect the audit found in
+    the bin benchmark's old floor probe. ``find_containing_cell`` returns -1,
+    which must become an explicit rejection.
+    """
+    grid = pv.ImageData(dimensions=(3, 3, 3))
+    grid.cell_data["CO"] = np.zeros(8)
+    readings = post.sample_sensors_from_grid(grid, [Sensor("outside", 99.0, 99.0)])
+    assert readings[0].contained is False
+    assert readings[0].values == {}
+    assert readings[0].reason
+
+
+def test_a_contained_sensor_reads_its_cell():
+    """A point inside the grid reads the containing cell and is marked contained."""
+    grid = pv.ImageData(dimensions=(3, 3, 3))
+    grid.cell_data["CO"] = np.arange(8, dtype=float)
+    readings = post.sample_sensors_from_grid(grid, [Sensor("inside", 0.5, 0.5)])
+    assert readings[0].contained is True
+    assert readings[0].reason == ""
+    assert readings[0].values["CO"] >= 0.0

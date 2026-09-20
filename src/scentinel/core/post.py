@@ -21,12 +21,20 @@ _TIME_DIR = re.compile(r"^\d+(?:\.\d+)?$")
 
 @dataclass
 class SensorReading:
-    """One sensor and the fields sampled at its position."""
+    """One sensor and the fields sampled at its position.
+
+    ``contained`` is False when the sensor position has no containing fluid
+    cell (it is buried in the mound or outside the mesh); ``values`` is then
+    empty and ``reason`` says why. A reading is never silently snapped to the
+    nearest cell, which would report a wall value as the probe's own.
+    """
 
     sensor_id: str
     x: float
     y: float
     values: dict[str, float]
+    contained: bool = True
+    reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -118,16 +126,37 @@ def sample_sensors(
 
     case_dir = Path(case_dir)
     grid = pv.read(internal_vtu(case_dir, time))
+    return sample_sensors_from_grid(grid, sensors)
+
+
+def sample_sensors_from_grid(grid, sensors: list) -> list[SensorReading]:
+    """Sample sensors against a grid, rejecting any with no containing cell.
+
+    ``find_containing_cell`` returns ``-1`` for a point outside the fluid (a
+    sensor buried in the mound, or beyond the mesh). That is an explicit
+    rejection, not a snap to the nearest wall cell: ``find_closest_cell`` would
+    silently report a wall value as the probe's own. The probe depth is the
+    grid's mid-plane, since the case is a 2D slab extruded one cell thick.
+    """
     scalars = _cell_scalars(grid)
     depth = grid.center[2]
 
     readings: list[SensorReading] = []
     for sensor in sensors:
-        cell = grid.find_closest_cell((sensor.x, sensor.y, depth))
-        values: dict[str, float] = {}
-        if cell >= 0:
-            for name in scalars:
-                values[name] = float(grid.cell_data[name][cell])
+        cell = grid.find_containing_cell((sensor.x, sensor.y, depth))
+        if cell < 0:
+            readings.append(
+                SensorReading(
+                    sensor_id=sensor.sensor_id,
+                    x=sensor.x,
+                    y=sensor.y,
+                    values={},
+                    contained=False,
+                    reason="the sensor position has no containing fluid cell",
+                )
+            )
+            continue
+        values = {name: float(grid.cell_data[name][cell]) for name in scalars}
         readings.append(
             SensorReading(
                 sensor_id=sensor.sensor_id,
