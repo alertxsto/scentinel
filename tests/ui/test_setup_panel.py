@@ -31,6 +31,20 @@ def test_defaults_match_the_default_project(panel):
     assert panel.gas_sources() == {}
 
 
+def test_a_loaded_width_survives_a_geometry_edit(panel):
+    from scentinel.core.scenario import Scenario
+
+    geom = BinGeometry(length_m=6.0, height_m=2.5, width_m=3.0)
+    panel.set_values(geom, Scenario(gas_sources={}))
+    assert panel.geometry().width_m == pytest.approx(3.0)
+    panel._length.setValue(7.0)
+    assert panel.geometry().width_m == pytest.approx(3.0)
+
+
+def test_the_width_spinbox_defaults_to_the_documented_bin_width(panel):
+    assert panel.geometry().width_m == pytest.approx(2.4)
+
+
 def test_a_fresh_holding_time_removes_methane_from_the_gas_list(panel):
     """A fresh aerobic load cannot select methane: its row is hidden, not disabled."""
     panel._age_h.setValue(8.0)

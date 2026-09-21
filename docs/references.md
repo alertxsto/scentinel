@@ -9,7 +9,7 @@ Dokumen ini mencatat setiap angka, asal-usulnya, dan tingkat kepercayaannya.
 > HH-1 yang diusulkan sebagai gantinya — lihat
 > [gas-composition-basis.md](gas-composition-basis.md).
 
-Terakhir diperbarui: 2026-09-19
+Terakhir diperbarui: 2026-09-21
 
 ---
 
@@ -109,6 +109,11 @@ Nilai acuan untuk memeriksa korelasi: CO ≈ 1.9 × 10⁻⁵, H2S ≈ 1.7 × 10�
 hexane ≈ 7.4 × 10⁻⁶ m²/s. Semua gas memakai metode yang sama, dan difusivitas
 per gas inilah yang ditulis ke `scalarTransport` di `system/functions` serta
 dicatat di blok `applied_physics`.
+
+| Parameter sumber | Nilai | Provenans | Dampak |
+|---|---|---|---|
+| `BinGeometry.width_m` | default 2.4 m, input pengguna | Asumsi geometri; bukan nilai literatur | Luas emisi = panjang profil × lebar |
+| Fluks massa | laju batch / luas emisi | Turunan dimensional | Pada laju tetap, fluks berbanding terbalik dengan lebar |
 
 ---
 
@@ -225,9 +230,9 @@ Artefak terstruktur: `docs/data/fresh_waste_references.json`.
 
 | Sumber | Status | Catatan |
 |---|---|---|
-| Statheropoulos, M., Agapiou, A., Pallis, G. (2005). *A study of volatile organic compounds evolved in urban waste disposal bins*. Atmospheric Environment. DOI `10.1016/j.atmosenv.2005.04.013` | **Terekstrak (abstrak)** | Nilai median µg/m³: dekana 694.9, etil asetat 353.1, limonena 334.9, nonana 257.4, etanol 216.1, 1,2,4-trimetilbenzena 212.6, undekana 159.1. Satuan massa, bukan fraksi volume. |
-| Tan, H. et al. (2017). *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW*. Waste Management 68:677-687. DOI `10.1016/j.wasman.2017.07.015` | **Tidak tersedia** | Paywalled; HTTP 400/403 pada pengambilan otomatis 2026-09-19. Nilai tidak diestimasi. |
-| NIOSH NMAM Method 3900 | **Tidak tersedia** | HTTP 403 pada pengambilan otomatis 2026-09-19. Ini daftar analit metode, bukan nilai konsentrasi. |
+| Statheropoulos, M., Agapiou, A., Pallis, G. (2005). *A study of volatile organic compounds evolved in urban waste disposal bins*. Atmospheric Environment. DOI `10.1016/j.atmosenv.2005.04.013` | **Terekstrak (abstrak)** | Nilai median µg/m³ diverifikasi terhadap [rekaman repositori NTUA](https://dspace.lib.ntua.gr/xmlui/handle/123456789/16366), yang tidak memiliki lampiran teks penuh: dekana 694.9, etil asetat 353.1, limonena 334.9, nonana 257.4, etanol 216.1, 1,2,4-trimetilbenzena 212.6, undekana 159.1. Satuan massa, bukan fraksi volume. |
+| Tan, H. et al. (2017). *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW*. Waste Management 68:677-687. DOI `10.1016/j.wasman.2017.07.015` | **Tidak tersedia** | Paywalled pada pengambilan otomatis 2026-09-19. Nilai tidak diestimasi. |
+| NIOSH NMAM Method 3900 | **Ditinjau; tidak diekstrak** | HTTP 200 pada 2026-09-20. Daftar 17 analit dan metode sampling/analisis, bukan nilai konsentrasi sampah segar atau kekuatan sumber. |
 
 Nilai Statheropoulos adalah **konsentrasi massa (µg/m³)**, bukan fraksi volume
 gas; konversi ke ppmv memerlukan suhu dan tekanan dan tidak dilakukan di sini.

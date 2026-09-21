@@ -12,6 +12,12 @@ from scentinel.core.scenario import (
     waste_spec,
 )
 
+def test_the_co2_split_is_labelled_a_model_assumption():
+    from scentinel.core import scenario
+
+    assert "model assumption" in scenario.CO2_SPLIT_PROVENANCE
+    assert "98.343" in scenario.CO2_SPLIT_PROVENANCE
+
 
 def test_default_mixed_msw_auto_matches_cited_ap42():
     scenario = Scenario(gas_sources={"CO": "auto", "VOC": "auto", "H2S": "auto"})

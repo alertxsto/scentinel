@@ -3,7 +3,7 @@
 > **Historical T-030 implementation contract.** This document freezes the state
 > before run history was implemented; its version numbers and verification
 > measurements are not current. See `docs/TASKS.md`, `docs/ROADMAP.md`, and
-> `docs/ARCHITECTURE.md` for the live contract (manifest v9; mass balance
+> `docs/ARCHITECTURE.md` for the live contract (manifest v10; mass balance
 > 1.4245%; containing-cell mesh gate 266.29% and still blocked).
 
 Implement the next smallest meaningful engineering feature: **persistent run history with an immutable, provenance-bearing manifest for every simulation attempt** (T-030).

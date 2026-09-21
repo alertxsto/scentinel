@@ -27,6 +27,26 @@ describe the repository as it is (no stale status or number); tag
 Note: scope is frozen — new work enters only through an explicit edit to the
 program plan.
 
+### Phase 1 — Material taxonomy · DEFERRED
+
+Scope was frozen before Phase 1 ran; Phase 2 and later work shipped without
+this taxonomy. Phase 4 gas applicability is only a partial substitute.
+
+#### T-210 Material taxonomy · NOT IMPLEMENTED
+No `core/materials.py` registry exists.
+
+#### T-211 Material → HH-1 mapper · NOT IMPLEMENTED
+The current model still stores decomposition categories directly.
+
+#### T-212 RDF/recycling material inputs · NOT IMPLEMENTED
+RDF and recycling cannot distinguish individual plastic resins or PVC share.
+
+#### T-213 Project material schema · NOT IMPLEMENTED
+Project format v2 records `width_m`; it does not store material keys.
+
+#### T-214 Material manifest schema · NOT IMPLEMENTED
+Manifest v10 records bin width; no released manifest stores material taxonomy.
+
 ### Phase 2 — Gas generation definitions
 
 #### T-220 Three generation quantities · DONE — 2026-09-19
@@ -55,23 +75,16 @@ across a boundary equals the rate times the interval); no CH4 step remains.
 Files: `src/scentinel/core/generation.py`, `src/scentinel/core/scenario.py`,
 `tests/unit/test_generation.py`, `tests/unit/test_scenario.py`
 Acceptance met: monkeypatching `phase_for` changes no generation number; the
-II→III CH4 jump is gone; the generated gas is the regulation's `F = 0.5` split
-(40 CFR 98.343 Table HH-1) at every age, so a fresh load reads ~500 000 ppmv
-CH4 by volume and the age moves the rate, not the share. The AP-42 55/40/5 mix
-is retained as a ceiling/comparison only.
-Note: this is a deliberate change of the mixture basis from AP-42 55/40/5 to
-the regulation's F = 0.5, agreed before implementation. The CO2 phase-I refusal
-from the previous session is retired — the CO2 share is now cited (F basis).
+II→III CH4 jump is gone. CH₄ uses the regulation's measurement-replaceable
+default `F = 0.5` at every age, so age moves rate rather than share. The CO₂
+carbon closure is an explicit model assumption, not a value supplied by the
+regulation. AP-42 55/40/5 remains a mature-landfill ceiling/comparison.
 
-#### T-224 Manifest v6 · DONE — 2026-09-19
+#### T-224 Generation quantities in manifest v5 · DONE — 2026-09-19
 Files: `src/scentinel/core/history.py`, `tests/unit/test_history.py`
-Acceptance met: `RUN_FORMAT_VERSION` is 5 (the program's "v6" is the fifth
-bump in this repository's numbering — see note); the scenario generation block
-records ultimate, cumulative, and rate separately; a version 4 manifest is
-rejected naming both versions.
-Note: the master program expected Phase 1 to land manifest v5 first. Gas work
-ran first, so this is v5 and Phase 1's material composition will be v6. The
-numbering is by repository sequence, not by program label.
+Acceptance met at delivery: manifest v5 added ultimate, cumulative, and rate
+fields and rejected v4. Subsequent schema work advanced the current format to
+v10; Phase 1 material composition did not ship.
 
 ### Phase 3 — Phase model
 
@@ -102,33 +115,25 @@ applicability.
 
 ### Phase 4 — Fresh-waste model
 
-#### T-106 Extract fresh-waste VOC data · DONE (partial — see note) — 2026-09-19
-Files: `docs/data/fresh_waste_references.json` (new),
-`docs/references/statheropoulos_2005_urban_bins.txt` (new),
-`docs/references.md`, `docs/gas-composition-basis.md`,
-`tests/unit/test_fresh_waste_data.py` (new)
-Acceptance met: the artifact records a status for each of the three named
-sources with retrieval metadata; Statheropoulos 2005 is extracted with units and
-references (median µg/m³); the two inaccessible sources are recorded
-`unavailable` with the HTTP reason, and no value is estimated in their place.
-Note: the primary source (Waste Manag. 2017) is paywalled and NIOSH 3900 returns
-403; the extraction is partial by access, not by effort. The Statheropoulos
-values are mass concentrations and have not been converted to a source strength.
+#### T-106 Extract fresh-waste VOC data · PARTIAL — 2026-09-20
+Files: `docs/data/fresh_waste_references.json`,
+`docs/references/statheropoulos_2005_urban_bins.txt`, `docs/references.md`,
+`docs/gas-composition-basis.md`, `tests/unit/test_fresh_waste_data.py`
+Measured state: the Statheropoulos abstract medians are recorded with units and
+an NTUA institutional-repository record; no attached full text exists there.
+The Waste Management 2017 values remain paywalled and are not estimated.
+NIOSH 3900 is reachable (HTTP 200) but is an analytical-method analyte list,
+not a fresh-waste concentration source.
 
-#### T-107 Phase-I gas set · DONE — 2026-09-19
+#### T-107 Phase-I gas set · PARTIAL — 2026-09-21
 Files: `src/scentinel/core/gas_data.py`, `src/scentinel/ui/setup_panel.py`,
-`src/scentinel/ui/main_window.py`, `src/scentinel/ui/workspace.py`,
-`tests/unit/test_gas_data.py`, `tests/ui/test_setup_panel.py`,
-`tests/ui/test_setup_panel_layout.py`
-Acceptance met: `GasApplicability(phases, source, uncertainty)` and
-`offered_gases(age_h)` gate the catalogue by the age's phase; methane is not
-offered for a fresh load (its row is hidden, not disabled) and reappears when
-the load ages; every offered gas carries a source and an uncertainty; the setup
-panel filters its rows by holding time and `gas_sources()` cannot leak a
-non-applicable gas. The setup dock's floor is preserved so hiding a row cannot
-collapse the panel.
-Note: CO2 is a generated gas, not a selectable catalogue source, so it is not in
-`offered_gases`; it is reported as a generated mass/share.
+`tests/unit/test_gas_data.py`, `tests/ui/test_setup_panel.py`
+Implemented: phase I now offers only the cited allow-list (CO, H2S, VOC,
+methyl/ethyl mercaptan, and dimethyl sulfide); mature-landfill-only species
+state that their fresh-waste basis is missing. Methane remains hidden until a
+methanogenic phase. The cited fresh-waste source strengths are still absent,
+so surviving AP-42 entries retain the landfill-extrapolation caveat. CO2 is a
+generated output, not a selectable catalogue source.
 
 ---
 
@@ -499,7 +504,7 @@ Change: `scalarTransport` now writes `alphaD`/`alphaDt` and omits both `D` and
 `alphaD*nu + alphaDt*nut` branch (verified against the v2512 `scalarTransport.C`
 source in the container). `TURBULENT_SCHMIDT_NUMBER = 0.7`, labelled a model
 assumption with its RANS basis. Manifest v8 introduced the number and
-provenance; current manifests are v9.
+provenance; current manifests are v10.
 Acceptance met for the mechanism: `D_eff = D + nu_t/Sc_t` reaches the case
 (with `alphaD` per gas, see T-020b). The historical nearest-cell metric fell
 from ~63% to ~19%.
@@ -683,38 +688,13 @@ concentration* moved, which passed only on float noise (549999.9999999999 vs
 550000.0). The steady-state share is cited at 55% and is not a moisture
 function; the honest assertion is on `ch4_kg`, and the test now says so.
 
-#### T-105 Manifest version 4 · DONE — 2026-09-19
+#### T-105 Composition in manifest v4 · DONE — 2026-09-19
 Files: `src/scentinel/core/history.py`, `tests/unit/test_history.py`
-Change: `RUN_FORMAT_VERSION` is 4; the scenario block records `tonnage_t`, the
-eight composition fractions, and a `generation` block (phase, DOC, k,
-decay_fraction, methane_fraction, ch4_kg, co2_kg) captured from the model at
-reservation time. Version 3 manifests are rejected rather than misread.
-Acceptance met: a version 3 manifest raises naming the expected version; the new
-manifest round-trips; `_decode_composition` re-validates through
-`WasteComposition`, so a hand-edited manifest cannot hold a composition the
-model would refuse.
+At delivery, v4 added tonnage, eight composition fractions, and the generation
+block and rejected v3. `_decode_composition` re-validates through
+`WasteComposition`, so a hand-edited manifest cannot hold an invalid
+composition. Subsequent schema work advanced the current format to v10.
 
-#### T-106 Extract fresh-waste VOC data · TODO — **research, blocks T-107**
-Files: `docs/data/` (new artifacts), `docs/references.md`, `scripts/scrape_references.py`
-Why: phase I has no cited composition in the repo. The basis document §5.1 names
-three sources; none are extracted. Without this, phase I cannot be populated
-honestly.
-Change: extract and record, with retrieval metadata (canonical URL, UTC, artifact
-SHA-256), from: Waste Manag. 2017 68:677-687 DOI `10.1016/j.wasman.2017.07.015`;
-Statheropoulos et al. 2005 (Atmos. Environ.); NIOSH NMAM Method 3900 (analyte
-list — method only, not values).
-Acceptance: each extracted value carries a page/table reference and a rating; a
-source that cannot be extracted is recorded as unavailable with the reason, and no
-value is estimated in its place.
-
-#### T-107 Phase-I gas set · TODO — blocked by T-106
-Files: `src/scentinel/core/generation.py`, `src/scentinel/core/gas_data.py`,
-`docs/references.md`
-Change: derive the phase-I gas set from T-106: CO₂, H₂S, mercaptans, dimethyl
-sulfide, and the measured VOC species. Offer CH₄ only above the phase threshold.
-Acceptance: a phase-I scenario cannot select CH₄ (the checkbox is absent, not
-merely disabled); CO₂ appears with a cited default; the gas list is a function of
-`age_h`.
 
 ### W1 — Mass balance and yield
 

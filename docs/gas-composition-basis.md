@@ -230,10 +230,10 @@ diekstrak** dan karenanya belum boleh dipakai:
 
 | Sumber | Relevansi | Status |
 |---|---|---|
-| *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW* — Waste Management, 2017, 68:677-687, DOI `10.1016/j.wasman.2017.07.015` | Komposisi VOC fasa dekomposisi awal MSW — persis kasus bak truk | **Tidak tersedia** — paywalled (HTTP 400/403), nilai tidak diestimasi |
-| Statheropoulos et al., 2005 — *A study of VOCs evolved in urban waste disposal bins*, Atmos. Environ., DOI `10.1016/j.atmosenv.2005.04.013` | VOC di dalam bin sampah kota | **Terekstrak (abstrak)** — median µg/m³ tercatat di `docs/data/fresh_waste_references.json` |
+| *Emission characteristics and variation of volatile odorous compounds in the initial decomposition stage of MSW* — Waste Management, 2017, 68:677-687, DOI `10.1016/j.wasman.2017.07.015` | Komposisi VOC fasa dekomposisi awal MSW — persis kasus bak truk | **Tidak tersedia** — paywalled, nilai tidak diestimasi |
+| Statheropoulos et al., 2005 — *A study of VOCs evolved in urban waste disposal bins*, Atmos. Environ., DOI `10.1016/j.atmosenv.2005.04.013` | VOC di dalam bin sampah kota | **Terekstrak (abstrak)** — median µg/m³ diverifikasi terhadap rekaman repositori NTUA; tidak ada lampiran teks penuh |
 | Salinas et al., 2026 — *Odour and Composition Assessment of MSW* | Pengaruh komposisi & tingkat pengisian terhadap emisi bau | Belum diekstrak |
-| NIOSH NMAM Method 3900 | Daftar analyte yang diukur di udara sampah (termasuk α-pinene, d-limonene) | **Tidak tersedia** — HTTP 403; metode, bukan nilai |
+| NIOSH NMAM Method 3900 | Daftar 17 analit VOC dan metode sampling udara | **Ditinjau; tidak diekstrak** — HTTP 200 pada 2026-09-20; metode, bukan nilai sampah segar |
 
 **Catatan konversi:** nilai Statheropoulos adalah konsentrasi massa (µg/m³),
 bukan fraksi volume. Konversi ke ppmv memerlukan suhu dan tekanan dan belum
@@ -259,29 +259,23 @@ ditemukan. Bentuk yang benar adalah peluruhan orde-satu (§3), bukan
 perkalian linear.
 
 **Status 0.2.2:** penskalaan linear dihapus (T-103); kekuatan sumber dihitung
-dari Eq. HH-1. CH₄ dan CO₂ kini mengikuti pembagian `F = 0.5` regulasi (§6.2b),
-jadi tidak ada komposisi yang melampaui plafon 55%.
+dari Eq. HH-1. CH₄ memakai default `F = 0.5`; pembagian CO₂ yang menutup neraca
+karbon adalah asumsi model, bukan nilai regulasi (§6.2b).
 
-### 5.3 Parameter yang saat ini tidak berfungsi
+### 5.3 Kelembapan sebagai input laju
 
-`moisture_fraction` tersimpan di proyek, tercatat di manifest, dan tampil di
-UI — tetapi **tidak pernah masuk ke perhitungan kekuatan sumber**. Verifikasi:
+`moisture_fraction` tersimpan di proyek dan manifest serta memilih `k` di dalam
+rentang Table HH-1. Model memakai interpolasi linear berlabel antara referensi
+kering 0.15 dan basah 0.65; ini pilihan model, bukan rumus kelembapan yang
+diterbitkan Table HH-1. Dengan demikian kelembapan mengubah laju dan massa
+kumulatif, tetapi tidak mengubah fraksi volume steady-state.
 
-```
-$ python -c "import inspect; from scentinel.core.scenario import auto_concentration_ppmv; \
-  print('moisture' in inspect.getsource(auto_concentration_ppmv))"
-False
-```
-
-Padahal AP-42 menyatakan kelembapan **memang** faktor yang mengubah laju:
+AP-42 menyatakan kelembapan memang faktor yang mengubah laju:
 
 > "The waste degradation decay rate is a function of waste type, age of waste,
 > and **waste moisture**. Waste moisture might be changed by leachate
 > recirculation and rainfall rates."
 > — AP-42 Ch.2.4, halaman 2.4-5
-
-Artinya kelembapan seharusnya memengaruhi `k` (atau pilihan `k`), bukan menjadi
-input mati.
 
 ---
 
@@ -337,38 +331,40 @@ menyatakan itu (`PhaseInterpretation.applicability`) alih-alih menyembunyikannya
 
 ### 6.2b Campuran gas yang dihasilkan (F = 0.5)
 
-Gas yang dihasilkan dibagi oleh **default metana regulasi itu sendiri**,
-`F = 0.5` (40 CFR §98.343 Tabel HH-1) — bukan oleh campuran AP-42 55/40/5.
-Alasannya:
+Persamaan HH-1 memakai default metana regulasi `F = 0.5` (40 CFR
+§98.343(a)(1)) untuk menghitung CH₄. **Regulasi itu tidak menetapkan pembagian
+CO₂ model ini.** Scentinel menutup neraca karbon dengan asumsi satu mol CO₂
+untuk satu mol CH₄ pada `F = 0.5`; provenance CO₂ karena itu `model
+assumption`, sementara `F` tetap `cited default, replace with measurement`.
 
-- 55/40/5 adalah **hasil pengukuran landfill matang**; menerapkannya pada sampah
-  berumur jam-an adalah kesalahan basis yang sama yang memicu seluruh dokumen ini.
-- Regulasi yang sama yang memberi persamaan HH-1 juga memberi `F = 0.5` sebagai
-  default, jadi campurannya satu basis dengan lajunya.
-- Dengan `F = 0.5`, karbon yang terdegradasi terbagi rata: sekitar separuh mol
-  menjadi CH₄, separuh menjadi CO₂. N₂ **bukan** produk peluruhan (ia udara
-  terperangkap) sehingga tidak dilaporkan.
-- Yang berubah karena umur adalah **jumlah** gas (kumulatif, kg) dan **lajunya**
-  (kg/jam), bukan persentasenya. Ini yang membuat umur benar-benar menggerakkan
-  simulasi, bukan hanya angka di layar.
+Pemisahan ini penting:
 
-Campuran 55/40/5 tetap disimpan sebagai **plafon dan pembanding** (gas landfill
-matang), bukan sebagai input model.
+- 55/40/5 adalah hasil pengukuran landfill matang; menerapkannya pada sampah
+  berumur jam-an tidak cocok dengan basis kasus.
+- `F = 0.5` adalah default regulasi yang dapat diganti pengukuran untuk jalur
+  CH₄, bukan bukti eksperimental pembagian CO₂.
+- N₂ bukan produk peluruhan dan tidak dilaporkan sebagai gas yang dihasilkan.
+- Umur mengubah jumlah kumulatif dan laju, bukan fraksi campuran model.
+
+Campuran AP-42 55/40/5 tetap disimpan sebagai plafon dan pembanding untuk
+landfill matang, bukan sebagai input model.
 
 ### 6.3 Gas yang dihitung (output)
 
 **Fasa I (bak truk):**
 
-| Gas | Sumber nilai | Status |
+| Gas | Dasar penawaran | Status |
 |---|---|---|
-| CO₂ | Fasa I aerobik — AP-42 §2.4.4 | bentuk tersedia, nilai perlu ekstraksi |
-| H₂S | Table 2.4-1: 36 ppmv | **tersedia & relevan** |
-| Merkaptan (metil, etil) | Table 2.4-1: 2.5 / 2.3 ppmv | **tersedia & relevan** |
-| Dimetil sulfida | Table 2.4-1: 7.8 ppmv | **tersedia & relevan** |
-| NH₃ | **tidak ada di AP-42** — perlu sumber lain | belum tersedia |
-| VOC oksigenat (etanol, aseton) | Table 2.4-1 punya nilai | perlu validasi fasa |
-| Terpena (limonena, pinena) | **tidak ada di AP-42** | belum tersedia |
-| CH₄ | ≈ 0 untuk jam-jam pertama | dihitung dari `age_h` |
+| CO₂ | Output model generasi | Pembagian CO₂ adalah model assumption |
+| CO | Katalog AP-42 + relevansi fase awal | Ditawarkan; kekuatan default masih ekstrapolasi landfill |
+| H₂S | Katalog AP-42 + relevansi bau | Ditawarkan; kekuatan default masih ekstrapolasi landfill |
+| Merkaptan (metil, etil) | Katalog AP-42 + relevansi bau | Ditawarkan; kekuatan default masih ekstrapolasi landfill |
+| Dimetil sulfida | Katalog AP-42 + relevansi bau | Ditawarkan; kekuatan default masih ekstrapolasi landfill |
+| VOC | Proxy hexana AP-42; median VOC bin tersedia terpisah | Ditawarkan; belum ada kekuatan sumber segar yang sepadan |
+
+Gas katalog lain, termasuk CH₄, NH₃, terpena, etana, aromatik, dan senyawa
+halogen, tidak ditawarkan untuk beban segar karena basis sampah segarnya belum
+tersedia. Pada beban matang seluruh katalog tetap tersedia.
 
 **Fasa IV (landfill/aged):**
 
@@ -445,13 +441,13 @@ dalam satuan fraksi volume setara dengan fluks massa; konversinya memakai
 `V_m/MW` pada 25 °C, 1 atm.
 
 Yang berubah karena umur adalah **laju** (dan karena itu fluks), bukan fraksi
-campuran — persis pemisahan yang ditetapkan di §6.6. Tonase dan lebar bin
-menggerakkan fluks secara linear.
+campuran — persis pemisahan yang ditetapkan di §6.6. Pada laju batch tetap,
+tonase menaikkan fluks sedangkan lebar bin memperbesar luas emisi dan karenanya
+menurunkan fluks secara berbanding terbalik.
 
-**Catatan jujur:** gate mesh-independence masih belum lolos (<10%). Boundary
-fluks sudah bukan penyebabnya lagi; akar yang terukur adalah medan kecepatan
-k-epsilon yang belum konvergen terhadap mesh dan skalar yang hanya memakai
-difusivitas molekuler (lihat [ROADMAP.md](ROADMAP.md)).
+**Catatan jujur:** gate mesh-independence masih belum lolos (<10%). Pengukuran
+containing-cell saat ini adalah S1 18.65%, S2 0.53%, dan S3 266.29%; medan
+kecepatan k-epsilon juga belum mesh-converged (lihat [ROADMAP.md](ROADMAP.md)).
 
 ### 7.2 Transpor skalar turbulen (Phase 6)
 
@@ -475,8 +471,9 @@ Sumber fluks ditulis dalam satuan **fraksi volume**, bukan ppmv: gradient =
 `J·(Vm/MW)/D` tanpa faktor `1e6` (faktor itu hanya untuk tampilan di
 `post.py`).
 
-Efeknya: deviasi mesh turun dari ~63% ke ~19%, tetapi gate <10% belum tutup.
-Menurunkan `Sc_t` (mis. 0.3) mengecilkan deviasi lebih jauh namun di luar
+Efek historisnya pada sampler nearest-cell adalah penurunan deviasi dari ~63%
+ke ~19%. Sampler containing-cell yang benar kini mengukur 266.29%, jadi gate
+tetap gagal. Menurunkan `Sc_t` (mis. 0.3) mengecilkan deviasi namun di luar
 rentang tersitasi — itu menyetel angka demi lolos gate, bukan fisika, sehingga
 `Sc_t` dibiarkan 0.7. Sisa error berasal dari medan kecepatan yang belum
 mesh-converged (T-021).
@@ -509,10 +506,10 @@ data dari literatur.
 | Konsentrasi trace (45+ senyawa) | **Terkutip** | AP-42 Table 2.4-1 |
 | NMOC/Benzene/Toluene per regime | **Terkutip** | AP-42 Table 2.4-2 |
 | Kelembapan memengaruhi laju | **Terkutip** | AP-42 Ch.2.4 hlm 2.4-5 |
-| Komposisi VOC fasa awal MSW | **Belum diekstrak** | Waste Manag. 2017 (DOI di §5.1) |
-| VOC dalam bin sampah | **Belum diekstrak** | Statheropoulos 2005 |
-| NH₃ | **Tidak ada sumber** | — |
-| Terpena (limonena, pinena) | **Tidak ada sumber** | — |
+| Komposisi VOC fasa awal MSW | **Belum diekstrak** | Waste Manag. 2017 (paywalled; DOI di §5.1) |
+| VOC dalam bin sampah | **Terekstrak (abstrak)** | Statheropoulos 2005; median µg/m³ belum menjadi kekuatan sumber |
+| NH₃ | **Tidak ada sumber kekuatan segar** | — |
+| Terpena (limonena, pinena) | **Terukur sebagai konsentrasi bin, belum ada kekuatan sumber** | Statheropoulos 2005 |
 | NCV, ash, Cl% bahan bakar | **Butuh laboratorium** | — |
 
 Aturan yang berlaku: **nilai tanpa sitasi tidak boleh masuk ke model.** Baris

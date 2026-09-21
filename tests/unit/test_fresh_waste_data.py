@@ -28,14 +28,14 @@ def test_the_artifact_records_a_status_for_every_named_source():
         "niosh_3900",
     }
     for name, entry in data.items():
-        assert entry["status"] in ("extracted", "unavailable"), name
+        assert entry["status"] in ("extracted", "reviewed", "unavailable"), name
         assert entry["canonical_url"]
         assert entry["retrieved_utc"]
 
 
 def test_an_unavailable_source_states_why_and_estimates_nothing():
     data = _data()
-    for name in ("waste_management_2017", "niosh_3900"):
+    for name in ("waste_management_2017",):
         entry = data[name]
         assert entry["status"] == "unavailable"
         assert entry["reason"]
@@ -56,7 +56,7 @@ def test_the_recorded_hash_matches_the_raw_artifact():
     entry = _data()["statheropoulos_2005"]
     raw = ROOT / entry["raw_artifact"]
     digest = hashlib.sha256(raw.read_bytes()).hexdigest()
-    assert digest == entry["artifact_sha256"]
+    assert digest == entry["scraped_text_sha256"]
 
 
 def test_limonene_is_recorded_with_its_measured_value():

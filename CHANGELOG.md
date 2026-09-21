@@ -27,33 +27,38 @@ Two things are worth knowing before reading:
 
 ### Changed
 
-- **Gas generation is one continuous curve.** The phase no longer switches
-  methane on and off at a holding-time boundary: generation is a single
-  first-order decay evaluated at every age, so the methane step at the 90-day
-  boundary is gone. The produced gas is split by the regulation's own default
-  methane fraction, `F = 0.5` (40 CFR 98.343 Table HH-1), at every age, instead
-  of applying the AP-42 55/40/5 mature-landfill measurement to fresh waste. The
-  AP-42 mix is retained as a ceiling and comparison only.
-- **Ultimate, cumulative, and rate are separate quantities.** A batch now
-  reports `ultimate_ch4_kg` (what it could produce), `ch4_cumulative_kg` /
-  `co2_cumulative_kg` (what it has produced by its age), and
-  `ch4_rate_kg_per_h` / `co2_rate_kg_per_h` (the instantaneous rate, the exact
-  derivative of the cumulative curve). The batch panel shows cumulative kg and
-  rate kg/h in two readouts; the old "Gas produced now" label, which showed a
-  cumulative mass, is removed. Holding time now moves the rate and the amount,
-  not the volume share.
-- **Manifest format 5.** `RUN_FORMAT_VERSION` is 5; the scenario generation
-  block records ultimate, cumulative, and rate separately. Version 4 manifests
-  are rejected naming both versions. (The hardening program labels this "v6";
-  gas work ran before the material-taxonomy phase, so the repository sequence
-  is v5 here and Phase 1's material composition will be v6.)
+- **Gas generation is one continuous curve.** Phase labels no longer switch
+  methane on and off. Equation HH-1 uses the cited, measurement-replaceable
+  methane default `F = 0.5`; the matching CO₂ split is explicitly a model
+  assumption. AP-42 55/40/5 remains a mature-landfill comparison only.
+- **Ultimate, cumulative, and rate are separate quantities.** A batch reports
+  potential, gas produced by its recorded age, and instantaneous generation
+  rate. Holding time moves rate and mass, not the modelled volume share.
+- **Manifest format 10.** Run records include convergence evidence and bin
+  width; old schemas are rejected naming the expected version. Project format
+  2 persists width. Phase 1 material taxonomy remains explicitly deferred.
 
 ### Fixed
 
-- The phase-I CO2 volume share is no longer refused as uncited: with the
-  regulation's `F = 0.5` basis it is cited, so `generated_source_ppmv` returns
-  a real ~500 000 ppmv CO2 share at every age. The carbon closure between CH4
-  and CO2 is asserted to 0.2%.
+- Manual CH₄/CO₂ source entries now control the emitted flux instead of being
+  overwritten by generated-gas shares.
+- Solver residuals use numeric time ordering, compare the actual case targets,
+  and treat missing fields as `not_evaluated`; solver failures cannot be
+  relabelled converged.
+- Fresh loads expose only the supported gas allow-list, while aged loads retain
+  the full catalogue and unsupported fresh species state the evidence gap.
+- Bin width is editable, persisted, and used in emission area and flux.
+- **Linux release packages now include their Python runtime.** The previous
+  packages copied a virtual environment whose interpreter was still an absolute
+  symlink into the GitHub Actions tool cache. It could launch only when a user
+  manually substituted another interpreter, and native extensions such as
+  NumPy then failed when that interpreter's CPython ABI differed. Linux builds
+  now use a PyInstaller one-directory bundle and execute an artifact-level
+  native dependency smoke test before `.deb`, `.rpm`, or `.tar.gz` creation.
+- Opening a project no longer aborts when its run directory contains a manifest
+  from an older, incompatible history format. The project opens normally with
+  empty results; strict history APIs continue to reject the obsolete manifest.
+
 
 ### Phase 3 — phase model
 

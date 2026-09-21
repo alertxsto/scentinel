@@ -48,15 +48,17 @@ and per-sensor ppmv results. Records survive restarts and are readable through
 `scentinel.core.history` (`list_runs()` / `get_run()`); failed and cancelled
 attempts are recorded too.
 
-Manifest format 8 also records the batch the run solved: the composition
-fractions, the tonnage, and the generation chemistry the model derived from
-them — the ultimate potential, the cumulative gas produced by the recorded age,
-and the instantaneous generation rate, each a separate quantity. The batch
-panel and the setup form edit one scenario, so the assessment a user reads is
-the waste the case actually solves.
+Manifest format 10 also records the batch the run solved: bin width,
+composition fractions, tonnage, and the generation chemistry the model derived
+from them — ultimate potential, cumulative gas produced by the recorded age,
+and instantaneous generation rate as separate quantities. Format 10 manifests
+reject older records rather than silently interpreting a different schema.
+The batch panel and setup form edit one scenario, so the assessment a user
+reads is the waste the case actually solves.
 
-The generated gas is split by the regulation's own default methane fraction,
-`F = 0.5` (40 CFR 98.343 Table HH-1), at every age; the AP-42 55/40/5 mix is
+Generated methane uses the regulation's default methane fraction `F = 0.5`
+(40 CFR 98.343(a)(1)), replaceable by a measurement. The matching CO2 split is
+an explicit model assumption, not a regulatory claim. The AP-42 55/40/5 mix is
 retained as a measured mature-landfill ceiling, not as the produced mixture.
 Holding time therefore moves the gas **rate and cumulative mass**, not the
 volume share. The phase label (I–IV) is an interpretation of the age, not a
@@ -97,19 +99,19 @@ for an ordinary run. The `ventilation` input is recorded as
 The design spec requires probe values to change by less than 10% when the mesh is
 refined 2×. Measured on the current pipeline:
 
-| Mesh size | Cells | S1 (ppmv) | S3 (ppmv) |
-|---|---|---|---|
-| 0.50 m | 3 444 | 0.342 | 4.340 |
-| 0.25 m | 7 248 | 0.465 | 3.363 |
-| 0.125 m | 28 016 | 0.887 | 6.358 |
+| Mesh size | Real cells | S1 change | S2 change | S3 change |
+|---|---:|---:|---:|---:|
+| 0.50 → 0.25 m | containing-cell samples | 18.65% | 0.53% | 266.29% |
 
-The source is an emission mass flux (kg/m²/s over the emitting area), imposed as
-a `fixedGradient` on the scalar, and the scalar is carried with turbulent
-diffusivity (`D + ν_t/Sc_t`, `Sc_t = 0.7` a labelled model assumption). Together
-these cut the worst-probe deviation from ~87% to ~19%, but the <10% gate is
-still missed: the k-epsilon velocity field is itself not mesh-converged at the
-current cell counts. Until the gate passes, **treat absolute concentrations as
-screening estimates and use results for relative comparison only.** The full
+The nominal mesh size controls the physical discretisation; earlier tables
+mixed that with computational cell counts from a 240× scaled mesh and are not
+comparable. The source is an emission mass flux (kg/m²/s over the emitting
+area), imposed as `fixedGradient`, and scalar transport uses
+`D + ν_t/Sc_t` with `Sc_t = 0.7` as a labelled model assumption. The current
+containing-cell result still misses the <10% gate; S3 crosses zero near the
+scalar noise floor and the k-epsilon velocity field is not mesh-converged.
+Until the gate passes, **treat absolute concentrations as screening estimates
+and use results for relative comparison only.** The full
 analysis and the ranked fix options are in
 [docs/ROADMAP.md](docs/ROADMAP.md#blocking-issue-mesh-independence).
 
@@ -132,7 +134,8 @@ analysis and the ranked fix options are in
 ## Releases
 
 GitHub Releases ship `.deb`, `.rpm`, an Arch prefix `.tar.gz`, and a Windows
-`.exe`. The GUI launches without Podman; a solve needs the container below.
+`.exe`. Release packages include their Python runtime; no system Python install
+is required. The GUI launches without Podman; a solve needs the container below.
 
 ```bash
 sudo apt install ./scentinel_*-amd64.deb        # Debian / Ubuntu

@@ -111,7 +111,7 @@ convergence, verification, or validation.
 | 2.2 Multi-gas case generation | Done | One `scalarTransport` object and one `0/<gas>` field per selected gas |
 | 2.3 Post-processing and probes | Done | VTK cell sampling, `SensorReading` |
 | 2.4 Results panel | Done | Table in ppmv, log pane, CSV export |
-| 2.5 Physics verification | **Blocked** | Mesh independence fails at 76.5%; see below |
+| 2.5 Physics verification | **Blocked** | Mesh independence fails at 266.29% worst containing-cell deviation; see below |
 | 2.6 Field visualisation (cut planes, streamlines) | Not started | pyvista is installed and `foamToVTK` already emits the data |
 
 ### F3 — Comparison and reporting
@@ -128,8 +128,8 @@ difference by `ventilation.requested_on` while `ventilation.modelled` is false.
 
 | Task | Status |
 |---|---|
-| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 8), `list_runs()` / `get_run()` |
-| 3.2 Comparison view | Not started — nothing reads the history back into the UI yet. Superseded in scope by T-142, which compares batches as well as runs |
+| 3.1 Run history manager | Done — `core/history.py`; persistent `run-NNN/run.json` manifests (format version 10), `list_runs()` / `get_run()` |
+| 3.2 Comparison view | Not started — history is restored in the workspace, but no side-by-side comparison UI exists; superseded in scope by T-142 |
 | 3.3 CSV export | Done (from the results panel) |
 | 3.4 PDF report | Not started |
 
@@ -151,12 +151,12 @@ when its inputs are missing.
 The W0–W3 engine shipped in 0.2.1: composition, phase, Equation HH-1
 generation, mass balance, suitability, and the recommendation all exist as core
 modules with unit tests, and `ui/batch_panel.py` exposes them live. The batch
-panel now also mirrors its composition, holding time, tonnage, moisture, and
-stream into the scenario the run uses, and manifest format 8 records them.
+panel mirrors composition, holding time, tonnage, moisture, and stream into the
+scenario the run uses, and manifest format 10 records them plus bin width.
 
 | Sub-phase | Content | Status |
 |---|---|---|
-| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest v5 | Done |
+| W0 | Composition, phase, Eq. HH-1 generation, moisture, manifest history through v10 | Done |
 | W1 | Batch mass balance and per-stream yield | Done; split fractions remain labelled assumptions |
 | W2 | RDF quality parameters and route suitability scores | Engine done; T-120 is partly blocked on laboratory data |
 | W3 | Interpretation, batch history, forecast, recommendation | Recommendation done; interpretation/history/forecast not started |
@@ -222,21 +222,6 @@ are not established while the containing-cell mesh gate fails.
 Phases 5 and 6 are done; the gate now depends on the velocity field (T-021),
 not on the source boundary or the scalar transport.
 
-1. **Mass-flux source.** Switch to a `fixedFluxPressure`-style or
-   `externalWallHeatFluxTemperature`-equivalent scalar flux boundary so the
-   emission rate (kg/m²/s) is imposed rather than the surface concentration.
-   Note: the design spec's §4.2/§4.3 describe a `fixedValue` *concentration*
-   boundary, so this is a change of plan, not a restoration of the spec. The
-   spec's own gas-source field comment (`gas_sources: … kg/m2/s or ppm basis`)
-   left the basis open, and this is the resolution.
-2. **Near-wall refinement.** Add boundary-layer grading normal to the waste
-   surface so the first cell height is resolved, then demonstrate convergence.
-3. **Accept and document.** Keep the flux boundary and state clearly that
-   values are relative screening estimates. This is the current position.
-
-Option 1 (turbulent scalar transport, Phase 6) is the current best fix and the
-gate now depends on it plus a mesh-converged velocity field. The source
-conversion is done: the UI and manifest already carry the flux in kg/m²/s.
 
 ---
 

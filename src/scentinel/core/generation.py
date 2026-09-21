@@ -22,11 +22,11 @@ fresh load read like a landfill:
   ``Generation.ch4_rate_kg_per_h``. The exact derivative of the cumulative
   curve, so the two can never disagree.
 
-The produced gas is split by the regulation's own default methane fraction,
-``F = 0.5`` (Table HH-1 to Subpart HH), at every age. The AP-42 p.2.4-3
-steady-state mix (55% CH4 / 40% CO2 / 5% N2) is a *measured mature-landfill*
-composition; it is retained here as a ceiling and a comparison, never as the
-mixture the model produces. N2 is not a decay product and is not reported.
+The methane term uses the regulation's measurement-replaceable default fraction
+``F = 0.5`` (Table HH-1 to Subpart HH) at every age. Assigning the remaining
+degraded carbon to CO2 is a model assumption, not a stoichiometric split stated
+by the regulation. The AP-42 p.2.4-3 steady-state mix (55% CH4 / 40% CO2 /
+5% N2) remains a measured mature-landfill comparison, never the generated mix.
 
 Because the split does not depend on age, the generation curve is continuous:
 no phase boundary switches methane on or off. The phase label

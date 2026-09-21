@@ -62,7 +62,7 @@ FOAM_BASHRC = "/usr/lib/openfoam/openfoam2512/etc/bashrc"
 #: Steady-state incompressible solver, as named in this distribution.
 SOLVER = "simpleFoam"
 
-#: Kinematic viscosity of air at 25 C [m^2/s].
+#: Kinematic viscosity of air at 20 C [m^2/s].
 NU_AIR = 1.5e-05
 
 #: Wind profile applied to the inlet boundary. The reported wind speed is
@@ -321,11 +321,10 @@ def _gas_mixture(scenario: Scenario) -> gen.Generation:
 def emission_rate_kg_per_s(scenario: Scenario, gas: str) -> float:
     """Mass emission rate of ``gas`` from the batch, in kg/s.
 
-    The batch's gas is the generation model's mixture. A generated gas (CH4,
-    CO2) takes its molar share of that mixture from the F = 0.5 split; a trace
-    gas takes its cited (or manual) volume share of the mixture's molar flow.
-    The bulk molar flow is the CH4 + CO2 rate divided by their molar masses, so
-    every gas is tied to the same generation curve rather than to its own guess.
+    A generated gas takes the model's F-split share unless the user supplied an
+    explicit value. An explicit CH4 or CO2 value is a manual share of the bulk
+    molar flow, exactly like a trace gas. The manifest's ``resolved_ppmv`` is
+    therefore always the source the boundary applies.
     """
     result = _gas_mixture(scenario)
     molar_mass = gas_data.get_gas(gas).mw_g_mol / 1000.0  # kg/mol
@@ -335,11 +334,13 @@ def emission_rate_kg_per_s(scenario: Scenario, gas: str) -> float:
     moles_co2 = result.co2_rate_kg_per_h / (gen.CO2_MOLAR_MASS / 1000.0)
     bulk_mol_per_h = moles_ch4 + moles_co2
 
-    if gas in ("CH4", "CO2"):
+    generated = gas in ("CH4", "CO2")
+    manual = not isinstance(scenario.gas_sources.get(gas), str)
+    if generated and not manual:
         moles = moles_ch4 if gas == "CH4" else moles_co2
     else:
-        # ``resolve_sources`` already chooses the manual value or the cited
-        # ``auto`` default, so a hand-set concentration is honoured here too.
+        # ``resolve_sources`` already chose the manual value or the cited
+        # ``auto`` default.
         fraction = resolve_sources(scenario).get(gas, 0.0)
         moles = bulk_mol_per_h * fraction
     kg_per_h = moles * molar_mass

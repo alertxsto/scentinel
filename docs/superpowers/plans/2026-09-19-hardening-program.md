@@ -58,10 +58,11 @@ These apply to every phase; each per-phase plan repeats them in its own
    `RUN_FORMAT_VERSION` (`core/history.py`) or `FORMAT_VERSION`
    (`core/project.py`) and either migrates old records or rejects them naming
    both versions. Actual repository sequence (gas work ran first): v5 = Phase 2
-   generation quantities, v6 = Phase 3 phase interpretation, v7 = Phase 1
-   material composition (project format v2 alongside), v8 = Phase 5 mass-flux
-   source. Program labels ("manifest v5/v6/v7") are nominal; the repository
-   number is what ships.
+   generation quantities, v6 = Phase 3 phase interpretation, v7 = Phase 5
+   mass-flux source, v8 = turbulent Schmidt number, v9 = parsed convergence
+   state, and v10 = bin width in the requested geometry. Project format v2
+   records `width_m`. **Phase 1's material composition was not implemented; it
+   remains deferred as T-210…T-214, not as a shipped schema.**
 6. **i18n:** every user-visible string goes through `Translator.t` with keys in
    both `resources/locales/en.json` and `id.json` — until Phase 18 replaces the
    shell, after which the same rule applies to the new UI's message catalogue.
@@ -95,6 +96,9 @@ These apply to every phase; each per-phase plan repeats them in its own
 ---
 
 ### Phase 1 — Material taxonomy · T-210…T-214
+
+**Status: DEFERRED — not implemented as of 2026-09-20.** Phase 4's gas
+applicability is a partial substitute, not the material taxonomy.
 
 **Goal:** physical materials and decomposition categories become separate
 things. Plastic is **not** inert for RDF or recycling; it is inert only for

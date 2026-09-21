@@ -45,6 +45,24 @@ def test_phase_one_offers_only_phase_one_gases():
     assert "VOC" in offered
     assert all("I" in applicability(g).phases for g in offered)
 
+def test_a_fresh_load_offers_only_gases_with_a_fresh_waste_basis():
+    offered = set(offered_gases(8.0))
+    assert "PERCHLOROETHYLENE" not in offered
+    assert "BENZENE" not in offered
+    assert "DICHLORODIFLUOROMETHANE" not in offered
+    assert {"CO", "H2S", "VOC"} <= offered
+
+
+def test_an_aged_load_offers_the_full_landfill_catalogue():
+    assert len(offered_gases(24.0 * 365 * 5)) > len(offered_gases(8.0))
+
+
+def test_every_unoffered_fresh_gas_states_the_missing_basis():
+    app = applicability("BENZENE")
+    assert "I" not in app.phases
+    assert "fresh" in app.uncertainty.lower()
+
+
 
 def test_unknown_gas_applicability_raises():
     with pytest.raises(KeyError):

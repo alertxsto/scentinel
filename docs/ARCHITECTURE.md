@@ -247,13 +247,12 @@ silently or with a misleading error.
 22. **Only the path relative to the run directory is stored.** `case_dir` is
     validated as a relative child, so a manifest never carries a workstation
     path and stays portable with its case.
-23. **`requested_end_iteration` is a control index, not elapsed time, and not
-    evidence of convergence.** The steady `simpleFoam` run has no physical
-    duration, so the manifest names the field for what it is. Reaching
-    `endTime` counts iterations; it does not prove the `residualControl`
-    targets were met, and nothing parses the achieved residuals, so
-    `solver_termination` and `quality.convergence` both stay `not_evaluated`.
-    Inferring convergence from exit code 0 would fabricate a scientific claim.
+23. **`requested_end_iteration` is a control index, not elapsed time.** The
+    steady `simpleFoam` run has no physical duration. Scentinel parses the
+    numerically latest solver-time residuals and compares every configured
+    field against the targets written for that case. A missing field is
+    `not_evaluated`, not a pass; a solver-stage failure remains
+    `solver_error`. Exit code 0 alone is never evidence of convergence.
 24. **The run samples a frozen snapshot, not the live model.** `start_run()`
     takes one `history.snapshot_project()` copy and gives it to both
     `begin_run()` and `SolverWorker`. Disabling the editing surfaces while a
@@ -268,12 +267,11 @@ silently or with a misleading error.
     `load_run()` applies the same check, so a hand-edited manifest cannot
     smuggle in foreign readings.
 26. **`applied_physics` and the case digest separate request from experiment.**
-    The reported wind speed becomes a different inlet velocity after the
-    power-law scaling, and the case carries each scalar with the turbulent
-    effective diffusivity `alphaD*nu + alphaDt*nut` (`alphaD = 1`,
-    `alphaDt = 1/Sc_t`, `Sc_t = 0.7` a model assumption). The per-gas
-    molecular diffusivity `casegen.scalar_diffusivity()` reads each gas's
-    FSG-computed value from `gas_data` and still enters through `alphaD*nu`.
+    The reported wind speed becomes a different inlet velocity after power-law
+    scaling. Each scalar uses `alphaD*nu + alphaDt*nut`, with per-gas
+    `alphaD = D_gas/nu` and `alphaDt = 1/Sc_t`; `Sc_t = 0.7` is a labelled
+    model assumption. `casegen.scalar_diffusivity()` reads each gas's
+    FSG-computed molecular value from `gas_data`.
     `casegen` owns those constants and renders both the case files
     and the persisted block from the same source, so a manifest cannot claim a
     setting the case does not use. The SHA-256 digest
@@ -315,9 +313,9 @@ guess a registry when it cannot prompt.
 
 | Gate (design spec) | Target | Measured | Status |
 |---|---|---|---|
-| Mesh independence | <10% deviation under 2× refinement | 76.5% worst, not convergent | **FAIL** |
-| Mass balance | <5% | ~8% by a hand-rolled diffusive-flux estimate | not automated |
-| Analytical 1D diffusion | R² > 0.99 | not written | — |
+| Mesh independence | <10% deviation under 2× refinement | 266.29% worst containing-cell deviation | **FAIL** |
+| Mass balance | <5% | 1.4245% integrated closure | **PASS** |
+| Analytical transport | advection exact; axial diffusion within benchmark tolerance | 0% advection error; 5.5% axial-diffusion error at Pe=5 | **PASS** |
 | Cavity benchmark | runs, no `FOAM FATAL` | superseded by the real e2e case | — |
 
 `checkMesh` passes on the generated meshes (non-orthogonality 32.6° max, skewness

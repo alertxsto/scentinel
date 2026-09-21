@@ -83,21 +83,29 @@ def waste_spec(key: str) -> WasteSpec:
         raise ValueError(f"waste_type must be one of {WASTE_TYPES}")
     return WASTE_SPECS[key]
 
+#: The regulation defines F as a measurement-replaceable methane default, not
+#: as a stoichiometric CH4/CO2 split. Using (1 - F) for the remaining degraded
+#: carbon is therefore an explicit model assumption.
+CO2_SPLIT_PROVENANCE = (
+    "model assumption: CO2 = (1 - F) of the degraded carbon under 40 CFR "
+    "98.343(a)(1)'s default F = 0.5, which is measurement-replaceable, "
+    "not a stoichiometric split"
+)
+
 
 def generated_source_ppmv(scenario: Scenario, gas: str) -> float:
     """Source concentration of a decomposition product, in ppmv.
 
     The gas phase above the waste is the mixture the decomposition model reports,
-    so the source strength of a product is its volume share of that mixture. The
-    model splits the degraded carbon by the regulation's own default methane
-    fraction, ``F = 0.5`` (40 CFR §98.343 Table HH-1), at every age: methane and
-    CO2 each hold about half the gas by volume, and the AP-42 55/40/5
-    mature-landfill mix is a measured ceiling rather than the produced mixture.
+    so a product's source strength is its volume share of that mixture. Methane
+    uses 40 CFR §98.343(a)(1)'s measurement-replaceable default ``F = 0.5``.
+    Assigning the remaining degraded carbon to CO2 is the model assumption
+    recorded in :data:`CO2_SPLIT_PROVENANCE`; the regulation does not define a
+    stoichiometric CH4/CO2 split.
 
-    The holding time does not move this share — it moves the *rate* and the
-    cumulative mass the generation model reports. That separation is the point:
-    a fresh load and an aged landfill both produce a ~50/50 gas, but the aged one
-    produces far more of it, and much faster.
+    Holding time changes the generation rate and cumulative mass, not this
+    assumed share. The AP-42 55/40/5 mature-landfill mix remains a measured
+    ceiling and comparison, not the mixture generated here.
     """
     if gas not in GENERATED_GASES:
         raise ValueError(f"{gas!r} is not a decomposition product")
@@ -143,11 +151,16 @@ def auto_provenance(scenario: Scenario, gas: str) -> str:
     """
     if gas in GENERATED_GASES:
         ppmv = generated_source_ppmv(scenario, gas)
+        split_basis = (
+            "cited default F=0.5 (measurement-replaceable)"
+            if gas == "CH4"
+            else CO2_SPLIT_PROVENANCE
+        )
         return (
             f"{gas}: {ppmv:.0f} ppmv — computed by the generation model "
             f"(40 CFR 98.343(a)(1) Equation HH-1) for waste_type={scenario.waste_type!r}, "
             f"age_h={scenario.age_h:g}, moisture={scenario.moisture_fraction:.2f}; "
-            f"40 CFR 98.343 Table HH-1 F=0.5 splits the degraded carbon between CH4 and CO2"
+            f"{split_basis}"
         )
     return gas_data.citation(gas)
 

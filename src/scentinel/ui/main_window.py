@@ -402,7 +402,7 @@ class MainWindow(DockedWorkspace):
             return
         try:
             runs = history.list_runs(_runs_root(self._path))
-        except OSError:
+        except (OSError, HistoryError):
             return
         for record in reversed(runs):
             if record.execution_status != "succeeded":
@@ -592,10 +592,10 @@ class MainWindow(DockedWorkspace):
             return history.GATE_NOT_EVALUATED, f"solverInfo.dat could not be parsed: {error}"
         if not residuals:
             return history.GATE_NOT_EVALUATED, "no solverInfo.dat was written for this run"
-        targets = residual_targets(
-            {gas: 0.0 for gas in record.project.scenario.gas_sources}
-        )
+        targets = residual_targets(record.project.scenario.gas_sources)
         met, reason = post.residual_targets_met_from_residuals(residuals, targets)
+        if reason.startswith("not compared:"):
+            return history.GATE_NOT_EVALUATED, reason
         state = "residual_targets_met" if met else "residual_targets_not_met"
         return state, reason
 

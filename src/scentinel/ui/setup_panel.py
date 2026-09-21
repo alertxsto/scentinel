@@ -24,9 +24,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scentinel.core.gas_data import DEFAULT_SOURCE_GASES, citation, offered_gases, short_label
-from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
 from scentinel.core.composition import PHASE_GASES, phase_for
+from scentinel.core.gas_data import (
+    DEFAULT_SOURCE_GASES,
+    citation,
+    offered_gases,
+    short_label,
+)
+from scentinel.core.geometry import MOUND_SHAPES, BinGeometry, fill_fraction
 from scentinel.core.scenario import WASTE_SPECS, WASTE_TYPES, WIND_DIRECTIONS, Scenario
 from scentinel.ui.i18n import Translator
 
@@ -92,6 +97,7 @@ class SetupPanel(QScrollArea):
 
         self._length = _spin(0.5, 30.0, 6.0, 0.1, " m", 2)
         self._height = _spin(0.5, 10.0, 2.5, 0.1, " m", 2)
+        self._width = _spin(0.5, 10.0, 2.4, 0.1, " m", 2)
         self._shape = QComboBox()
         for shape in MOUND_SHAPES:
             self._shape.addItem("", shape)
@@ -102,18 +108,20 @@ class SetupPanel(QScrollArea):
 
         self._length_label = QLabel()
         self._height_label = QLabel()
+        self._width_label = QLabel()
         self._shape_label = QLabel()
         self._fill_label = QLabel()
         self._actual_fill_caption = QLabel()
         self._shape_help = _help_label()
         form.addRow(self._length_label, self._length)
         form.addRow(self._height_label, self._height)
+        form.addRow(self._width_label, self._width)
         form.addRow(self._shape_label, self._shape)
         form.addRow(self._fill_label, self._fill)
         form.addRow(self._actual_fill_caption, self._actual_fill)
         form.addRow(self._shape_help)
 
-        for widget in (self._length, self._height, self._fill):
+        for widget in (self._length, self._height, self._width, self._fill):
             widget.valueChanged.connect(self._emit)
         self._shape.currentIndexChanged.connect(self._emit)
         return self._geometry_group
@@ -317,6 +325,7 @@ class SetupPanel(QScrollArea):
         return BinGeometry(
             length_m=self._length.value(),
             height_m=self._height.value(),
+            width_m=self._width.value(),
             mound_shape=self._shape.currentData(),
             mound_fill_fraction=self._fill.value(),
         )
@@ -397,6 +406,7 @@ class SetupPanel(QScrollArea):
         widgets = (
             self._length,
             self._height,
+            self._width,
             self._shape,
             self._fill,
             self._waste_type,
@@ -415,6 +425,7 @@ class SetupPanel(QScrollArea):
         try:
             self._length.setValue(geom.length_m)
             self._height.setValue(geom.height_m)
+            self._width.setValue(geom.width_m)
             self._shape.setCurrentIndex(self._shape.findData(geom.mound_shape))
             self._fill.setValue(geom.mound_fill_fraction)
             self._waste_type.setCurrentIndex(self._waste_type.findData(scenario.waste_type))
@@ -454,6 +465,9 @@ class SetupPanel(QScrollArea):
 
         self._length_label.setText(t("field.length"))
         self._height_label.setText(t("field.height"))
+        self._width_label.setText(t("field.width"))
+        self._width_label.setToolTip(t("help.width"))
+        self._width.setToolTip(t("help.width"))
         self._shape_label.setText(t("field.mound_shape"))
         self._fill_label.setText(t("field.fill"))
         self._actual_fill_caption.setText(t("field.actual_fill"))

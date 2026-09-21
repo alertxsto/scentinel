@@ -740,7 +740,10 @@ def test_finalize_run_records_the_parsed_convergence_state(run_window, tmp_path,
     )
     monkeypatch.setattr(
         "scentinel.ui.main_window.post.solver_residuals",
-        lambda case_dir: {"p": [(100.0, 0.5)], "Ux": [(100.0, 1e-6)]},
+        lambda case_dir: {
+            field: [(100.0, 0.5 if field == "p" else 1e-9)]
+            for field in ("p", "Ux", "k", "epsilon", "CO")
+        },
     )
 
     assert run_window.start_run() is True
@@ -758,7 +761,10 @@ def test_finalize_run_records_met_targets_when_residuals_are_small(run_window, t
     )
     monkeypatch.setattr(
         "scentinel.ui.main_window.post.solver_residuals",
-        lambda case_dir: {"p": [(100.0, 1e-9)], "Ux": [(100.0, 1e-9)]},
+        lambda case_dir: {
+            field: [(100.0, 1e-9)]
+            for field in ("p", "Ux", "k", "epsilon", "CO")
+        },
     )
 
     assert run_window.start_run() is True
@@ -766,6 +772,52 @@ def test_finalize_run_records_met_targets_when_residuals_are_small(run_window, t
     record = history.get_run(tmp_path / "runs", "run-001")
     assert record.quality.convergence == "residual_targets_met"
     assert record.execution.solver_termination == "residual_targets_met"
+
+def test_finalize_run_does_not_claim_convergence_from_an_empty_comparison(
+    run_window, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.solver_residuals",
+        lambda case_dir: {"p": [(100.0, 1e-12)]},
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.residual_targets_met_from_residuals",
+        lambda residuals, targets: (False, "not compared: no residual columns matched U"),
+    )
+    assert run_window.start_run() is True
+    record = history.get_run(tmp_path / "runs", "run-001")
+    assert record.quality.convergence == "not_evaluated"
+    assert record.execution.solver_termination != "residual_targets_met"
+
+
+def test_finalize_run_uses_the_cases_own_residual_targets(
+    run_window, tmp_path, monkeypatch
+):
+    captured = {}
+
+    def fake_compare(residuals, targets):
+        captured.update(targets)
+        return True, "every residual target met at the last iteration"
+
+    monkeypatch.setattr(
+        "scentinel.ui.solver_worker.SolverWorker._run_pipeline",
+        lambda self: _success_outcome(self._run_dir),
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.solver_residuals",
+        lambda case_dir: {"p": [(1.0, 1e-12)]},
+    )
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.post.residual_targets_met_from_residuals",
+        fake_compare,
+    )
+    assert run_window.start_run() is True
+    assert captured["p"] == pytest.approx(1e-3)
+    assert any(abs(value - 1e-5) < 1e-12 for value in captured.values())
 
 
 def test_finalize_run_says_not_evaluated_when_solverinfo_is_absent(run_window, tmp_path, monkeypatch):

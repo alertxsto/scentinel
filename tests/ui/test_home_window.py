@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 from scentinel.core.geometry import BinGeometry
+from scentinel.core.history import HistoryError
 from scentinel.core.project import Project, Sensor, save_project
 from scentinel.core.scenario import Scenario
 from scentinel.ui.home_window import HomeWindow
@@ -121,6 +122,28 @@ def test_home_reopens_a_saved_project(qapp, translator, tmp_path):
     assert window._editor.project().scenario.waste_type == "organic-rich"
     assert [sensor.sensor_id for sensor in window._editor.project().sensors] == ["S1"]
     window.deleteLater()
+
+def test_home_opens_a_project_when_legacy_history_cannot_be_decoded(
+    qapp, translator, tmp_path, monkeypatch
+):
+    path = tmp_path / "legacy.scentinel"
+    save_project(Project(name="legacy", geometry=BinGeometry(length_m=7.5)), path)
+    window = HomeWindow(translator, settings=_settings(tmp_path))
+    window._remember_project(path)
+
+    monkeypatch.setattr(
+        "scentinel.ui.main_window.history.list_runs",
+        lambda _root: (_ for _ in ()).throw(HistoryError("unsupported format_version 4")),
+    )
+
+    window._open_recent_item(window._recents.item(0))
+
+    assert window._stack.currentWidget() is window._editor
+    assert window._editor.project().geometry.length_m == pytest.approx(7.5)
+    assert window._editor.project_path() == path
+    assert window._editor.results_panel().readings() == []
+    window.deleteLater()
+
 
 
 def test_opening_by_path_alone_loads_the_project(qapp, translator, tmp_path):

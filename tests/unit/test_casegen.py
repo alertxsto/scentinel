@@ -88,6 +88,44 @@ def test_applied_physics_records_the_flux_and_area(tmp_path, mesh):
     assert applied["emitting_area_m2"] > 0.0
     assert applied["emission_flux_kg_per_m2_s"]["CO"] > 0.0
 
+def test_a_manual_methane_source_changes_the_imposed_flux():
+    geom = BinGeometry()
+    auto = Scenario(gas_sources={"CH4": "auto"})
+    manual = Scenario(gas_sources={"CH4": 50.0})
+    assert emission_flux_kg_per_m2_s(manual, geom, "CH4") != pytest.approx(
+        emission_flux_kg_per_m2_s(auto, geom, "CH4")
+    )
+
+
+def test_a_manual_methane_source_is_honoured_as_its_own_share():
+    from scentinel.core import generation
+
+    scenario = Scenario(gas_sources={"CH4": 50.0})
+    result = generation.generate(
+        scenario.composition,
+        tonnage_t=scenario.tonnage_t,
+        age_h=scenario.age_h,
+        moisture=scenario.moisture_fraction,
+    )
+    bulk_mol_per_h = (
+        result.ch4_rate_kg_per_h / (generation.METHANE_MOLAR_MASS / 1000.0)
+        + result.co2_rate_kg_per_h / (generation.CO2_MOLAR_MASS / 1000.0)
+    )
+    expected = (
+        bulk_mol_per_h
+        * 50e-6
+        * (gas_data.get_gas("CH4").mw_g_mol / 1000.0)
+        / 3600.0
+    )
+    assert emission_rate_kg_per_s(scenario, "CH4") == pytest.approx(expected)
+
+
+def test_the_air_viscosity_label_matches_its_reference_temperature():
+    import inspect
+
+    assert "Kinematic viscosity of air at 20 C" in inspect.getsource(casegen)
+
+
 
 def test_the_scalar_carries_turbulent_diffusivity(tmp_path, mesh):
     """The scalar must use D + nut/Sc_t, not molecular D alone.

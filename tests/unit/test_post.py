@@ -39,13 +39,31 @@ def test_residual_targets_met_passes_when_every_field_is_under():
     assert reason
 
 
-def test_residual_targets_met_ignores_a_field_with_no_rows():
-    """A target the log never reports cannot silently count as met."""
+def test_residual_targets_met_does_not_count_an_unmatched_target_as_met():
     met, reason = post.residual_targets_met_from_residuals(
         {"p": [(1.0, 1e-4)]}, {"p": 1e-3, "U": 1e-4}
     )
-    assert met is True  # nothing to compare against; only p is present
-    assert reason
+    assert met is False
+    assert "not compared" in reason
+    assert "U" in reason
+
+
+def test_residual_targets_met_rejects_an_empty_comparison():
+    met, reason = post.residual_targets_met_from_residuals({}, {"p": 1e-3})
+    assert met is False
+    assert "not compared" in reason
+
+
+def test_solver_residuals_picks_the_numerically_newest_time(tmp_path):
+    for time in (0, 100, 900, 1000):
+        directory = tmp_path / "postProcessing" / "solverInfo" / str(time)
+        directory.mkdir(parents=True)
+        (directory / "solverInfo.dat").write_text(
+            "# Time Ux_initial Ux_final\n"
+            f"1\t{time}.0\t0\n"
+        )
+    assert post.solver_residuals(tmp_path)["Ux"][-1] == (1.0, 1000.0)
+
 
 
 def test_a_buried_sensor_is_rejected_not_snapped():

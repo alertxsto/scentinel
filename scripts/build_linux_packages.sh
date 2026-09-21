@@ -9,46 +9,27 @@ VERSION="$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
 echo "==> packaging scentinel ${VERSION}"
 
 STAGE="${ROOT}/build/linux-root"
+BUILD_ENV="${ROOT}/build/linux-package-venv"
 OUT="${ROOT}/dist/packages"
-export STAGE
-rm -rf "${STAGE}" "${OUT}"
-mkdir -p "${STAGE}/opt" "${STAGE}/usr/bin" "${STAGE}/usr/share/applications" \
-  "${STAGE}/usr/share/doc/scentinel" "${OUT}" "${ROOT}/build"
+rm -rf "${STAGE}" "${BUILD_ENV}" "${OUT}" "${ROOT}/dist/scentinel"
+mkdir -p "${STAGE}/opt/scentinel" "${STAGE}/usr/bin" \
+  "${STAGE}/usr/share/applications" "${STAGE}/usr/share/doc/scentinel" \
+  "${OUT}" "${ROOT}/build"
 
 PYTHON="${PYTHON:-python3}"
-"${PYTHON}" -m pip install --upgrade pip build
-"${PYTHON}" -m build --wheel --outdir "${ROOT}/dist"
+"${PYTHON}" -m venv "${BUILD_ENV}"
+"${BUILD_ENV}/bin/pip" install --upgrade pip build pyinstaller
+"${BUILD_ENV}/bin/python" -m build --wheel --outdir "${ROOT}/dist"
 
 WHEEL="$(ls -1 "${ROOT}/dist"/scentinel-*.whl | tail -1)"
-"${PYTHON}" -m venv "${STAGE}/opt/scentinel"
-"${STAGE}/opt/scentinel/bin/pip" install --upgrade pip
-"${STAGE}/opt/scentinel/bin/pip" install "${WHEEL}[cfd,report]"
+"${BUILD_ENV}/bin/pip" install "${WHEEL}[cfd,report]"
+"${BUILD_ENV}/bin/python" -m PyInstaller \
+  --noconfirm --clean "${ROOT}/packaging/scentinel-linux.spec"
+cp -a "${ROOT}/dist/scentinel/." "${STAGE}/opt/scentinel/"
 
-python3 - <<'PY'
-from pathlib import Path
-import os
-
-root = Path(os.environ["STAGE"]) / "opt" / "scentinel"
-for path in (root / "bin").iterdir():
-    try:
-        data = path.read_bytes()
-    except OSError:
-        continue
-    if not data.startswith(b"#!"):
-        continue
-    first, _, rest = data.partition(b"\n")
-    if b"bin/python" in first:
-        path.write_bytes(b"#!/opt/scentinel/bin/python3\n" + rest)
-cfg = root / "pyvenv.cfg"
-if cfg.exists():
-    lines = [
-        line
-        for line in cfg.read_text().splitlines()
-        if not line.startswith("home =") and not line.startswith("command =")
-    ]
-    lines.append("home = /opt/scentinel/bin")
-    cfg.write_text("\n".join(lines) + "\n")
-PY
+echo "==> smoke-testing bundled runtime"
+QT_QPA_PLATFORM=offscreen \
+  "${STAGE}/opt/scentinel/scentinel" --package-smoke-test
 
 install -m 0755 "${ROOT}/packaging/scentinel.wrapper" "${STAGE}/usr/bin/scentinel"
 install -m 0644 "${ROOT}/packaging/scentinel.desktop" "${STAGE}/usr/share/applications/scentinel.desktop"

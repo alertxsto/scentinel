@@ -103,6 +103,21 @@ _AP42_TRANSITION_NOTE = (
 )
 _AP42_APPLIES = "The table value describes this anaerobic phase directly."
 
+#: Gases deliberately offered for a phase-I load. Their catalogue strengths
+#: still come from mature-landfill measurements and retain that evidence-gap
+#: warning; other catalogue entries are withheld entirely for phase I.
+_PHASE_I_OFFERED = frozenset(
+    {
+        "CO",
+        "H2S",
+        "METHYL_MERCAPTAN",
+        "ETHYL_MERCAPTAN",
+        "DIMETHYL_SULFIDE",
+        "VOC",
+        "CO2",
+    }
+)
+
 #: Per-gas phase applicability. A gas absent from this map is offered in every
 #: phase with the landfill caveat; the map narrows the exceptions.
 _GAS_APPLICABILITY: dict[str, GasApplicability] = {
@@ -128,16 +143,14 @@ _GAS_APPLICABILITY: dict[str, GasApplicability] = {
     ),
 }
 
-#: Gases produced by the generation model rather than read from a table. CO2 is
-#: cited on the F = 0.5 carbon balance (40 CFR 98.343) in every phase; CH4 is the
-#: methanogenic product.
+#: Gases produced by the generation model rather than read from a table.
 _GENERATED_APPLICABILITY: dict[str, GasApplicability] = {
     "CO2": GasApplicability(
         phases=_ALL_PHASES,
-        source="Generation model, 40 CFR 98.343 F = 0.5 carbon balance",
+        source="Generation model, 40 CFR 98.343 default F = 0.5 carbon balance",
         uncertainty=(
-            "The CO2 volume share follows the cited F split; in the aerobic phase "
-            "the anaerobic model is extrapolated."
+            "Model assumption: CO2 receives (1 - F) of degraded carbon; the "
+            "regulation defines F as a measurement-replaceable methane default."
         ),
     ),
     "CH4": GasApplicability(
@@ -152,9 +165,9 @@ _GENERATED_APPLICABILITY: dict[str, GasApplicability] = {
 def applicability(gas_key: str) -> GasApplicability:
     """Which phases ``gas_key`` applies to, with its source and uncertainty.
 
-    Covers both catalogue gases and the generated gases (CO2, CH4). A catalogue
-    gas not in the explicit map applies to every phase with the landfill caveat
-    stated, so no gas silently lacks an applicability.
+    Covers catalogue and generated gases. Catalogue gases without a cited
+    fresh-waste basis are excluded from phase I rather than presenting a
+    mature-landfill measurement as an equivalent source.
     """
     if gas_key in _GENERATED_APPLICABILITY:
         return _GENERATED_APPLICABILITY[gas_key]
@@ -162,10 +175,16 @@ def applicability(gas_key: str) -> GasApplicability:
         raise KeyError(f"Unknown gas: {gas_key}")
     if gas_key in _GAS_APPLICABILITY:
         return _GAS_APPLICABILITY[gas_key]
+    fresh = gas_key in _PHASE_I_OFFERED
     return GasApplicability(
-        phases=_ALL_PHASES,
+        phases=_ALL_PHASES if fresh else ("II", "III", "IV"),
         source=_AP42_LANDFILL,
-        uncertainty=_AP42_TRANSITION_NOTE,
+        uncertainty=(
+            _AP42_TRANSITION_NOTE
+            if fresh
+            else "No cited fresh-waste value exists for this species; the AP-42 "
+            "value is a mature-landfill measurement and is not offered for phase I."
+        ),
     )
 
 

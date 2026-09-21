@@ -89,7 +89,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert (record.run_dir / history.MANIFEST_NAME).is_file()
 
     payload = _manifest(record)
-    assert payload["format_version"] == 9
+    assert payload["format_version"] == 10
     assert payload["execution_status"] == "incomplete"
     assert payload["started_at_utc"] == "2026-09-19T12:34:56Z"
     assert payload["finished_at_utc"] is None
@@ -99,6 +99,7 @@ def test_begin_run_reserves_run_001_and_round_trips_the_input_snapshot(tmp_path)
     assert geometry == {
         "length_m": 6.0,
         "height_m": 2.5,
+        "width_m": 2.4,
         "mound_shape": "mounded",
         "mound_fill_fraction": 0.45,
     }
@@ -194,6 +195,26 @@ def test_a_version_7_manifest_is_rejected_naming_both_versions(tmp_path):
 
     with pytest.raises(HistoryError, match="7"):
         history.load_run(record.run_dir)
+
+def test_a_version_9_manifest_is_rejected_naming_both_versions(tmp_path):
+    record = _begin(tmp_path)
+    _rewrite(record, lambda payload: payload.__setitem__("format_version", 9))
+    with pytest.raises(HistoryError, match="9"):
+        history.load_run(record.run_dir)
+
+
+def test_the_geometry_record_round_trips_the_bin_width(tmp_path):
+    project = _project(
+        geometry=BinGeometry(
+            length_m=6.0,
+            height_m=2.5,
+            width_m=3.0,
+            mound_shape="mounded",
+            mound_fill_fraction=0.45,
+        )
+    )
+    record = _begin(tmp_path, project)
+    assert history.load_run(record.run_dir).project.geometry.width_m == pytest.approx(3.0)
 
 
 def test_the_manifest_records_the_schmidt_number(tmp_path):
@@ -1406,3 +1427,17 @@ def test_finish_run_records_met_targets_as_termination(tmp_path):
         convergence_reason="every residual target met at the last iteration",
     )
     assert finished.execution.solver_termination == "residual_targets_met"
+
+def test_a_failed_run_is_not_relabelled_as_converged(tmp_path):
+    record = _begin(tmp_path, _project())
+    finished = _finish(
+        record,
+        status="failed",
+        exit_code=13,
+        failed_stage="solver",
+        error="solver failed",
+        convergence="residual_targets_met",
+        convergence_reason="every residual target met at the last iteration",
+    )
+    assert finished.quality.convergence == "residual_targets_met"
+    assert finished.execution.solver_termination == "solver_error"

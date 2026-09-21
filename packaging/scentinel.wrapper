@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /opt/scentinel/bin/scentinel "$@"
+exec /opt/scentinel/scentinel "$@"

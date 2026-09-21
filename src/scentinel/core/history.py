@@ -97,7 +97,9 @@ from scentinel.core.scenario import (
 #: 9 — records the parsed convergence state and its reason. A version 8 record
 #:     can only say ``not_evaluated``: it never read the solver's residuals, so
 #:     it cannot distinguish a run that met its targets from one that did not.
-RUN_FORMAT_VERSION = 9
+#: 10 — records the bin width in the requested geometry. A version 9 record
+#:      cannot distinguish projects that differ only in physical emitting area.
+RUN_FORMAT_VERSION = 10
 
 #: File name of the per-run manifest, inside its ``run-NNN`` directory.
 MANIFEST_NAME = "run.json"
@@ -205,7 +207,7 @@ _TOP_LEVEL_KEYS = (
 )
 _APPLICATION_KEYS = ("name", "version")
 _PROJECT_KEYS = ("name", "geometry", "scenario", "sensors")
-_GEOMETRY_KEYS = ("length_m", "height_m", "mound_shape", "mound_fill_fraction")
+_GEOMETRY_KEYS = ("length_m", "height_m", "width_m", "mound_shape", "mound_fill_fraction")
 _SCENARIO_KEYS = (
     "wind_speed_m_s",
     "wind_direction",
@@ -321,6 +323,7 @@ class GeometryRecord:
 
     length_m: float
     height_m: float
+    width_m: float
     mound_shape: str
     mound_fill_fraction: float
 
@@ -421,10 +424,9 @@ class AppliedPhysicsRecord:
 
     Distinct from :class:`ProjectRecord`, which holds the *requested* inputs. A
     reported wind speed of 2 m/s becomes a different inlet velocity after the
-    power-law scaling, and the case applies a single hard-coded scalar
-    diffusivity rather than the per-gas table in ``gas_data``. Recording only
-    the request would let two manifests look identical while the generated
-    cases differ.
+    power-law scaling, and each gas uses its own FSG molecular diffusivity plus
+    turbulent transport. Recording only the request would let two manifests
+    look identical while the generated cases differ.
 
     ``case_input_digest`` is the authoritative guard: it is a SHA-256 over the
     generated case inputs (see :func:`casegen.case_input_digest`), so any change
@@ -692,11 +694,21 @@ def finish_run(
     convergence_state = _closed_enum(
         convergence, CONVERGENCE_STATES, "convergence", where
     )
-    # A parsed convergence state overrides the caller's termination hint: when
-    # the residuals were read, the termination is what the residuals say.
-    if convergence_state == "residual_targets_met":
+    if (
+        terminal == "failed"
+        and failed_stage == "solver"
+        and termination == GATE_NOT_EVALUATED
+    ):
+        termination = "solver_error"
+    # Residual evidence can override termination only when the process actually
+    # completed. A failed or cancelled solver did not converge, regardless of
+    # residuals written before it stopped.
+    if terminal == "succeeded" and convergence_state == "residual_targets_met":
         termination = "residual_targets_met"
-    elif convergence_state == "residual_targets_not_met" and termination == GATE_NOT_EVALUATED:
+    elif (
+        convergence_state == "residual_targets_not_met"
+        and termination == GATE_NOT_EVALUATED
+    ):
         termination = "end_time_reached"
 
     persisted = load_run(record.run_dir)
@@ -913,6 +925,7 @@ def _snapshot_project(project: Project) -> ProjectRecord:
         geometry=GeometryRecord(
             length_m=geometry.length_m,
             height_m=geometry.height_m,
+            width_m=geometry.width_m,
             mound_shape=geometry.mound_shape,
             mound_fill_fraction=geometry.mound_fill_fraction,
         ),
@@ -1055,8 +1068,8 @@ def _screening_quality() -> QualityRecord:
 
     Every gate is stated explicitly rather than left to inference, so a
     successful process exit cannot be read as convergence, verification, or
-    validation. Nothing here copies the repository's documented 76.5%
-    mesh-independence failure onto an individual run.
+    validation. Repository-wide mesh evidence is not copied onto an individual
+    run.
     """
     return QualityRecord(
         classification=QUALITY_CLASSIFICATION,
@@ -1228,6 +1241,7 @@ def _payload(record: RunRecord) -> dict[str, object]:
             "geometry": {
                 "length_m": project.geometry.length_m,
                 "height_m": project.geometry.height_m,
+                "width_m": project.geometry.width_m,
                 "mound_shape": project.geometry.mound_shape,
                 "mound_fill_fraction": project.geometry.mound_fill_fraction,
             },
@@ -1498,6 +1512,7 @@ def _decode_geometry(payload: object, where: str) -> GeometryRecord:
     return GeometryRecord(
         length_m=_number(mapping["length_m"], "project.geometry.length_m", where, minimum=0.0),
         height_m=_number(mapping["height_m"], "project.geometry.height_m", where, minimum=0.0),
+        width_m=_number(mapping["width_m"], "project.geometry.width_m", where, minimum=0.0),
         mound_shape=shape,
         mound_fill_fraction=fill,
     )
