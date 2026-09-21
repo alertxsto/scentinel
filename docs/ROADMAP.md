@@ -1,6 +1,6 @@
 # Scentinel — Roadmap
 
-**Version:** 0.2.2 · **Last updated:** 2026-09-19
+**Version:** 0.2.3 · **Last updated:** 2026-09-21
 
 Phase plan, current position, and what each remaining phase has to prove. Task
 detail lives in [TASKS.md](TASKS.md); design rationale in
@@ -36,31 +36,32 @@ provenance, the applied numerical settings with a digest of the generated case,
 the requested iteration count, the terminal execution status, and its results,
 so runs survive a restart and can be listed or looked up. Projects save and
 load; the UI switches language at runtime; results export to CSV. Concentration
-fields render from the solved case, ten cited AP-42 gases are selectable with
-per-gas Fuller-Schettler-Giddings diffusivities, the sensor lab replays each
-placement through a device model, and the container image is pulled from the GUI
-into an app-private store.
+fields render from the solved case, the full 47-gas AP-42 catalogue is
+available for aged loads, and phase I exposes only its supported allow-list.
+Each gas uses its Fuller-Schettler-Giddings diffusivity, the sensor lab replays
+each placement through a device model, and the container image is pulled from
+the GUI into an app-private store.
 
-**Gas generation (Phase 2–4 done, 2026-09-19):** a batch's gas is computed from
-its composition and age by Equation HH-1, with ultimate potential, cumulative
-mass, and instantaneous rate as separate quantities and the produced mixture
-split by the regulation's `F = 0.5`. The phase label is an interpretation, not
-a switch, so generation is continuous across every age boundary; the AP-42
-55/40/5 mix is kept as a mature-landfill ceiling. Each gas carries an explicit
-applicability, and the offered gas list follows holding time — a fresh load does
-not offer methane. Manifest format 6 records the generation and phase
-provenance. Fresh-waste VOC research is partly extracted (Statheropoulos 2005)
-and partly recorded unavailable (Waste Manag. 2017 paywalled).
+**Gas generation (Phases 2–3 done; Phase 4 partial):** a batch's gas is
+computed from composition and age by Equation HH-1, with ultimate potential,
+cumulative mass, and instantaneous rate as separate quantities. Methane uses
+the regulation's measurement-replaceable default `F = 0.5`; the matching CO₂
+carbon closure is an explicit model assumption. The phase label interprets age
+rather than switching generation, so the curve stays continuous across every
+boundary. AP-42 55/40/5 remains a mature-landfill ceiling. Manifest format 10
+records generation, phase provenance, convergence evidence, and bin width.
+Phase I enforces its gas allow-list, but cited fresh-waste source strengths are
+still absent; Statheropoulos provides bin concentrations, while Waste
+Management 2017 remains paywalled.
 
 **What does not work:** absolute concentrations are not mesh-converged. The
-source is now a mass flux (Phase 5), which cut the worst-probe deviation from
-~87% to ~63%, but the <10% gate is still missed: the k-epsilon velocity field is
-not mesh-converged at the current cell counts and the scalar is carried with
-molecular diffusivity only. Nothing reads the run history back into the UI, so
-there is still no scenario comparison view and no PDF reporting; the ventilation
-flag is stored — recorded as requested but unmodelled — but has no effect on the
-case; and the fuel-basis RDF parameters (NCV, ash, Cl) still need laboratory
-input, so no EN 15359 / ISO 21640 class is claimed.
+source is a mass flux and scalar transport includes `D + ν_t/Sc_t`, but the
+current containing-cell gate still reaches 266.29% while the k-epsilon velocity
+field is also mesh-dependent. The workspace restores the latest compatible run;
+side-by-side comparison and PDF reporting remain unimplemented. The ventilation
+flag is persisted as requested but unmodelled and has no effect on the case.
+Fuel-basis RDF parameters (NCV, ash, Cl) still need laboratory input, so no
+EN 15359 / ISO 21640 class is claimed.
 
 A recorded run separates four things that are easy to conflate. The *requested*
 inputs are the project snapshot; the *applied* experiment is the block of

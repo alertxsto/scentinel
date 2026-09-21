@@ -1,6 +1,6 @@
 # Scentinel — Task Breakdown
 
-**Version:** 0.2.2 · **Last updated:** 2026-09-19
+**Version:** 0.2.3 · **Last updated:** 2026-09-21
 
 Every task with its status, the files it touches, and its acceptance test. Phase
 context is in [ROADMAP.md](ROADMAP.md).

@@ -8,6 +8,8 @@
 
 *scent + sentinel — the watchful nose.*
 
+**Current release: [0.2.3](https://github.com/alertxsto/scentinel/releases/tag/v0.2.3)**
+
 </div>
 
 ---
@@ -24,12 +26,28 @@ concentrations with a persisted, auditable record of every attempt.
 2. Choose a waste stream (mixed MSW, co-disposal, organic-rich, green waste, RDF
    feedstock, dry recyclables) and set the organic and moisture fractions
 3. Click candidate sensor positions in the viewport
-4. Configure gas sources from cited EPA AP-42 defaults, or enter manual values
-   (CO, CH₄, VOC, H₂S, ethane, benzene, toluene, vinyl chloride, methyl
-   mercaptan, dimethyl sulfide)
+4. Configure a phase-aware gas set: the supported fresh-waste allow-list for
+   phase I, or the full 47-gas AP-42 catalogue for aged loads; use cited
+   automatic defaults or enter a manual value
 5. Run CFD (airflow + passive scalar transport) in an OpenFOAM container
 6. Inspect concentration fields and per-sensor values, then export CSV
 7. Replay each placement through a virtual sensor model in the sensor lab
+
+## What's new in 0.2.3
+
+- Linux `.deb`, `.rpm`, and Arch tarballs include a relocatable Python runtime
+  and smoke-test NumPy, PyVista, VTK, and gmsh before packaging.
+- Manual CH₄/CO₂ values now reach the CFD source instead of being overwritten
+  by generated-gas shares.
+- Convergence uses the numerically latest residual output and the exact targets
+  written into the case; missing residual fields remain `not_evaluated`.
+- Bin width is editable, persists in project/run data, and sets the physical
+  emitting area used by the mass flux.
+- Fresh loads expose only the supported phase-I gases. Aged loads retain the
+  full catalogue, and missing fresh-waste evidence is stated rather than
+  silently extrapolated.
+- Projects still open when their run directory contains an obsolete manifest;
+  strict history APIs continue to reject incompatible records.
 
 ## Status
 
@@ -133,9 +151,10 @@ analysis and the ranked fix options are in
 
 ## Releases
 
-GitHub Releases ship `.deb`, `.rpm`, an Arch prefix `.tar.gz`, and a Windows
-`.exe`. Release packages include their Python runtime; no system Python install
-is required. The GUI launches without Podman; a solve needs the container below.
+GitHub Releases for 0.2.3 ship `.deb`, `.rpm`, an Arch prefix `.tar.gz`, and a
+Windows `.exe`. Release packages include their Python runtime; no system Python
+installation is required. The GUI launches without Podman; a solve needs the
+OpenFOAM container below.
 
 ```bash
 sudo apt install ./scentinel_*-amd64.deb        # Debian / Ubuntu

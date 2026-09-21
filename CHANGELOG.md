@@ -18,6 +18,8 @@ Two things are worth knowing before reading:
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-09-21
+
 ### Added
 
 - 20-phase hardening program
@@ -409,6 +411,7 @@ Initial release. 2D bin cross-section, gmsh meshing, OpenFOAM case generation,
 Podman runner, probe sampling, results table with CSV export, bilingual UI
 (English / Indonesian), and persistent per-run manifests with provenance.
 
+[0.2.3]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.3
 [0.2.2]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.2
 [0.2.1]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.1
 [0.2.0]: https://github.com/alertxsto/scentinel/releases/tag/v0.2.0

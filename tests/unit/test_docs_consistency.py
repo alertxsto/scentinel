@@ -20,3 +20,12 @@ def test_the_documents_cite_the_current_mesh_gate_number():
 
 def test_the_manifest_version_constant_is_ten():
     assert history.RUN_FORMAT_VERSION == 10
+
+
+def test_the_roadmap_describes_the_current_generation_contract():
+    roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    normalized = " ".join(roadmap.split())
+    assert "Manifest format 6" not in roadmap
+    assert "Manifest format 10" in roadmap
+    assert "measurement-replaceable default" in normalized
+    assert "CO₂ carbon closure is an explicit model assumption" in normalized

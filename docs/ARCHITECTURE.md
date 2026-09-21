@@ -1,6 +1,6 @@
 # Scentinel — Architecture
 
-**Version:** 0.2.2 · **Last updated:** 2026-09-19
+**Version:** 0.2.3 · **Last updated:** 2026-09-21
 
 How the application is put together: what each module owns, how data flows from
 a click in the viewport to a concentration in the results table, and which
@@ -56,7 +56,7 @@ reports rather than restating it.
 | `geometry.py` | 187 | `BinGeometry` (incl. `width_m`); mound surface, polygon, height, area, emitting area |
 | `scenario.py` | 255 | `Scenario`: wind, ventilation flag, waste stream, composition/tonnage overrides, per-gas sources (ppmv or `"auto"`) |
 | `composition.py` | 300 | `WasteComposition`, Table HH-1 `DOC`/`k`, `PhaseModel`, `interpret_phase` |
-| `generation.py` | 280 | 40 CFR 98.343(a)(1) Equation HH-1: ultimate, cumulative, and rate; F = 0.5 mixture |
+| `generation.py` | 280 | 40 CFR 98.343(a)(1) Equation HH-1: ultimate, cumulative, and rate; measurement-replaceable CH₄ default `F = 0.5`, with CO₂ closure labelled as a model assumption |
 | `massbalance.py` | 188 | Per-stream tonnage; every split carries its provenance |
 | `suitability.py` | 284 | Route scores, fuel-quality inputs and their missing set |
 | `recommend.py` | 174 | One recommendation with reasons, caveats, and a runner-up margin |
